@@ -26,7 +26,9 @@ const _analystReports = {
 final _completed = RunViewState(
   phase: RunPhase.done,
   ticker: 'NVDA',
+  tradeDate: '2024-05-10',
   lastSeq: 62,
+  cost: const CostSnapshot(llmCalls: 14, toolCalls: 8, tokensIn: 24800, tokensOut: 13200, estUsd: 0.42),
   stages: {for (final s in stageMeta.keys) s: NodeStatus.done},
   agents: {
     for (final agents in stageMeta.values)
@@ -54,7 +56,9 @@ final _completed = RunViewState(
 final _midRun = RunViewState(
   phase: RunPhase.running,
   ticker: 'NVDA',
+  tradeDate: '2024-05-10',
   lastSeq: 24,
+  cost: const CostSnapshot(llmCalls: 5, toolCalls: 3, tokensIn: 9100, tokensOut: 3800, estUsd: 0.16),
   stages: const {Stage.analysts: NodeStatus.done, Stage.researchDebate: NodeStatus.running},
   agents: const {
     AgentId.market: NodeStatus.done,

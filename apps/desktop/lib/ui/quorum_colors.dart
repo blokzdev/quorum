@@ -11,7 +11,8 @@ class QC {
   static const border = Color(0xFF2A313D);
   static const textHi = Color(0xFFE6EAF2);
   static const textMid = Color(0xFF9AA4B2);
-  static const textLo = Color(0xFF5B6473);
+  // Lifted from #5B6473 (~2.4:1, failed WCAG) to a readable-but-recessive grey for structural labels.
+  static const textLo = Color(0xFF7C8694);
   static const accent = Color(0xFF3D7DFF);
   static const up = Color(0xFF26C281);
   static const down = Color(0xFFFF5C5C);
@@ -43,6 +44,22 @@ const stageMeta = <Stage, (String, List<AgentId>)>{
   Stage.trader: ('Trader', [AgentId.trader]),
   Stage.riskDebate: ('Risk Debate', [AgentId.aggressive, AgentId.neutral, AgentId.conservative]),
   Stage.portfolio: ('Portfolio', [AgentId.portfolio]),
+};
+
+/// Which agent authored each report section (for attribution chips on the cards).
+const sectionAgent = <String, AgentId>{
+  'market_report': AgentId.market,
+  'sentiment_report': AgentId.social,
+  'news_report': AgentId.news,
+  'fundamentals_report': AgentId.fundamentals,
+  'bull': AgentId.bull,
+  'bear': AgentId.bear,
+  'investment_plan': AgentId.researchManager,
+  'trader_investment_plan': AgentId.trader,
+  'aggressive': AgentId.aggressive,
+  'conservative': AgentId.conservative,
+  'neutral': AgentId.neutral,
+  'final_trade_decision': AgentId.portfolio,
 };
 
 const sectionTitle = <String, String>{

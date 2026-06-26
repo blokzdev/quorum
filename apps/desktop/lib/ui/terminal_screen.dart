@@ -7,7 +7,7 @@ import 'package:quorum_core/quorum_core.dart';
 import '../state/run_controller.dart';
 import 'quorum_colors.dart';
 
-/// The live screen: watches the run and wires the Run/Cancel actions + orphan-free exit teardown.
+/// The live screen: watches the run, wires Run/Cancel, and tears the sidecar down on exit.
 class TerminalScreen extends ConsumerStatefulWidget {
   const TerminalScreen({super.key});
   @override
@@ -44,11 +44,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> with WidgetsBin
   Widget build(BuildContext context) {
     final state = ref.watch(runControllerProvider);
     final ctrl = ref.read(runControllerProvider.notifier);
-    return TerminalBody(
-      state: state,
-      onRun: () => ctrl.start(),
-      onCancel: ctrl.cancel,
-    );
+    return TerminalBody(state: state, onRun: () => ctrl.start(), onCancel: ctrl.cancel);
   }
 }
 
@@ -57,7 +53,6 @@ class TerminalBody extends StatelessWidget {
   final RunViewState state;
   final VoidCallback? onRun;
   final VoidCallback? onCancel;
-
   const TerminalBody({super.key, required this.state, this.onRun, this.onCancel});
 
   @override
@@ -103,8 +98,9 @@ class _Header extends StatelessWidget {
         children: [
           const _Wordmark(),
           const SizedBox(width: 20),
-          if (state.ticker != null)
+          if (state.ticker != null) ...[
             Container(
+              constraints: const BoxConstraints(maxWidth: 120),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: QC.surface2,
@@ -112,10 +108,19 @@ class _Header extends StatelessWidget {
                 border: Border.all(color: QC.border),
               ),
               child: Text(state.ticker!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      color: QC.textHi, fontFeatures: [FontFeature.tabularFigures()], fontWeight: FontWeight.w600)),
+                      color: QC.textHi,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                      fontWeight: FontWeight.w600)),
             ),
-          const SizedBox(width: 12),
+            if (state.tradeDate != null) ...[
+              const SizedBox(width: 10),
+              Text(state.tradeDate!, style: const TextStyle(color: QC.textMid, fontSize: 13)),
+            ],
+          ],
+          const SizedBox(width: 14),
           _PhaseChip(state.phase),
           const Spacer(),
           if (running)
@@ -142,12 +147,7 @@ class _Wordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      // The ascending-bars mark.
-      SizedBox(
-        width: 22,
-        height: 22,
-        child: CustomPaint(painter: _BarsMarkPainter()),
-      ),
+      SizedBox(width: 22, height: 22, child: CustomPaint(painter: _BarsMarkPainter())),
       const SizedBox(width: 10),
       const Text('Quorum',
           style: TextStyle(color: QC.textHi, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
@@ -243,38 +243,41 @@ class _AgentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dot = switch (status) {
-      NodeStatus.done => QC.up,
+    final running = status == NodeStatus.running;
+    final color = switch (status) {
+      NodeStatus.done => agentColor(agent),
       NodeStatus.running => agentColor(agent),
       NodeStatus.error => QC.down,
       _ => QC.textLo,
     };
-    final running = status == NodeStatus.running;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(
-              color: running ? dot : (status == NodeStatus.done ? dot : Colors.transparent),
-              shape: BoxShape.circle,
-              border: Border.all(color: dot, width: 1.5),
+    final icon = switch (status) {
+      NodeStatus.done => Icons.check_circle,
+      NodeStatus.running => Icons.circle,
+      NodeStatus.error => Icons.error,
+      _ => Icons.radio_button_unchecked,
+    };
+    final label = '${agentName(agent)}: ${status?.name ?? 'pending'}';
+    return Semantics(
+      label: label,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(agentName(agent),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: status == null || status == NodeStatus.pending ? QC.textLo : QC.textHi,
+                    fontSize: 13.5,
+                    fontWeight: running ? FontWeight.w600 : FontWeight.w400,
+                  )),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(agentName(agent),
-                style: TextStyle(
-                  color: status == null || status == NodeStatus.pending ? QC.textLo : QC.textHi,
-                  fontSize: 13.5,
-                  fontWeight: running ? FontWeight.w600 : FontWeight.w400,
-                )),
-          ),
-          if (running)
-            const Text('•••', style: TextStyle(color: QC.accent, fontSize: 12)),
-        ],
+            if (running) const Text('•••', style: TextStyle(color: QC.accent, fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -284,21 +287,25 @@ class _ReasoningPane extends StatelessWidget {
   final RunViewState state;
   const _ReasoningPane(this.state);
 
+  static const _decisionKeys = ['final_trade_decision', 'trader_investment_plan', 'investment_plan'];
+  static const _evidenceKeys = [
+    'bull', 'bear', 'aggressive', 'conservative', 'neutral',
+    'fundamentals_report', 'news_report', 'sentiment_report', 'market_report',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    // The currently-streaming agent (if any) shows its live reasoning at the top.
     final active = state.agents.entries
         .where((e) => e.value == NodeStatus.running)
         .map((e) => e.key)
         .firstOrNull;
     final liveText = active != null ? state.reasoningByAgent[active.name] : null;
 
-    final sections = [
-      for (final key in sectionTitle.keys)
-        if (state.reports[key] != null) state.reports[key]!,
-    ];
+    final decision = [for (final k in _decisionKeys) if (state.reports[k] != null) state.reports[k]!];
+    final evidence = [for (final k in _evidenceKeys) if (state.reports[k] != null) state.reports[k]!];
+    final ratingAccent = ratingColor(state.verdict?.rating);
 
-    if (sections.isEmpty && liveText == null) {
+    if (decision.isEmpty && evidence.isEmpty && liveText == null) {
       return const Center(
         child: Text('Run an analysis to watch the council deliberate.',
             style: TextStyle(color: QC.textLo, fontSize: 15)),
@@ -310,10 +317,31 @@ class _ReasoningPane extends StatelessWidget {
       children: [
         if (active != null && liveText != null && liveText.isNotEmpty)
           _LiveReasoningCard(agent: active, text: liveText),
-        for (final s in sections.reversed) _SectionCard(s),
+        for (final s in decision)
+          _SectionCard(s,
+              emphasis: s.section == 'final_trade_decision',
+              accent: ratingAccent),
+        if (decision.isNotEmpty && evidence.isNotEmpty) const _GroupLabel('Evidence & Debate'),
+        for (final s in evidence) _SectionCard(s),
       ],
     );
   }
+}
+
+class _GroupLabel extends StatelessWidget {
+  final String text;
+  const _GroupLabel(this.text);
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 12),
+        child: Row(children: [
+          Text(text.toUpperCase(),
+              style: const TextStyle(
+                  color: QC.textLo, fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w700)),
+          const SizedBox(width: 12),
+          const Expanded(child: Divider(color: QC.border, height: 1)),
+        ]),
+      );
 }
 
 class _LiveReasoningCard extends StatelessWidget {
@@ -340,7 +368,7 @@ class _LiveReasoningCard extends StatelessWidget {
                 style: TextStyle(color: agentColor(agent), fontWeight: FontWeight.w600, fontSize: 13)),
           ]),
           const SizedBox(height: 8),
-          Text(text, style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 14)),
+          SelectableText(text, style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 14)),
         ],
       ),
     );
@@ -349,27 +377,84 @@ class _LiveReasoningCard extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final ReportSection section;
-  const _SectionCard(this.section);
+  final bool emphasis;
+  final Color accent;
+  const _SectionCard(this.section, {this.emphasis = false, this.accent = QC.accent});
+
   @override
   Widget build(BuildContext context) {
     final title = sectionTitle[section.section] ?? section.section;
+    final agent = sectionAgent[section.section];
+
+    final header = Row(children: [
+      if (agent != null) ...[
+        Container(width: 7, height: 7, decoration: BoxDecoration(color: agentColor(agent), shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+      ],
+      Flexible(
+        child: Text(title.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: emphasis ? QC.textHi : QC.textMid,
+                fontSize: emphasis ? 12.5 : 11,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700)),
+      ),
+      if (agent != null) ...[
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text('· ${agentName(agent)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: QC.textLo, fontSize: 11)),
+        ),
+      ],
+    ]);
+    final body = SelectableText(section.markdown,
+        style: TextStyle(
+            color: QC.textHi,
+            height: 1.5,
+            fontSize: emphasis ? 15 : 14,
+            fontWeight: emphasis ? FontWeight.w500 : FontWeight.w400));
+
+    final content = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      header,
+      const SizedBox(height: 8),
+      body,
+    ]);
+
+    if (!emphasis) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: QC.surface1,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: QC.border),
+        ),
+        child: content,
+      );
+    }
+    // Emphasised "answer" card: surface2 + a full-height accent stripe tied to the verdict colour.
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: QC.surface1,
+        color: QC.surface2,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: QC.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title.toUpperCase(),
-              style: const TextStyle(
-                  color: QC.textMid, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(section.markdown, style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 14)),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 4, color: accent),
+              Expanded(child: Padding(padding: const EdgeInsets.all(18), child: content)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -385,34 +470,78 @@ class _VerdictRail extends StatelessWidget {
     return Container(
       color: QC.surface1,
       padding: const EdgeInsets.all(20),
-      child: v == null
-          ? Center(
-              child: Text(
-                state.phase == RunPhase.running ? 'Deliberating…' : 'No verdict yet',
-                style: const TextStyle(color: QC.textLo, fontSize: 15),
-              ),
-            )
-          : ListView(
-              children: [
-                const Text('VERDICT',
-                    style: TextStyle(
-                        color: QC.textLo, fontSize: 11, letterSpacing: 2, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                _RatingPill(v.rating),
-                if (v.confidence != null) ...[
-                  const SizedBox(height: 16),
-                  _Confidence(v.confidence!),
-                ],
-                if (v.thesis != null) ...[
-                  const SizedBox(height: 16),
-                  Text(v.thesis!,
-                      style: const TextStyle(
-                          color: QC.textHi, fontSize: 15, height: 1.5, fontStyle: FontStyle.italic)),
-                ],
-                const SizedBox(height: 20),
-                _Levels(v),
-              ],
-            ),
+      child: ListView(
+        children: [
+          const Text('VERDICT',
+              style: TextStyle(color: QC.textLo, fontSize: 11, letterSpacing: 2, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          if (v == null)
+            _PendingVerdict(state.phase)
+          else ...[
+            _RatingPill(v.rating),
+            if (v.confidence != null) ...[
+              const SizedBox(height: 16),
+              _Confidence(v.confidence!),
+            ],
+            if (v.thesis != null) ...[
+              const SizedBox(height: 16),
+              SelectableText(v.thesis!,
+                  style: const TextStyle(
+                      color: QC.textHi, fontSize: 15, height: 1.5, fontStyle: FontStyle.italic)),
+            ],
+            const SizedBox(height: 20),
+            _KvCard('Key Levels', [
+              if (v.entryPrice != null) ('Entry', v.entryPrice!.toStringAsFixed(0)),
+              if (v.priceTarget != null) ('Target', v.priceTarget!.toStringAsFixed(0)),
+              if (v.stopLoss != null) ('Stop', v.stopLoss!.toStringAsFixed(0)),
+              if (v.timeHorizon != null) ('Horizon', v.timeHorizon!),
+            ]),
+          ],
+          if (state.cost != null) _KvCard('Run Cost', _costRows(state.cost!)),
+        ],
+      ),
+    );
+  }
+
+  static List<(String, String)> _costRows(CostSnapshot c) {
+    String tokens(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
+    return [
+      if (c.estUsd != null) ('Est. cost', '\$${c.estUsd!.toStringAsFixed(2)}'),
+      ('LLM calls', '${c.llmCalls}'),
+      ('Tool calls', '${c.toolCalls}'),
+      ('Tokens', tokens(c.tokensIn + c.tokensOut)),
+    ];
+  }
+}
+
+class _PendingVerdict extends StatelessWidget {
+  final RunPhase phase;
+  const _PendingVerdict(this.phase);
+  @override
+  Widget build(BuildContext context) {
+    final msg = phase == RunPhase.running ? 'The council is deliberating…' : 'No verdict yet.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Skeleton keeps the rail's shape across phases instead of collapsing.
+        Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: QC.surface2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: QC.border),
+          ),
+          alignment: Alignment.center,
+          child: Text(msg, style: const TextStyle(color: QC.textLo, fontSize: 14)),
+        ),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          // Determinate (static) so it reads as a skeleton track and never animates.
+          child: const LinearProgressIndicator(
+            value: 0, minHeight: 6, backgroundColor: QC.surface2, valueColor: AlwaysStoppedAnimation(QC.surface2)),
+        ),
+      ],
     );
   }
 }
@@ -423,62 +552,66 @@ class _RatingPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = ratingColor(rating);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+    return Semantics(
+      label: 'Verdict: ${rating ?? 'unknown'}',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Text((rating ?? '—').toUpperCase(),
+            style: TextStyle(color: color, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1)),
       ),
-      child: Text((rating ?? '—').toUpperCase(),
-          style: TextStyle(color: color, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1)),
     );
   }
 }
 
 class _Confidence extends StatelessWidget {
-  final double value; // 0..1
+  final double value;
   const _Confidence(this.value);
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          const Text('Confidence', style: TextStyle(color: QC.textMid, fontSize: 13)),
-          const Spacer(),
-          Text('${(value * 100).round()}%',
-              style: const TextStyle(
-                  color: QC.textHi, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
-        ]),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 6,
-            backgroundColor: QC.surface2,
-            valueColor: const AlwaysStoppedAnimation(QC.accent),
+    return Semantics(
+      label: 'Confidence ${(value * 100).round()} percent',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('Confidence', style: TextStyle(color: QC.textMid, fontSize: 13)),
+            const Spacer(),
+            Text('${(value * 100).round()}%',
+                style: const TextStyle(
+                    color: QC.textHi, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+          ]),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: value,
+              minHeight: 6,
+              backgroundColor: QC.surface2,
+              valueColor: const AlwaysStoppedAnimation(QC.accent),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _Levels extends StatelessWidget {
-  final Verdict v;
-  const _Levels(this.v);
+/// A small key/value card (surface2, tabular figures). Used for both Key Levels and Run Cost.
+class _KvCard extends StatelessWidget {
+  final String title;
+  final List<(String, String)> rows;
+  const _KvCard(this.title, this.rows);
+
   @override
   Widget build(BuildContext context) {
-    final rows = <(String, String)>[
-      if (v.entryPrice != null) ('Entry', v.entryPrice!.toStringAsFixed(0)),
-      if (v.priceTarget != null) ('Target', v.priceTarget!.toStringAsFixed(0)),
-      if (v.stopLoss != null) ('Stop', v.stopLoss!.toStringAsFixed(0)),
-      if (v.timeHorizon != null) ('Horizon', v.timeHorizon!),
-    ];
     if (rows.isEmpty) return const SizedBox.shrink();
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: QC.surface2,
@@ -486,14 +619,19 @@ class _Levels extends StatelessWidget {
         border: Border.all(color: QC.border),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(title.toUpperCase(),
+              style: const TextStyle(
+                  color: QC.textMid, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
           for (final (label, value) in rows)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(children: [
                 Text(label, style: const TextStyle(color: QC.textMid, fontSize: 13)),
                 const Spacer(),
-                Text(value,
+                SelectableText(value,
                     style: const TextStyle(
                         color: QC.textHi,
                         fontWeight: FontWeight.w600,
