@@ -41,7 +41,6 @@ dependencies:
   quorum_core:
     path: ../../packages/quorum_core
   window_manager: ^0.5.1
-  flutter_animate: ^4.5.2
 
 dev_dependencies:
   flutter_test:

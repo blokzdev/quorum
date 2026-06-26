@@ -8,6 +8,13 @@ import 'package:window_manager/window_manager.dart';
 import '../state/run_controller.dart';
 import 'quorum_colors.dart';
 
+/// Motion budget (calm-luxury): fast 120 / normal 180 / slow 240ms, ease-out. All animations are
+/// FINITE (they settle) so golden pumpAndSettle never hangs; honour the OS reduce-motion setting.
+const _motionNormal = Duration(milliseconds: 180);
+const _motionSlow = Duration(milliseconds: 240);
+Duration _motion(BuildContext ctx, Duration d) =>
+    (MediaQuery.maybeOf(ctx)?.disableAnimations ?? false) ? Duration.zero : d;
+
 /// The live screen: owns the frameless window's custom title bar, watches the run, wires Run/Cancel,
 /// and tears the sidecar down exactly once on close.
 class TerminalScreen extends ConsumerStatefulWidget {
@@ -321,11 +328,14 @@ class _PhaseChip extends StatelessWidget {
       RunPhase.error => ('Error', QC.down),
       RunPhase.idle => ('Idle', QC.textLo),
     };
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.circle, size: 8, color: color),
-      const SizedBox(width: 6),
-      Text(label, style: TextStyle(color: color, fontSize: 13)),
-    ]);
+    return Semantics(
+      label: 'Run status: $label',
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.circle, size: 8, color: color),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(color: color, fontSize: 13)),
+      ]),
+    );
   }
 }
 
@@ -594,7 +604,15 @@ class _TugBar extends StatelessWidget {
               style: TextStyle(color: QC.down, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 7),
-        SizedBox(height: 12, child: CustomPaint(size: Size.infinite, painter: _TugBarPainter(lean))),
+        SizedBox(
+          height: 12,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.5, end: lean),
+            duration: _motion(context, _motionSlow),
+            curve: Curves.easeOut,
+            builder: (_, v, _) => CustomPaint(size: Size.infinite, painter: _TugBarPainter(v)),
+          ),
+        ),
       ]),
     );
   }
@@ -897,15 +915,22 @@ class _RatingPill extends StatelessWidget {
     final color = ratingColor(rating);
     return Semantics(
       label: 'Verdict: ${rating ?? 'unknown'}',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
+      // Finite reveal (scale + fade) when the verdict lands — plays once at done, never re-runs.
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: _motion(context, _motionNormal),
+        curve: Curves.easeOut,
+        builder: (_, t, child) => Opacity(opacity: t, child: Transform.scale(scale: 0.96 + 0.04 * t, child: child)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.5)),
+          ),
+          child: Text((rating ?? '—').toUpperCase(),
+              style: TextStyle(color: color, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1)),
         ),
-        child: Text((rating ?? '—').toUpperCase(),
-            style: TextStyle(color: color, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1)),
       ),
     );
   }
@@ -931,11 +956,16 @@ class _Confidence extends StatelessWidget {
           const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: value,
-              minHeight: 6,
-              backgroundColor: QC.surface2,
-              valueColor: const AlwaysStoppedAnimation(QC.accent),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: value),
+              duration: _motion(context, _motionSlow),
+              curve: Curves.easeOut,
+              builder: (_, v, _) => LinearProgressIndicator(
+                value: v,
+                minHeight: 6,
+                backgroundColor: QC.surface2,
+                valueColor: const AlwaysStoppedAnimation(QC.accent),
+              ),
             ),
           ),
         ],
