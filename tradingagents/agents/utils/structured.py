@@ -18,8 +18,10 @@ all three agents log the same warnings when fallback fires.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -27,6 +29,27 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+# When set (by the runtime, via ``capture_structured``), each successful structured agent result is
+# reported here as ``sink(agent_name, model_dump_dict)`` before it is flattened to markdown — so the
+# typed Pydantic outputs can be persisted/streamed as JSON instead of being discarded.
+_structured_sink: contextvars.ContextVar[Callable[[str, dict], None] | None] = contextvars.ContextVar(
+    "quorum_structured_sink", default=None
+)
+
+
+@contextlib.contextmanager
+def capture_structured(sink: Callable[[str, dict], None]) -> Iterator[None]:
+    """Within this context, report every structured agent result to ``sink(agent_name, dict)``.
+
+    Thread-affine (uses a ``ContextVar``): set it in the same thread that drives ``graph.stream``;
+    the agent nodes run synchronously in that thread, so they see the sink.
+    """
+    token = _structured_sink.set(sink)
+    try:
+        yield
+    finally:
+        _structured_sink.reset(token)
 
 
 def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Any | None:
@@ -68,6 +91,12 @@ def invoke_structured_or_freetext(
                 # the tool, leaving the parser with nothing to return. Treat it
                 # as a structured miss and fall back, with a clear reason.
                 raise ValueError("structured output returned no parsed result")
+            sink = _structured_sink.get()
+            if sink is not None:
+                try:
+                    sink(agent_name, result.model_dump(mode="json"))
+                except Exception:  # capture is best-effort; never break a run over telemetry
+                    logger.debug("structured capture failed for %s", agent_name, exc_info=True)
             return render(result)
         except Exception as exc:
             logger.warning(
