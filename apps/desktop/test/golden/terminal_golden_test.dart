@@ -6,7 +6,7 @@ import 'package:quorum_core/quorum_core.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, brightness: Brightness.dark, fontFamily: 'SegoeUI'),
+      theme: ThemeData(useMaterial3: true, brightness: Brightness.dark, fontFamily: 'Inter'),
       home: Scaffold(backgroundColor: QC.bg, body: child),
     );
 

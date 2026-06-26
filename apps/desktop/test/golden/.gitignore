@@ -1,4 +1,3 @@
-# Golden baselines here are machine-font-specific (loaded from system fonts) and the UI is still
-# evolving. Regenerate locally with `flutter test --update-goldens`. Stable, font-bundled goldens
-# can be committed once the design settles (S4).
-goldens/
+# Goldens are now committed: S4 bundles Inter + JetBrains Mono and the test harness loads those
+# bundled .ttf (see test/flutter_test_config.dart), so renders are deterministic across machines/CI.
+# Regenerate after intentional UI changes with `flutter test --update-goldens` and review the diff.

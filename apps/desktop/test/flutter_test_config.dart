@@ -4,12 +4,20 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Load real system fonts so golden renders show legible text (Flutter's test font renders glyphs as
-/// boxes otherwise). S3 uses Segoe UI as a stand-in for visual critique; S4 bundles Inter/JetBrains Mono.
+/// Load the bundled brand fonts so golden renders use the SAME type as the shipping app (Flutter's
+/// test font renders glyphs as boxes otherwise). Paths are relative to the test cwd (apps/desktop),
+/// matching the `fonts/` assets declared in pubspec.yaml — so committed goldens are now portable
+/// across machines/CI instead of depending on installed system fonts.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
-  await _load('SegoeUI', [r'C:\Windows\Fonts\segoeui.ttf', r'C:\Windows\Fonts\segoeuib.ttf']);
-  await _load('Mono', [r'C:\Windows\Fonts\consola.ttf']);
+  await _load('Inter', [
+    'fonts/Inter-Regular.ttf',
+    'fonts/Inter-Medium.ttf',
+    'fonts/Inter-SemiBold.ttf',
+    'fonts/Inter-Bold.ttf',
+    'fonts/Inter-ExtraBold.ttf',
+  ]);
+  await _load('JetBrainsMono', ['fonts/JetBrainsMono-Regular.ttf', 'fonts/JetBrainsMono-Medium.ttf']);
   await testMain();
 }
 

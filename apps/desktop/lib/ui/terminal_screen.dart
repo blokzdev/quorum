@@ -112,7 +112,7 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: QC.textHi,
-                      fontFeatures: [FontFeature.tabularFigures()],
+                      fontFamily: QC.fontMono,
                       fontWeight: FontWeight.w600)),
             ),
             if (state.tradeDate != null) ...[
@@ -583,7 +583,7 @@ class _Confidence extends StatelessWidget {
             const Spacer(),
             Text('${(value * 100).round()}%',
                 style: const TextStyle(
-                    color: QC.textHi, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                    color: QC.textHi, fontWeight: FontWeight.w700, fontFamily: QC.fontMono)),
           ]),
           const SizedBox(height: 6),
           ClipRRect(
@@ -635,7 +635,7 @@ class _KvCard extends StatelessWidget {
                     style: const TextStyle(
                         color: QC.textHi,
                         fontWeight: FontWeight.w600,
-                        fontFeatures: [FontFeature.tabularFigures()])),
+                        fontFamily: QC.fontMono)),
               ]),
             ),
         ],

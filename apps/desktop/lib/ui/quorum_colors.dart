@@ -5,6 +5,9 @@ import 'package:quorum_core/quorum_core.dart';
 /// S3 uses these constants directly to nail the IA, layout, and colour semantics first.
 class QC {
   QC._();
+  // Brand type: Inter for UI, JetBrains Mono for numerics (bundled under apps/desktop/fonts/).
+  static const fontUi = 'Inter';
+  static const fontMono = 'JetBrainsMono';
   static const bg = Color(0xFF0A0C10);
   static const surface1 = Color(0xFF12151C);
   static const surface2 = Color(0xFF1A1E27);
