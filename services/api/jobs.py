@@ -141,6 +141,9 @@ class JobRegistry:
                 job.event_log.append(ev.error("job", str(exc)))
 
     def _execute(self, job: Job) -> None:
+        if job.request.get("mode") == "demo":
+            self._execute_demo(job)
+            return
         plan = plan_run(job.request)
         job.status = "running"
         self._results_dir.mkdir(parents=True, exist_ok=True)
@@ -159,6 +162,18 @@ class JobRegistry:
                 params=plan["params"], should_cancel=lambda: job.cancel_flag,
             )
             self._write_reports(job, plan["ticker"])
+        job.status = "cancelled" if job.cancel_flag else "done"
+
+    def _execute_demo(self, job: Job) -> None:
+        """Cost-free synthetic run (no engine, no keys) for building/demoing the UI."""
+        from services.api.demo import run_demo
+        job.status = "running"
+        ticker = job.request.get("ticker") or _extract_ticker(job.request.get("intent")) or "NVDA"
+        delay = job.request.get("step_delay")
+        job.final_state = run_demo(
+            job.event_log, ticker, lambda: job.cancel_flag,
+            step_delay=0.25 if delay is None else float(delay),
+        )
         job.status = "cancelled" if job.cancel_flag else "done"
 
     def _write_reports(self, job: Job, ticker: str) -> None:

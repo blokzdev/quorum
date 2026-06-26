@@ -251,3 +251,63 @@ def test_post_run_streams_sse_to_completion(monkeypatch, tmp_path):
     _poll_status(client, run_id, "done")
     reports = client.get(f"/runs/{run_id}/reports").json()
     assert reports["sections"]["final_trade_decision"] == "DEC"
+
+
+# --- Demo mode (cost-free synthetic run; no engine, no keys) ---
+
+def test_demo_run_streams_full_debate_without_engine():
+    from services.api.demo import run_demo
+    from services.api.event_log import EventLog
+
+    log = EventLog("demo")
+    state = run_demo(log, "NVDA", lambda: False, step_delay=0)
+    events = log.replay_from(0)
+
+    assert events[0].type == EventType.RUN_STARTED
+    assert events[-1].type == EventType.RUN_DONE
+    assert events[-1].data["rating"] == "Buy"
+    assert events[-1].data["structured"]["price_target"] == 152.0
+    assert events[-1].data["cancelled"] is False
+
+    sections = {e.data["section"] for e in events if e.type == EventType.REPORT_SECTION_DONE}
+    assert {"market_report", "sentiment_report", "news_report", "fundamentals_report",
+            "investment_plan", "trader_investment_plan", "final_trade_decision"} <= sections
+    stages = {e.data["stage"] for e in events if e.type == EventType.STAGE_STARTED}
+    assert len(stages) == 5
+    assert state["final_trade_decision"].startswith("BUY NVDA")
+
+
+def test_demo_run_cancels_early():
+    from services.api.demo import run_demo
+    from services.api.event_log import EventLog
+
+    log = EventLog("demo")
+    run_demo(log, "NVDA", lambda: True, step_delay=0)  # cancel immediately
+    done = next(e for e in log.replay_from(0) if e.type == EventType.RUN_DONE)
+    assert done.data["cancelled"] is True
+    assert done.data["rating"] is None
+
+
+def test_demo_run_over_http_without_keys(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+
+    created = client.post("/runs", json={"mode": "demo", "ticker": "NVDA", "step_delay": 0})
+    assert created.status_code == 202
+    run_id = created.json()["run_id"]
+
+    received: list[str] = []
+    with client.stream("GET", f"/runs/{run_id}/events") as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data:"):
+                payload = json.loads(line[len("data:"):].strip())
+                if payload.get("type"):
+                    received.append(payload["type"])
+                    if payload["type"] in ("run_done", "error"):
+                        break
+
+    assert received[0] == "run_started"
+    assert received[-1] == "run_done"
+    _poll_status(client, run_id, "done")
+    assert client.get(f"/runs/{run_id}/reports").json()["sections"]["final_trade_decision"].startswith("BUY")

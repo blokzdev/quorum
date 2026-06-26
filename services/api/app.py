@@ -31,7 +31,7 @@ _SSE_IDLE_TIMEOUT = 15  # seconds between heartbeats when no events are flowing
 
 
 class RunRequest(BaseModel):
-    mode: Literal["vibe", "pro"] = "vibe"
+    mode: Literal["vibe", "pro", "demo"] = "vibe"
     intent: str | None = None
     ticker: str | None = None
     trade_date: str | None = None
@@ -45,6 +45,8 @@ class RunRequest(BaseModel):
     output_language: str = "English"
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
+    # demo mode only: per-step delay in seconds (0 = instant, for tests).
+    step_delay: float | None = None
 
 
 @app.middleware("http")
