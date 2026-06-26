@@ -1,0 +1,4 @@
+# Golden baselines here are machine-font-specific (loaded from system fonts) and the UI is still
+# evolving. Regenerate locally with `flutter test --update-goldens`. Stable, font-bundled goldens
+# can be committed once the design settles (S4).
+goldens/
