@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "langchain-core>=0.3.81",
-    "backtrader>=1.9.78.123",
     "langchain-anthropic>=0.3.15",
     "langchain-experimental>=0.3.4",
     "langchain-google-genai>=4.0.0",
@@ -22,7 +21,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pytz>=2025.2",
     "questionary>=2.1.0",
-    "redis>=6.2.0",
     "requests>=2.32.4",
     "rich>=14.0.0",
     "typer>=0.21.0",
@@ -44,12 +42,20 @@ dev = [
 bedrock = [
     "langchain-aws>=1.5.0",
 ]
+# Quorum local API sidecar: FastAPI + SSE transport + OS-keychain secret storage. Optional so the
+# core engine install stays lean: pip install ".[api]". The desktop app bundles this.
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.0",
+    "keyring>=24.0",
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "services*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
