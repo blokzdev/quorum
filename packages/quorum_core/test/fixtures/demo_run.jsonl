@@ -1,0 +1,63 @@
+{"type": "run_started", "seq": 0, "run_id": "demo", "ts": 1782491306.6560583, "data": {"ticker": "NVDA", "trade_date": "2024-05-10", "asset_type": "stock", "params": {"mode": "demo"}, "contract_version": 1}}
+{"type": "stage_started", "seq": 1, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "analysts"}}
+{"type": "agent_started", "seq": 2, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "market"}}
+{"type": "token", "seq": 3, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "market", "delta": "NVDA reclaimed its 50-day moving average on rising volume; RSI 58 with room to run and a fresh MACD bullish crossover. "}}
+{"type": "token", "seq": 4, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "market", "delta": "Key support 118, resistance 135."}}
+{"type": "agent_done", "seq": 5, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "market"}}
+{"type": "report_section_done", "seq": 6, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "market_report", "markdown": "NVDA reclaimed its 50-day moving average on rising volume; RSI 58 with room to run and a fresh MACD bullish crossover. Key support 118, resistance 135.", "structured": null}}
+{"type": "agent_started", "seq": 7, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "social"}}
+{"type": "token", "seq": 8, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "social", "delta": "Social sentiment skews bullish (7.4/10). "}}
+{"type": "token", "seq": 9, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "social", "delta": "StockTwits mentions +22% w/w and constructive Reddit threads on the product cycle. Confidence: medium."}}
+{"type": "agent_done", "seq": 10, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "social"}}
+{"type": "report_section_done", "seq": 11, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "sentiment_report", "markdown": "Social sentiment skews bullish (7.4/10). StockTwits mentions +22% w/w and constructive Reddit threads on the product cycle. Confidence: medium.", "structured": null}}
+{"type": "agent_started", "seq": 12, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "news"}}
+{"type": "token", "seq": 13, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "news", "delta": "Macro backdrop supportive: soft-landing narrative intact, sector tailwinds from new orders, and no company-specific red flags this week."}}
+{"type": "agent_done", "seq": 14, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "news"}}
+{"type": "report_section_done", "seq": 15, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "news_report", "markdown": "Macro backdrop supportive: soft-landing narrative intact, sector tailwinds from new orders, and no company-specific red flags this week.", "structured": null}}
+{"type": "agent_started", "seq": 16, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "fundamentals"}}
+{"type": "token", "seq": 17, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "fundamentals", "delta": "Revenue +18% YoY, gross margin expanding to 71%, free cash flow positive. "}}
+{"type": "token", "seq": 18, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "fundamentals", "delta": "Valuation is rich (38x forward) but defensible given growth durability."}}
+{"type": "agent_done", "seq": 19, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "fundamentals"}}
+{"type": "report_section_done", "seq": 20, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "fundamentals_report", "markdown": "Revenue +18% YoY, gross margin expanding to 71%, free cash flow positive. Valuation is rich (38x forward) but defensible given growth durability.", "structured": null}}
+{"type": "stage_done", "seq": 21, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "analysts"}}
+{"type": "stage_started", "seq": 22, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "research_debate"}}
+{"type": "agent_started", "seq": 23, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "bull"}}
+{"type": "token", "seq": 24, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "bull", "delta": "Bull: NVDA's margin expansion and order backlog support multiple persistence."}}
+{"type": "agent_done", "seq": 25, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "bull"}}
+{"type": "report_section_done", "seq": 26, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "bull", "markdown": "The order backlog and 71% gross margin give NVDA room to compound through the cycle.", "structured": null}}
+{"type": "agent_started", "seq": 27, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "bear"}}
+{"type": "token", "seq": 28, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "bear", "delta": "Bear: NVDA is priced for perfection; any growth wobble re-rates it lower."}}
+{"type": "agent_done", "seq": 29, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "bear"}}
+{"type": "report_section_done", "seq": 30, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "bear", "markdown": "At 38x forward, NVDA leaves no margin for error if growth decelerates.", "structured": null}}
+{"type": "agent_started", "seq": 31, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "research_manager"}}
+{"type": "token", "seq": 32, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "research_manager", "delta": "Manager: the bull case is better supported this quarter."}}
+{"type": "agent_done", "seq": 33, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "research_manager"}}
+{"type": "report_section_done", "seq": 34, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "investment_plan", "markdown": "On balance the bull thesis on NVDA is better supported; lean constructive with sizing discipline.", "structured": null}}
+{"type": "stage_done", "seq": 35, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "research_debate"}}
+{"type": "stage_started", "seq": 36, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "trader"}}
+{"type": "agent_started", "seq": 37, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "trader"}}
+{"type": "token", "seq": 38, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "trader", "delta": "Trader: starter long NVDA, entry ~124, stop 113, target 152."}}
+{"type": "agent_done", "seq": 39, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "trader"}}
+{"type": "report_section_done", "seq": 40, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "trader_investment_plan", "markdown": "Buy a starter position in NVDA: entry ~124, stop 113, target 152, size 5% of book.", "structured": null}}
+{"type": "stage_done", "seq": 41, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "trader"}}
+{"type": "stage_started", "seq": 42, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "risk_debate"}}
+{"type": "agent_started", "seq": 43, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "aggressive"}}
+{"type": "token", "seq": 44, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "aggressive", "delta": "Aggressive: add on strength; the trend is your friend."}}
+{"type": "agent_done", "seq": 45, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "aggressive"}}
+{"type": "report_section_done", "seq": 46, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "aggressive", "markdown": "Press the NVDA long on confirmation above 135; momentum favors continuation.", "structured": null}}
+{"type": "agent_started", "seq": 47, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "conservative"}}
+{"type": "token", "seq": 48, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "conservative", "delta": "Conservative: keep the starter small; valuation is stretched."}}
+{"type": "agent_done", "seq": 49, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "conservative"}}
+{"type": "report_section_done", "seq": 50, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "conservative", "markdown": "Cap NVDA risk at a starter; a stop at 113 bounds the downside.", "structured": null}}
+{"type": "agent_started", "seq": 51, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "neutral"}}
+{"type": "token", "seq": 52, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "neutral", "delta": "Neutral: the trader's plan is balanced as written."}}
+{"type": "agent_done", "seq": 53, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "neutral"}}
+{"type": "report_section_done", "seq": 54, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "neutral", "markdown": "The proposed NVDA entry/stop/target is a reasonable risk/reward as written.", "structured": null}}
+{"type": "stage_done", "seq": 55, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "risk_debate"}}
+{"type": "stage_started", "seq": 56, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "portfolio"}}
+{"type": "agent_started", "seq": 57, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "portfolio"}}
+{"type": "report_section_done", "seq": 58, "run_id": "demo", "ts": 1782491306.6560583, "data": {"section": "final_trade_decision", "markdown": "BUY NVDA \u2014 starter long. Entry ~124, stop 113, target 152, time horizon 3-6 months. Momentum and durable growth outweigh a rich multiple.", "structured": null}}
+{"type": "agent_done", "seq": 59, "run_id": "demo", "ts": 1782491306.6560583, "data": {"agent": "portfolio"}}
+{"type": "stage_done", "seq": 60, "run_id": "demo", "ts": 1782491306.6560583, "data": {"stage": "portfolio"}}
+{"type": "cost", "seq": 61, "run_id": "demo", "ts": 1782491306.6560583, "data": {"llm_calls": 0, "tool_calls": 0, "tokens_in": 0, "tokens_out": 0, "est_usd": 0.0}}
+{"type": "run_done", "seq": 62, "run_id": "demo", "ts": 1782491306.6560583, "data": {"final_decision": "BUY NVDA \u2014 starter long. Entry ~124, stop 113, target 152, time horizon 3-6 months. Momentum and durable growth outweigh a rich multiple.", "rating": "Buy", "confidence": 0.72, "thesis": "NVDA's momentum and durable growth outweigh a rich multiple.", "structured": {"rating": "Buy", "executive_summary": "Initiate a starter long in NVDA.", "investment_thesis": "NVDA pairs improving technicals with accelerating fundamentals.", "price_target": 152.0, "time_horizon": "3-6 months", "entry_price": 124.0, "stop_loss": 113.0}, "cancelled": false}}

@@ -1,0 +1,11 @@
+name: quorum_core
+description: Portable Quorum domain — the streaming event contract, run view-state, and pure reducer. No Flutter or UI dependencies, so it is reused verbatim by the desktop app and a future mobile client.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.4.0
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^5.0.0
