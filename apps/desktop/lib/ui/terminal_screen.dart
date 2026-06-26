@@ -287,11 +287,9 @@ class _ReasoningPane extends StatelessWidget {
   final RunViewState state;
   const _ReasoningPane(this.state);
 
-  static const _decisionKeys = ['final_trade_decision', 'trader_investment_plan', 'investment_plan'];
-  static const _evidenceKeys = [
-    'bull', 'bear', 'aggressive', 'conservative', 'neutral',
-    'fundamentals_report', 'news_report', 'sentiment_report', 'market_report',
-  ];
+  static const _decisionKeys = ['final_trade_decision', 'trader_investment_plan'];
+  static const _riskKeys = ['aggressive', 'neutral', 'conservative'];
+  static const _analystKeys = ['fundamentals_report', 'news_report', 'sentiment_report', 'market_report'];
 
   @override
   Widget build(BuildContext context) {
@@ -301,29 +299,242 @@ class _ReasoningPane extends StatelessWidget {
         .firstOrNull;
     final liveText = active != null ? state.reasoningByAgent[active.name] : null;
 
-    final decision = [for (final k in _decisionKeys) if (state.reports[k] != null) state.reports[k]!];
-    final evidence = [for (final k in _evidenceKeys) if (state.reports[k] != null) state.reports[k]!];
+    ReportSection? rep(String k) => state.reports[k];
+    final decision = [for (final k in _decisionKeys) if (rep(k) != null) rep(k)!];
+    final bull = rep('bull');
+    final bear = rep('bear');
+    final rmPlan = rep('investment_plan');
+    final hasDebate = bull != null || bear != null || rmPlan != null;
+    final riskViews = [for (final k in _riskKeys) if (rep(k) != null) rep(k)!];
+    final analyst = [for (final k in _analystKeys) if (rep(k) != null) rep(k)!];
     final ratingAccent = ratingColor(state.verdict?.rating);
 
-    if (decision.isEmpty && evidence.isEmpty && liveText == null) {
+    final hasLive = active != null && liveText != null && liveText.isNotEmpty;
+    if (decision.isEmpty && !hasDebate && riskViews.isEmpty && analyst.isEmpty && !hasLive) {
       return const Center(
         child: Text('Run an analysis to watch the council deliberate.',
             style: TextStyle(color: QC.textLo, fontSize: 15)),
       );
     }
 
+    // IA: the answer (decision) first, then the research debate as a tug-of-war, then the risk
+    // debate, then the raw analyst evidence as supporting drill-down.
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        if (active != null && liveText != null && liveText.isNotEmpty)
-          _LiveReasoningCard(agent: active, text: liveText),
+        if (hasLive) _LiveReasoningCard(agent: active, text: liveText),
         for (final s in decision)
-          _SectionCard(s,
-              emphasis: s.section == 'final_trade_decision',
-              accent: ratingAccent),
-        if (decision.isNotEmpty && evidence.isNotEmpty) const _GroupLabel('Evidence & Debate'),
-        for (final s in evidence) _SectionCard(s),
+          _SectionCard(s, emphasis: s.section == 'final_trade_decision', accent: ratingAccent),
+        if (hasDebate) ...[
+          const _GroupLabel('Research Debate'),
+          _TugOfWar(
+            bull: bull,
+            bear: bear,
+            managerPlan: rmPlan,
+            bullLive: active == AgentId.bull,
+            bearLive: active == AgentId.bear,
+          ),
+        ],
+        if (riskViews.isNotEmpty) ...[
+          const _GroupLabel('Risk Debate'),
+          for (final s in riskViews) _SectionCard(s),
+        ],
+        if (analyst.isNotEmpty) ...[
+          const _GroupLabel('Analyst Evidence'),
+          for (final s in analyst) _SectionCard(s),
+        ],
       ],
+    );
+  }
+}
+
+/// The bull-vs-bear "tug-of-war": two facing tinted columns (bull green / bear red) showing each
+/// case, a balance bar leaning toward the side the Research Manager favored, resolving into the
+/// manager's verdict ribbon.
+class _TugOfWar extends StatelessWidget {
+  final ReportSection? bull;
+  final ReportSection? bear;
+  final ReportSection? managerPlan;
+  final bool bullLive;
+  final bool bearLive;
+  const _TugOfWar({this.bull, this.bear, this.managerPlan, this.bullLive = false, this.bearLive = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final lean = _lean(managerPlan?.markdown);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _DebateColumn(agent: AgentId.bull, section: bull, live: bullLive)),
+                const SizedBox(width: 12),
+                Expanded(child: _DebateColumn(agent: AgentId.bear, section: bear, live: bearLive)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _TugBar(lean: lean),
+          if (managerPlan != null) ...[
+            const SizedBox(height: 16),
+            _DecisionRibbon(section: managerPlan!, lean: lean),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Lean in [0,1] (0 = fully bear, 1 = fully bull), inferred from the manager's decision text.
+  static double _lean(String? text) {
+    if (text == null) return 0.5;
+    final t = text.toLowerCase();
+    const bullWords = ['bull', 'buy', 'long', 'constructive', 'upside', 'accumulate', 'outperform', 'overweight'];
+    const bearWords = ['bear', 'sell', 'short', 'caution', 'downside', 'overvalued', 'underperform', 'underweight'];
+    var score = 0;
+    for (final w in bullWords) {
+      if (t.contains(w)) score++;
+    }
+    for (final w in bearWords) {
+      if (t.contains(w)) score--;
+    }
+    return (0.5 + 0.11 * score).clamp(0.22, 0.78);
+  }
+}
+
+class _DebateColumn extends StatelessWidget {
+  final AgentId agent;
+  final ReportSection? section;
+  final bool live;
+  const _DebateColumn({required this.agent, this.section, this.live = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = agentColor(agent);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withValues(alpha: 0.30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Text(agentName(agent).toUpperCase(),
+                style: TextStyle(color: c, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+            if (live) ...[const SizedBox(width: 8), Text('•••', style: TextStyle(color: c, fontSize: 11))],
+          ]),
+          const SizedBox(height: 10),
+          if (section != null)
+            SelectableText(section!.markdown,
+                style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 13.5))
+          else
+            Text(live ? 'Building its case…' : 'Awaiting rebuttal…',
+                style: const TextStyle(color: QC.textLo, fontSize: 13, fontStyle: FontStyle.italic)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A horizontal balance bar: a green (bull) segment on the left and a red (bear) segment on the
+/// right, split at [lean] with a knob — the wider side is "winning" the debate.
+class _TugBar extends StatelessWidget {
+  final double lean; // 0 = bear, 1 = bull
+  const _TugBar({required this.lean});
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Debate balance leans ${lean >= 0.5 ? 'bull' : 'bear'}',
+      child: Column(children: [
+        Row(children: const [
+          Text('BULL',
+              style: TextStyle(color: QC.up, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+          Spacer(),
+          Text('BEAR',
+              style: TextStyle(color: QC.down, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 7),
+        SizedBox(height: 12, child: CustomPaint(size: Size.infinite, painter: _TugBarPainter(lean))),
+      ]),
+    );
+  }
+}
+
+class _TugBarPainter extends CustomPainter {
+  final double lean;
+  _TugBarPainter(this.lean);
+  @override
+  void paint(Canvas canvas, Size s) {
+    final rrect = RRect.fromRectAndRadius(Offset.zero & s, Radius.circular(s.height / 2));
+    canvas.save();
+    canvas.clipRRect(rrect);
+    final split = (s.width * lean).clamp(0.0, s.width);
+    canvas.drawRect(Rect.fromLTWH(0, 0, split, s.height), Paint()..color = QC.up.withValues(alpha: 0.85));
+    canvas.drawRect(
+        Rect.fromLTWH(split, 0, s.width - split, s.height), Paint()..color = QC.down.withValues(alpha: 0.85));
+    canvas.restore();
+    final cx = split.clamp(7.0, s.width - 7.0);
+    canvas.drawCircle(Offset(cx, s.height / 2), s.height / 2 + 1, Paint()..color = QC.bg);
+    canvas.drawCircle(Offset(cx, s.height / 2), s.height / 2 - 1.5, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TugBarPainter old) => old.lean != lean;
+}
+
+/// The Research Manager's resolution of the debate, tinted by which side won.
+class _DecisionRibbon extends StatelessWidget {
+  final ReportSection section;
+  final double lean;
+  const _DecisionRibbon({required this.section, required this.lean});
+  @override
+  Widget build(BuildContext context) {
+    final c = lean >= 0.55 ? QC.up : (lean <= 0.45 ? QC.down : QC.warning);
+    return Container(
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withValues(alpha: 0.35)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 4, color: c),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(Icons.gavel, size: 14, color: c),
+                        const SizedBox(width: 8),
+                        Text('RESEARCH MANAGER · VERDICT',
+                            style:
+                                TextStyle(color: c, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+                      ]),
+                      const SizedBox(height: 10),
+                      SelectableText(section.markdown,
+                          style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -36,11 +36,25 @@ final _completed = RunViewState(
   },
   reports: {
     ..._analystReports,
+    'bull': const ReportSection('bull',
+        'The order backlog and 71% gross margin give NVDA room to compound through the cycle, and the '
+        'reclaimed 50-day MA confirms buyers stepping in on dips. Durable growth and operating leverage '
+        'justify a constructive stance even at a premium.', null),
+    'bear': const ReportSection('bear',
+        'At ~38x forward, NVDA leaves no margin for error. Any normalization in data-center demand or '
+        'supply would compress estimates and the multiple at once — thin support at the 50-day is little '
+        'comfort against that.', null),
     'investment_plan': const ReportSection('investment_plan',
         'On balance the bull thesis on NVDA is better supported this quarter; lean constructive '
         'with sizing discipline.', null),
     'trader_investment_plan': const ReportSection('trader_investment_plan',
         'Buy a starter position in NVDA: entry ~124, stop 113, target 152, size 5% of book.', null),
+    'aggressive': const ReportSection('aggressive',
+        'Press the long on confirmation above 135 — momentum and rising estimates favor continuation.', null),
+    'neutral': const ReportSection('neutral',
+        "The proposed entry/stop/target is a reasonable risk/reward as written; no change to the plan.", null),
+    'conservative': const ReportSection('conservative',
+        'Cap risk at a starter with a hard stop at 113; the rich multiple warrants patience over size.', null),
     'final_trade_decision': const ReportSection('final_trade_decision',
         'BUY NVDA — starter long. Entry ~124, stop 113, target 152, time horizon 3-6 months.', null),
   },
@@ -57,22 +71,29 @@ final _midRun = RunViewState(
   phase: RunPhase.running,
   ticker: 'NVDA',
   tradeDate: '2024-05-10',
-  lastSeq: 24,
-  cost: const CostSnapshot(llmCalls: 5, toolCalls: 3, tokensIn: 9100, tokensOut: 3800, estUsd: 0.16),
+  lastSeq: 38,
+  cost: const CostSnapshot(llmCalls: 8, toolCalls: 5, tokensIn: 14200, tokensOut: 6100, estUsd: 0.27),
   stages: const {Stage.analysts: NodeStatus.done, Stage.researchDebate: NodeStatus.running},
   agents: const {
     AgentId.market: NodeStatus.done,
     AgentId.social: NodeStatus.done,
     AgentId.news: NodeStatus.done,
     AgentId.fundamentals: NodeStatus.done,
-    AgentId.bull: NodeStatus.running,
+    AgentId.bull: NodeStatus.done,
+    AgentId.bear: NodeStatus.running,
   },
   reasoningByAgent: const {
-    'bull': 'The order backlog and 71% gross margin give NVDA room to compound through the cycle, '
-        'and the reclaimed 50-day MA confirms buyers are stepping in on dips. Even at a rich '
-        'multiple, durable growth and operating leverage justify a constructive stance…',
+    'bear': 'Counterpoint: at ~38x forward the bar is set high. If data-center growth normalizes even '
+        'modestly, estimates and the multiple compress together — the reclaimed 50-day MA is thin '
+        'support against that, and competitive supply is catching up faster than consensus assumes…',
   },
-  reports: _analystReports,
+  reports: {
+    ..._analystReports,
+    'bull': const ReportSection('bull',
+        'The order backlog and 71% gross margin give NVDA room to compound through the cycle; the '
+        'reclaimed 50-day MA confirms buyers are stepping in on dips. Durable growth and operating '
+        'leverage justify a constructive stance.', null),
+  },
 );
 
 void main() {
