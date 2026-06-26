@@ -1,10 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'ui/quorum_colors.dart';
 import 'ui/terminal_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  const opts = WindowOptions(
+    size: Size(1320, 860),
+    minimumSize: Size(1040, 680),
+    center: true,
+    // Opaque dark background (NOT transparent) — avoids the Windows white-flash / compositor-artifact
+    // class of bugs while still giving us a frameless, custom-title-bar window.
+    backgroundColor: QC.bg,
+    titleBarStyle: TitleBarStyle.hidden,
+  );
+  await windowManager.waitUntilReadyToShow(opts, () async {
+    // Arm the close hook BEFORE showing so the sidecar always gets a chance to tear down on close.
+    await windowManager.setPreventClose(true);
+    await windowManager.show();
+    await windowManager.focus();
+  });
   runApp(const ProviderScope(child: QuorumApp()));
 }
 
