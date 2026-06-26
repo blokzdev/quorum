@@ -35,8 +35,16 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Quorum: state management + the portable domain/transport layer.
+  flutter_riverpod: ^3.0.0
+  http: ^1.2.0
+  quorum_core:
+    path: ../../packages/quorum_core
+
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
