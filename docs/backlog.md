@@ -20,3 +20,8 @@
 - [2026-06-27] (P2.5) Per-role *effort* UI control in Model Studio (the wire seam `spec.effort` already ships dormant) — enhancement — M
 - [2026-06-27] (MO) Optional CI/pre-commit check: fail if HUMAN.md "Last AI update" is older than the newest commit touching apps/ or tradingagents/ — enhancement (HITL anti-rot insurance) — S
 - [2026-06-27] (Phase 3) Rotate the shared Gemini test key (release hygiene) — future-subphase — S
+- [2026-06-27] (P2.5c1) Per-role OpenAI-compatible / Ollama **base-URL field** so a role can pin a custom/local endpoint independent of the global provider (c1 excludes openai_compatible per role to avoid a broken run) — future-subphase (P2.5c2+) — M
+- [2026-06-27] (P2.5c1) Non-destructive **"fill only unassigned"** apply-to-all variant (and/or confirm-before-clobber); c1 ships the simpler destructive overwrite — enhancement — S
+- [2026-06-27] (P2.5c1) Bench row summary should show **"N roles"** so users see that applying a Bench REPLACES (not merges) the whole Dream Team lineup — enhancement — S
+- [2026-06-27] (P2.5c1) **Live-terminal cast list** — surface the resolved roster on the verdict rail the moment a run completes (needs the resolved map plumbed into RunViewState); advances the debate-terminal transparency bet — future-subphase — M
+- [2026-06-27] (P2.5c1) **Serve the Dream Team roster via `/catalog`** (ROLE_KEYS + labels + DEEP_ROLES + stages) so the desktop stops hand-mirroring agent_roles.py — kills a whole class of drift (Model Studio + cast list); a contract/endpoint change for a future Model Studio hardening — future-subphase — M

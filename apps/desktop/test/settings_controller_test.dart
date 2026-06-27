@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quorum/dream_team_roster.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum_core/quorum_core.dart';
 
@@ -273,6 +274,46 @@ void main() {
       final cfg = await ctrl.buildLaunchConfig();
       expect(cfg.apiKeys, {'google': 'g-key', 'anthropic': 'a-key'}); // ollama omitted (no key)
       expect(cfg.agentModels!['portfolio_manager']!.provider, 'anthropic');
+    });
+
+    test('setAllAgentModels pins one model to every one of the 12 roles', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setAllAgentModels(const AgentModel(provider: 'xai', model: 'grok-x'));
+      final models = c.read(settingsControllerProvider).agentModels!;
+      expect(models.length, 12);
+      expect(models.keys.toSet(), dreamTeamRoleKeys.toSet()); // exactly the frozen roster
+      expect(models['portfolio_manager'], const AgentModel(provider: 'xai', model: 'grok-x'));
+      expect(models['market_analyst'], const AgentModel(provider: 'xai', model: 'grok-x'));
+    });
+
+    test('a saved Bench round-trips the FULL 12-role lineup through save/apply/disk', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setAllAgentModels(const AgentModel(provider: 'xai', model: 'grok-x'));
+      ctrl.saveBench('Dream');
+      final bench = c.read(settingsControllerProvider).benches.single;
+      expect(bench.agentModels!.length, 12);
+      // Disk round-trip preserves all 12.
+      expect(Bench.fromJson(bench.toJson()).agentModels!.length, 12);
+      // Apply after a clear re-hydrates the whole lineup.
+      ctrl.clearAgentModels();
+      expect(c.read(settingsControllerProvider).agentModels, isNull);
+      ctrl.applyBench(bench);
+      expect(c.read(settingsControllerProvider).agentModels!.length, 12);
+      expect(c.read(settingsControllerProvider).agentModels!['trader'],
+          const AgentModel(provider: 'xai', model: 'grok-x'));
+    });
+
+    test('a blank-model assignment never survives in state (invariant)', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      // A blank/whitespace model must unassign, not persist as AgentModel(model:'') — the engine and
+      // manifest both drop it, so a stored blank would make the roster lie about what ran.
+      ctrl.setAgentModel('trader', const AgentModel(provider: 'openai', model: '  '));
+      expect(c.read(settingsControllerProvider).agentModels, isNull);
+      ctrl.setAllAgentModels(const AgentModel(provider: 'openai', model: ''));
+      expect(c.read(settingsControllerProvider).agentModels, isNull); // no-op
     });
   });
 

@@ -237,11 +237,16 @@ split (roster UI vs capability/key gate) per the scope critic.
   *Exit:* round-trip tests for **all three** serializations (RunConfig, Bench, SettingsState); a
   multi-provider run injects every referenced key; the manifest records the resolved per-role map; a
   demo run ignores `agent_models` and writes no provenance.
-- [ ] **P2.5c1 Model Studio — Dream Team roster** — a stage-grouped 12-role roster (Analyst desks /
-  Researcher debate / Managers / Risk team / Trader), each with a provider+model picker reusing the
-  Model Studio dropdowns; **muted "quick/deep fallback" chips** on unassigned roles (vs solid chips on
-  assigned); "apply to all" / per-stage set; Dream Team lineups saved as **Benches**; a post-run "cast
-  list" (role → model that ran) on the Hub/verdict.
+- [x] **P2.5c1 Model Studio — Dream Team roster** *(done — shared `dream_team_roster.dart` mirror +
+  collapsible stage-grouped roster + `_ModelAssignmentPicker` (transient half-set edit → never a
+  blank-model wire leak) + apply-to-all/per-stage/`setAllAgentModels` + Hub cast list with
+  differs-from-default override inference; per-role provider list excludes only `openai_compatible`
+  (Ollama kept — baked-in localhost default verified); 2 roster goldens + mirror/controller/widget
+  tests; 73 flutter green; fresh-context review returned MERGE, zero blocker/high)* — a stage-grouped
+  12-role roster (Analyst desks / Research debate / Trader / Risk team / Portfolio), each with a
+  provider+model picker reusing the Model Studio dropdowns; **muted "quick/deep fallback" chips** on
+  unassigned roles (vs solid chips on assigned); "apply to all" / per-stage set; Dream Team lineups
+  saved as **Benches**; a post-run "cast list" (role → model that ran) on the Hub/verdict.
   *Exit:* the roster renders all 12 with correct fallback chips (golden: all-default + partially-
   assigned); a saved Bench round-trips its roster; "apply to all" sets every role.
 - [ ] **P2.5c2 Capability + multi-provider key gate** — **block** non-tool-capable models on

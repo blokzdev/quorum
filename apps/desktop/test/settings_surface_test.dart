@@ -223,4 +223,101 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Not stored'), findsOneWidget);
   });
+
+  // --- Dream Team roster picker wiring --------------------------------------------------------------
+  // The all-default/partial GOLDENS prove rendering; these prove the per-role picker mutates state.
+  // The apply-to-all panel also shows a 'Provider' hint, so the role-row dropdown is the .last one.
+
+  testWidgets('roster: assigning a role provider+model wires the AgentModel through the controller',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM')); // expand the section
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Market Analyst')); // open the role row
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('— Default').last); // the role-row provider dropdown (not apply-to-all)
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DeepSeek').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('V4 Pro').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['market_analyst'],
+        const AgentModel(provider: 'deepseek', model: 'deepseek-v4-pro'));
+  });
+
+  testWidgets('roster: a custom model id lands directly in AgentModel.model; empty unassigns',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Trader')); // the role row (the stage header is 'TRADER')
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('— Default').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ollama (local)').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Custom model ID').last, warnIfMissed: false); // the catalog's 'custom' sentinel
+    await tester.pumpAndSettle();
+
+    final customField = find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.hintText == 'Custom model id (e.g. llama3.2:latest)');
+    await tester.enterText(customField, 'my-local:latest');
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['trader'],
+        const AgentModel(provider: 'ollama', model: 'my-local:latest')); // raw id, NOT 'custom'
+
+    await tester.enterText(customField, '   '); // whitespace -> unassign (never AgentModel(model:''))
+    await tester.pump();
+    expect(container.read(settingsControllerProvider).agentModels, isNull);
+  });
+
+  testWidgets('roster: changing a role provider drops the now-stale model (unassigns)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Market Analyst'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('— Default').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DeepSeek').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('V4 Pro').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['market_analyst'],
+        const AgentModel(provider: 'deepseek', model: 'deepseek-v4-pro'));
+
+    // Re-open the (now 'DeepSeek') provider dropdown and switch — the deepseek model is invalid now.
+    await tester.tap(find.text('DeepSeek')); // the role-row selected display (unique)
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Google Gemini').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(container.read(settingsControllerProvider).agentModels, isNull); // dropped, not carried
+  });
 }
