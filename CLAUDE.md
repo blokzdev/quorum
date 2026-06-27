@@ -16,6 +16,68 @@ here. Keep it current; it is loaded into context each session.
 > The engine package stays named `tradingagents` to preserve merge-ability with upstream
 > `TauricResearch/TradingAgents`.
 
+## Operating doctrine (Ultracode MO — read first)
+
+The autonomous loop: workflows fan out the heavy research/design/review; **I (Opus 4.8) own the final
+adversarial pass, the executive refinement (keep the real findings, reject the false ones), and the
+decision to ship.** Every safeguard below is self-administered, and self-administered checks decay into
+no-ops — so **prefer artifacts over assertions, and a fresh context over my own for any final
+judgment.** When a guardrail feels like ceremony, that feeling is the drift, not a reason to skip it.
+
+**Orchestrate, don't rubber-stamp.**
+1. **Match machinery to the change.** Workflows are for genuine research, design, or multi-file risk —
+   NOT trivial/single-file/mechanical edits (do those directly). If you can't name what a fan-out would
+   find that you couldn't, don't spawn it.
+2. **Workflows fan out execution, never the decision.** Before accepting a workflow's converged output,
+   restate the one assumption that, if false, makes it worthless, and check it yourself against code —
+   not the prose. Confidence ≠ evidence; length ≠ rigor; N agents sharing a prompt = one opinion.
+3. **The adversarial pass produces an artifact, not a feeling.** Triage every fan-out finding: KEEP
+   (with the file:line/test that proves it real) / REJECT (why it's a false positive) / DEFER→backlog.
+   A pass that keeps all or rejects all is presumed not to have happened. Put the triage in the PR.
+4. **The pre-merge review runs in FRESH context** — a subagent/workflow given only the diff + exit
+   criteria, never the implementation rationale. The implementer's context is the worst judge of its
+   own work. (Keystone — this is what breaks the self-grading loop.)
+
+**Verify against falsification.**
+5. Map each exit criterion to the evidence that would FALSIFY it, and run that. "Tests pass" ≠ "feature
+   correct" — name the test that fails if the feature is broken; write it if it's missing.
+6. **A re-baselined golden needs a written visual-diff justification** (what pixels changed + why each
+   is intended; Read the PNG). An unexplained `--update-goldens` is a *failed* verification.
+7. **Distrust the synthetic path.** Demo is cost-free synthetic; it can't prove key injection, provider
+   wiring, frozen-exe spawn, or SSE resume. Verify those on the real (Ollama/Gemini) path and state
+   which path each claim was checked on.
+
+**Scope wall — deepen, don't widen.**
+8. "Maximize / world-class" = **depth + rigor on in-scope work, not new surface.** Work is in-scope iff
+   it's necessary to make a *currently-listed* exit criterion verifiably pass. Four checks before adding
+   anything mid-subphase: **exit-criterion** (maps to a checkbox in the plan doc?), **counterfactual**
+   (skip it → a criterion fails / a test goes red?), **new-surface** (adds a new capability / endpoint /
+   config key / contract field? → out), **reversibility** (required now AND no cheaper later?). Go deep
+   inside the box; the wall is the exit-criteria list.
+9. **Done is falsifiable.** The adversarial pass runs once; it fixes real defects but does NOT reopen
+   scope or re-plan unless a criterion is *actually failing*. "Could be stronger" is a backlog line, not
+   a reopen. A subphase is done when every listed criterion verifiably passes.
+10. **Backlog** ([`docs/backlog.md`](docs/backlog.md), append-only, one line): the instant work fails the
+    four checks, append a line and move on (capture must be cheaper than doing the work). Drain at
+    phase-end, never mid-phase. **Exception:** a `security` / `correctness` / `data-loss` item is
+    surfaced to `HUMAN.md` the same session — it does not wait in the backlog.
+
+**Keep the human in the loop (decision surfacing, not approval gating).**
+11. Maintain **[`HUMAN.md`](HUMAN.md)** — the co-founder log (Blocked-on-you / Want-your-input /
+    Decided-FYI / What-shipped / Archive + a header tracking spend vs the agreed cost boundary). It's a
+    **router + queue, never canonical**: a pointer + the human-action delta; ADR-worthy → write the ADR
+    and link it. Blockers (§1) and forks (§2) are **pushed in the chat turn** the moment they arise,
+    never buried; FYI/shipped are pull-only. Don't start work that depends on an open blocker. When
+    unsure FYI-vs-fork, it's a fork. "Reversible" is judged at *phase-end* cost (rip out one commit, or
+    ten?) — a contract/schema/token-name decision is a fork even if cheap to change now.
+12. **Still surface (never self-approve through):** merges to `main`, key rotation, cert/signing, paid
+    spend beyond the agreed boundary, publishing, genuine product forks, contract/security/scope changes.
+
+**Persistence.** This doctrine is the contract; **memory is a backstop — on any conflict, CLAUDE.md
+wins and memory is corrected.** Open each substantive subphase by restating the loop in one line + the
+tripwires that apply (fan-out? goldens touched? real-path needed? sensitive op ahead? open HUMAN.md
+blockers?) — if you can't state them, you haven't reloaded the MO.
+
 ## What this project is
 
 A user picks a ticker; a team of LLM agents (analysts → bull/bear researcher debate → trader →
@@ -116,26 +178,28 @@ CI (`.github/workflows/ci.yml`) gates on **ruff + pytest** — keep new packages
 - **Secret hygiene**: provider keys live only in the gitignored `.env` (never committed — verified
   clean of history). A shared Gemini test key is pending rotation (release-hygiene task).
 
-## Working loop
+## Working loop (phase cadence)
 
-Operate in **Ultracode** mode as an autonomous **phase-execution loop** (the default MO for
-substantive multi-subphase work):
+The autonomous **phase-execution loop** — the *mechanics*; the behavioral contract (orchestration,
+verification-as-artifact, the scope wall, fresh-context review, what to surface, HUMAN.md) is the
+**Operating doctrine** near the top of this file.
 
-1. **Start of phase** — lock the plan in a small docs PR (roadmap, subphases, exit criteria,
-   decisions/ADRs). Current: [`docs/phase-2-plan.md`](docs/phase-2-plan.md).
-2. **Per subphase** — plan thoroughly (research/explore Workflow) → **adversarially validate**
-   the plan against falsifiable exit criteria → **self-approve** (no human approval gate) →
-   implement in small reviewable commits → test/emulate (golden render-to-PNG + sidecar + headless
-   demo/real runs + `ruff`/`pytest` + `flutter test`) → refine until exit criteria pass. Tick the
-   plan checkboxes; add an ADR for any consequential decision.
-3. **End of phase** — completeness-critic pass, then a close-out docs PR.
+1. **Start of phase** — lock the plan in a small docs PR (roadmap, subphases, **falsifiable** exit
+   criteria, decisions/ADRs). Current: [`docs/phase-2-plan.md`](docs/phase-2-plan.md).
+2. **Per subphase** — research/design via Workflow → **personally adversarially validate** the plan
+   (restate + check its load-bearing assumption against code) → self-approve (no human gate) →
+   implement in small reviewable commits → **verify against falsification** (golden render-to-PNG +
+   sidecar + headless demo/**real** runs + `ruff`/`pytest` + `flutter test`) → **fresh-context
+   pre-merge review** → refine until exit criteria pass → subphase PR self-merged into the integration
+   branch. Tick the plan checkboxes; ADR for any consequential decision; log out-of-scope work to
+   [`docs/backlog.md`](docs/backlog.md).
+3. **End of phase** — completeness-critic pass (incl. a **scope audit**: any shipped capability with no
+   exit criterion is unsanctioned creep) → review the `→ main` PR **in slices**, not one mega-diff →
+   close-out docs PR.
 
-**Verification is the gate** — never mark a subphase done unverified; report failures faithfully.
-**Still surface (don't self-approve through):** hard-to-reverse / outward-facing / costly actions
-(merging to `main`, key rotation, cert/signing, paid spend beyond the agreed boundary, publishing),
-genuine product forks, and contract/security/scope changes — with a recommendation. Keep the user in
-the loop via **decision surfacing, not approval gating**. The per-phase cadence (merge model, cost
-boundary, sensitive-op handling) is set once at phase start — see the plan doc's "Phase cadence".
+**Verification is the gate** — never mark a subphase done unverified; report failures faithfully. The
+per-phase cadence (merge model, cost boundary, sensitive-op handling) is set once at phase start — see
+the plan doc's "Phase cadence" — and the live HITL queue is [`HUMAN.md`](HUMAN.md).
 
 ## Git
 
