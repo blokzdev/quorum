@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'engine_endpoint.dart';
+import 'run_summary.dart';
 
 class ApiClient {
   final EngineConnection conn;
@@ -38,6 +39,15 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> getRun(String runId) => _getJson('/runs/$runId');
+
+  /// GET /runs -> the persisted run history (newest first), as typed [RunSummary]s.
+  Future<List<RunSummary>> listRuns() async {
+    final body = await _getJson('/runs');
+    final runs = (body['runs'] as List?) ?? const [];
+    return runs
+        .map((e) => RunSummary.fromJson((e as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
 
   Future<Map<String, dynamic>> reports(String runId) => _getJson('/runs/$runId/reports');
 
