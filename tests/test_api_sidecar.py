@@ -338,3 +338,26 @@ def test_demo_run_strips_api_keys_from_stored_request(monkeypatch, tmp_path):
     job = app_module.registry.get(created.json()["run_id"])
     assert job is not None
     assert job.request.get("api_keys") is None
+
+
+def test_env_keys_requires_bearer(monkeypatch):
+    monkeypatch.setenv("QUORUM_API_TOKEN", "secret-token")
+    client = TestClient(app_module.app)
+    assert client.get("/env-keys").status_code == 401
+    assert client.get("/env-keys", headers={"Authorization": "Bearer secret-token"}).status_code == 200
+
+
+def test_env_keys_reads_known_provider_keys_from_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    envf = tmp_path / ".env"
+    envf.write_text("GOOGLE_API_KEY=g-secret\nUNRELATED=x\n")
+    monkeypatch.setattr("dotenv.find_dotenv", lambda *a, **k: str(envf))
+    body = TestClient(app_module.app).get("/env-keys").json()
+    assert body.get("google") == "g-secret"
+    assert "unrelated" not in body  # only known providers are surfaced
+
+
+def test_env_keys_missing_dotenv_returns_empty(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr("dotenv.find_dotenv", lambda *a, **k: str(tmp_path / "absent.env"))
+    assert TestClient(app_module.app).get("/env-keys").json() == {}

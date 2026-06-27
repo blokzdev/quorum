@@ -87,6 +87,24 @@ async def catalog():
     }
 
 
+@app.get("/env-keys")
+async def env_keys():
+    """Host-only: surface provider keys from the local gitignored ``.env`` so the desktop can offer a
+    one-time import into its OS keystore. Loopback + bearer only (NOT in ``_PUBLIC_PATHS``); values
+    are NEVER logged and must never be exposed on a future remote-mobile surface (ADR 0001 — keys
+    stay on the sidecar host). Missing ``.env`` returns ``{}`` (never 500)."""
+    from dotenv import dotenv_values, find_dotenv
+
+    from tradingagents.llm_clients.api_key_env import PROVIDER_API_KEY_ENV
+
+    vals = dotenv_values(find_dotenv(usecwd=True))
+    out: dict[str, str] = {}
+    for provider, env_var in PROVIDER_API_KEY_ENV.items():
+        if env_var and vals.get(env_var):
+            out[provider] = vals[env_var]
+    return out
+
+
 @app.post("/runs", status_code=202)
 async def create_run(req: RunRequest):
     body = req.model_dump()
