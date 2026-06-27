@@ -60,7 +60,7 @@ These facts (verified by code reading) shape the sequencing:
 | 3 | BYO key storage | `flutter_secure_storage`, one entry per provider, `.env` first-launch import, per-run injection via `RunRequest.api_keys` (sidecar stays stateless). See [ADR 0001](decisions/0001-byo-api-key-storage.md). |
 | 4 | Navigation | Lightweight in-app shell (enum / `IndexedStack` + `Navigator`) now; revisit GoRouter only if the post-V1 mobile remote needs deep-linking. |
 | 5 | Subphase naming | `P2.x`, one topic per commit — extends the Phase-1 `S0–S4` convention. |
-| 6 | Sidecar bundling | **Open** — decided by the P2.0 spike, then recorded as ADR 0002. |
+| 6 | Sidecar bundling | **PyInstaller `onedir`**, demo decoupled from the engine via lazy import; verified 11/11 frozen outside repo/.venv. See [ADR 0002](decisions/0002-sidecar-bundling.md). |
 | 7 | Model Studio scope | **Quick/deep in P2.3** (the supported shared split); the **Dream Team** per-agent assignment is its own V1 phase **P2.5** (needs engine per-role routing), built to integrate maximally with the UI. |
 
 ### Phase cadence & autonomy envelope
@@ -84,15 +84,18 @@ autonomy for this phase:
 
 ## Roadmap
 
-### P2.0 — Sidecar-bundling spike *(gating; mostly throwaway)*
+### P2.0 — Sidecar-bundling spike *(gating; mostly throwaway)* — ✅ DONE
 
-- [ ] **P2.0 Sidecar-bundling spike** — PyInstaller-freeze `services.api` into a standalone sidecar
+- [x] **P2.0 Sidecar-bundling spike** — PyInstaller-freeze `services.api` into a standalone sidecar
   exe; prove the stdout `{port, token}` handshake + `/healthz` + a cost-free `demo` stream all work
-  when launched as a frozen exe *outside* the repo `.venv`. Decide one-file vs one-dir vs embedded
-  relocatable venv.
+  when launched as a frozen exe *outside* the repo `.venv`.
 
-**Exit:** a frozen sidecar runs a demo end-to-end with no repo/.venv present; the bundling strategy
-is chosen → ADR 0002.
+**Result:** PyInstaller **`onedir`**; the demo path is decoupled from the engine via a lazy import.
+The 61 MB demo bundle passed the contract harness **11/11** outside the repo/.venv (428 ms handshake);
+the Windows parent-PID watchdog (an orphaned-process bug found in Phase 1) was fixed and verified
+(self-exit 2.20 s), and taskkill teardown works. Two real fixes landed (lazy engine import +
+watchdog). Spike scaffolding in [`packaging/spike/`](../packaging/spike/). See
+[ADR 0002](decisions/0002-sidecar-bundling.md).
 
 > Secret hygiene + the shared Gemini test-key rotation moved to **Phase 3** (V1 Release & Hardening),
 > per the phase cadence below — they happen once, at GA, with the security sweep.
