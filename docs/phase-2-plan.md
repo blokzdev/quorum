@@ -50,7 +50,7 @@ These facts (verified by code reading) shape the sequencing:
 
 | # | Decision | Choice |
 |---|----------|--------|
-| 1 | Sequencing | De-risk-first, **installer in-scope**. Gating spike (P2.0) before feature work; P2.5 builds the installer; **P2.6** signs it + hardens (security sweep, key rotation, tech-debt) + closes out. |
+| 1 | Sequencing | De-risk-first. Gating spike (P2.0) before feature work; P2.5 builds the **debug-signed** installer; **P2.6** closes out Phase 2. Production signing + security sweep + key rotation + GA are **Phase 3 (V1 Release & Hardening)**. |
 | 2 | Hub scope | **Home**: Launch + Run history (with cached review) + Watchlist. **Run Comparison** (diff two runs of one ticker across model configs/dates) is the flagship "separate multi-agent view", scoped as a **stretch** (P2.4d). |
 | 3 | BYO key storage | `flutter_secure_storage`, one entry per provider, `.env` first-launch import, per-run injection via `RunRequest.api_keys` (sidecar stays stateless). See [ADR 0001](decisions/0001-byo-api-key-storage.md). |
 | 4 | Navigation | Lightweight in-app shell (enum / `IndexedStack` + `Navigator`) now; revisit GoRouter only if the post-V1 mobile remote needs deep-linking. |
@@ -73,7 +73,8 @@ autonomy for this phase:
   deep=Gemini). No other paid spend without asking.
 - **Sensitive ops — prep then pause:** do all automatable prep, then **stop and surface** before any
   irreversible / account-dependent action — merging to `main`, **key rotation**, **cert/keystore
-  signing**, external publishing. These are concentrated in **P2.6**.
+  signing**, external publishing. These are concentrated in **Phase 3** (with the `phase-2 → main`
+  merge surfaced at P2.6).
 
 ## Roadmap
 
@@ -87,8 +88,8 @@ autonomy for this phase:
 **Exit:** a frozen sidecar runs a demo end-to-end with no repo/.venv present; the bundling strategy
 is chosen → ADR 0002.
 
-> Secret hygiene + the shared Gemini test-key rotation moved to **P2.6** (finalization), per the
-> phase cadence below — they happen once, at the end, with the security sweep.
+> Secret hygiene + the shared Gemini test-key rotation moved to **Phase 3** (V1 Release & Hardening),
+> per the phase cadence below — they happen once, at GA, with the security sweep.
 
 ### P2.1 — Shared foundation (plumbing) *(blocks Hub + Studio)*
 
@@ -152,42 +153,51 @@ goldens land.
   `desktop_sidecar_endpoint.dart`'s spawn path to launch it (keep the `.venv` fallback for local dev).
 - [ ] **P2.5b** Installer packaging (MSIX vs Inno/WiX per P2.0); include the C++ ATL build deps
   required by `flutter_secure_storage_windows`. Validate the full install/launch flow with a
-  **debug / self-signed cert** — production keystore signing is deferred to P2.6c.
+  **debug / self-signed cert** — production keystore signing is deferred to **Phase 3**.
 - [ ] **P2.5c** CI — add a Flutter build + `flutter test` (incl. goldens) job and a packaging job to
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 **Exit:** a packaged Quorum installs + launches on a clean machine, spawns the bundled sidecar
 (no repo/.venv), and runs demo + a real run; CI gates Flutter + Python.
 
-### P2.6 — Hardening & finalization *(sensitive ops concentrated here; closing milestone)*
+### P2.6 — Phase 2 close-out *(closing milestone)*
 
-- [ ] **P2.6a Security sweep** — secret hygiene: rotate the shared **Gemini test key**; sweep
-  fixtures/CI for hardcoded/shared keys; confirm `.env` stays gitignored + clean of history.
-  Re-verify the `JobIsolationContext` env snapshot/restore now that BYO-key runs are common; add a
-  `/healthz` contract-version check on the client.
-- [ ] **P2.6b Technical-debt pass** — TODO / dead-code cleanup; candidate: **P0.3b** (converge
-  `cli/main.py` onto `runtime.run_streaming`); contract / forward-compat audit.
-- [ ] **P2.6c Release signing** — swap the P2.5 debug/self-signed cert for the production
-  keystore/cert (provisioning + timestamp + signing hook) → a **signed** installer artifact;
-  release job in CI.
-- [ ] **P2.6d Phase close-out** — completeness-critic pass (missing / regressed / deferred), update
-  `phase-2-plan.md`, then the `phase-2 → main` PR + the close-out docs PR.
+- [ ] **P2.6a Completeness-critic pass** — what's missing / regressed / deferred across P2.0–P2.5
+  (modality not covered, claim unverified, golden stale, exit criterion quietly skipped).
+- [ ] **P2.6b Close-out** — update `phase-2-plan.md` (tick boxes, record outcomes + new ADRs), then
+  open the `phase-2 → main` PR + the Phase 2 close-out docs PR for final review.
 
-**Exit:** a **signed** release artifact runs on a clean machine; the Gemini key is rotated; the
-security sweep is clean; Phase 2 is closed out and merged to `main`.
+**Exit:** Phase 2 is feature-complete (Hub, Model Studio, brand, **debug-signed** installer), verified
+against every subphase's exit criteria, and merged to `main`; the close-out docs summarize what
+shipped vs deferred. Production signing + hardening + GA continue in **Phase 3**.
 
-## Deferred / post-Phase-2
+## After Phase 2 — the longer roadmap
 
-Tracked, not built in Phase 2:
+Phase 2 ships the feature set + a debug-signed, internally-installable build. The product line
+continues; each phase below gets its own start-of-phase plan + docs when it begins.
 
+### Phase 3 — V1 Release & Hardening
+The release-engineering phase that turns the feature-complete app into a trusted public V1:
+
+- **Security sweep** — secret hygiene (rotate the shared **Gemini test key**; sweep fixtures/CI for
+  hardcoded/shared keys; `.env` gitignored + clean of history); re-verify the `JobIsolationContext`
+  env snapshot/restore now that BYO-key runs are common; add a `/healthz` contract-version check.
+- **Technical-debt pass** — TODO / dead-code cleanup; candidate: **P0.3b** (converge `cli/main.py`
+  onto `runtime.run_streaming`); contract / forward-compat audit.
+- **Production code-signing** — swap the P2.5 debug/self-signed cert for the production keystore/cert
+  (provisioning + timestamp + signing hook) → a **signed** installer; release/distribution CI. May
+  coordinate with the macOS port so both platforms sign together.
+- **GA** — the first signed public release.
+
+### Post-V1
+- Mobile-as-remote (LAN/WAN over the same API, with TLS + auth)
+- Paper-trading sandbox (P10/P11)
+- macOS port (may pull forward into Phase 3 for a multi-platform signed launch)
+
+### Deferred niceties
 - Run Comparison (if it slips from P2.4d)
 - Cost / usage-insights dashboard
 - Optional master-passphrase vault toggle (defense-in-depth on top of the OS keystore — see ADR 0001)
-- **P0.3b** — converge `cli/main.py` onto `runtime.run_streaming` (single canonical streaming path);
-  a candidate for the P2.6b tech-debt pass
-- Mobile-as-remote (LAN/WAN over the same API, with TLS + auth)
-- macOS port
-- Paper-trading sandbox (post-V1 P10/P11)
 
 ## Risk register
 
