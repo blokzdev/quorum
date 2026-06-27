@@ -36,6 +36,12 @@ dev = [
     "ruff>=0.15",
     "pytest>=8.0",
     "pytest-subtests>=0.13",
+    # The default test suite includes the sidecar tests (tests/test_api_sidecar.py), so the dev/CI
+    # environment needs the sidecar deps too. Keep these in sync with the [api] extra below.
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.0",
+    "keyring>=24.0",
 ]
 # Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
 # stays lean: pip install "tradingagents[bedrock]".
