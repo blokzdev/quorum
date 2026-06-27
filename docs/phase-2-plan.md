@@ -249,10 +249,16 @@ split (roster UI vs capability/key gate) per the scope critic.
   saved as **Benches**; a post-run "cast list" (role → model that ran) on the Hub/verdict.
   *Exit:* the roster renders all 12 with correct fallback chips (golden: all-default + partially-
   assigned); a saved Bench round-trips its roster; "apply to all" sets every role.
-- [ ] **P2.5c2 Capability + multi-provider key gate** — **block** non-tool-capable models on
-  market/news/fundamentals (reads the catalog tool-capable flag); **warn** (don't block) on the four
-  structured roles (PM warning notes degraded rating extraction); a consolidated **pre-launch
-  "needs keys for: X, Y"** diff of referenced providers vs the vault.
+- [x] **P2.5c2 Capability + multi-provider key gate** *(done — `ModelOption.toolCapable` contract
+  parse + `RoleGate`/`roleGateClass` + `_gateOutcome` (BLOCK iff `toolCapable==false`, never `!=true`,
+  so custom/unknown WARNS); `_Dropdown` disabled-item block + `· no tools` tag + `_CapabilityNotice` +
+  red/amber `_RoleChip`; `missingKeysProvider` sharing `referencedProviders` with `buildLaunchConfig`,
+  `_LaunchCard` gates Run (incl. the async-loading window) + `provider_meta.providerRequiresKeyForLaunch`
+  treats openai_compatible key as optional; 2 goldens (hub_needs_keys, dream_team_capability) + block/
+  warn/stale + key-gate tests; 86 flutter green; fresh-context review = MERGE, all 8 invariants held)* —
+  **block** non-tool-capable models on market/news/fundamentals (reads the catalog tool-capable flag);
+  **warn** (don't block) on the four structured roles (PM warning notes degraded rating extraction); a
+  consolidated **pre-launch "needs keys for: X, Y"** diff of referenced providers vs the vault.
   *Exit:* assigning a non-tool model to a tool-analyst role is blocked in the UI (tested against the
   catalog flag); a run referencing an uncredentialed provider is gated before `POST /runs` (golden:
   the warning state).

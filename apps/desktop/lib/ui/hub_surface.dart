@@ -184,9 +184,12 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
     final running = ref.watch(runControllerProvider).phase == RunPhase.running;
     final needsProvider = !s.demoMode && s.provider == null;
     // Pre-launch key gate: referenced providers (global ∪ Dream Team) that need a key but have none.
-    final missing = ref.watch(missingKeysProvider).value ?? const <String>[];
+    // Gate Run while the async vault check is still resolving too, so a missing key can never slip
+    // through the brief loading window (the notice only shows once we actually have the list).
+    final missingAsync = ref.watch(missingKeysProvider);
+    final missing = missingAsync.value ?? const <String>[];
     final missingKeys = !s.demoMode && missing.isNotEmpty;
-    final gated = needsProvider || missingKeys;
+    final gated = needsProvider || (!s.demoMode && (missingAsync.isLoading || missing.isNotEmpty));
     final config = s.demoMode
         ? 'Demo mode · cost-free synthetic run'
         : [

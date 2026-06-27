@@ -345,9 +345,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('— Default').last); // role provider dropdown
     await tester.pumpAndSettle();
-    await tester.tap(find.text('legacy').last); // provider with a non-tool model
+    await tester.tap(find.text('legacy').last, warnIfMissed: false); // provider with a non-tool model
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Model'));
+    await tester.tap(find.text('Model'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     // The non-tool model renders with a "no tools" tag and a DISABLED DropdownMenuItem.
@@ -358,7 +358,7 @@ void main() {
         .first);
     expect(item.enabled, isFalse); // structurally un-pickable
     // The tool-capable sibling is selectable.
-    await tester.tap(find.text('HasTool').last);
+    await tester.tap(find.text('HasTool').last, warnIfMissed: false);
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
     expect(container.read(settingsControllerProvider).agentModels!['market_analyst'],

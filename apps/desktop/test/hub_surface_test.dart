@@ -275,11 +275,19 @@ void main() {
   });
 
   testWidgets('key gate: demo mode and keyless providers (ollama) never gate Run', (tester) async {
+    // Keyless local provider: no key needed -> not gated.
     await _pump(
       tester,
       _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'ollama'), const []),
     );
     expect(find.textContaining('Needs keys for'), findsNothing); // ollama needs no key
+    expect(runButton(tester).onPressed, isNotNull);
+
+    // Demo mode bypasses the gate even with an uncredentialed keyed provider.
+    await tester.pumpWidget(
+        _wrap(const SettingsState(ticker: 'SPY', demoMode: true, provider: 'anthropic'), const []));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Needs keys for'), findsNothing);
     expect(runButton(tester).onPressed, isNotNull);
   });
 }

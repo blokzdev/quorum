@@ -106,6 +106,8 @@ _GateOutcome _gateOutcome(RoleGate gate, bool? toolCapable) {
       if (toolCapable == null) return _GateOutcome.warn; // unknown/custom on a tool role
       return _GateOutcome.ok;
     case RoleGate.warn:
+      // Structured roles warn only on a KNOWN non-tool model; an unknown/custom (null) one is fine —
+      // structured-output support is a different capability than tool-calling.
       if (toolCapable == false) return _GateOutcome.warn; // structured degrades to free-text
       return _GateOutcome.ok;
     case RoleGate.none:
