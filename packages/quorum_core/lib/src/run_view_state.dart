@@ -61,6 +61,10 @@ class RunViewState {
   final String? error;
   final int lastSeq;
 
+  /// Epoch seconds when the run started — seeded optimistically by the client, then overwritten by
+  /// the authoritative RunStarted.ts. Drives the header's elapsed timer; null until a run starts.
+  final double? startedAtTs;
+
   const RunViewState({
     this.runId,
     this.ticker,
@@ -74,6 +78,7 @@ class RunViewState {
     this.verdict,
     this.error,
     this.lastSeq = -1,
+    this.startedAtTs,
   });
 
   factory RunViewState.initial() => const RunViewState();
@@ -94,6 +99,7 @@ class RunViewState {
     Verdict? verdict,
     String? error,
     int? lastSeq,
+    double? startedAtTs,
   }) {
     return RunViewState(
       runId: runId ?? this.runId,
@@ -108,6 +114,7 @@ class RunViewState {
       verdict: verdict ?? this.verdict,
       error: error ?? this.error,
       lastSeq: lastSeq ?? this.lastSeq,
+      startedAtTs: startedAtTs ?? this.startedAtTs,
     );
   }
 }

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quorum_core/quorum_core.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../state/run_controller.dart';
@@ -122,13 +124,40 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
 
 /// The Terminal surface: watches the run + wires Run/Cancel into the pure 3-pane [TerminalBody].
 /// Holds no window chrome (that lives in [QuorumShell]) so the golden harness can pump [TerminalBody]
-/// in isolation.
-class TerminalSurface extends ConsumerWidget {
+/// in isolation. Owns the once-per-second tick that advances the header's elapsed timer while a run
+/// is in flight — the [Timer] lives HERE, never in [TerminalBody], so it can't enter a golden test.
+class TerminalSurface extends ConsumerStatefulWidget {
   const TerminalSurface({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TerminalSurface> createState() => _TerminalSurfaceState();
+}
+
+class _TerminalSurfaceState extends ConsumerState<TerminalSurface> {
+  Timer? _tick;
+
+  void _syncTick(RunPhase phase) {
+    final running = phase == RunPhase.running;
+    if (running && _tick == null) {
+      _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {}); // re-derive the elapsed mm:ss from startedAtTs
+      });
+    } else if (!running && _tick != null) {
+      _tick!.cancel();
+      _tick = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(runControllerProvider);
     final ctrl = ref.read(runControllerProvider.notifier);
+    _syncTick(state.phase); // start/stop the 1s ticker (no synchronous setState here)
     return TerminalBody(state: state, onRun: () => ctrl.start(), onCancel: ctrl.cancel);
   }
 }

@@ -114,17 +114,21 @@ watchdog). Spike scaffolding in [`packaging/spike/`](../packaging/spike/). See
 **Exit:** the app boots into a switchable shell; the catalog is fetched + cached; a run launches from
 a `RunConfig` (not hardcoded); demo still streams end-to-end; goldens updated.
 
-### P2.2 — Design system + deferred terminal polish
+### P2.2 — Design system + deferred terminal polish — ✅ DONE
 
-- [ ] **P2.2a** Lift `quorum_colors.dart` `QC.*` tokens into a Material 3 `ThemeExtension`
+- [x] **P2.2a** Lift `quorum_colors.dart` `QC.*` tokens into a Material 3 `ThemeExtension`
   (`brand.dart`); add `flutter_launcher_icons` + a proper multi-DPI Quorum icon (replace the single
   `.ico`).
-- [ ] **P2.2b** Deferred backlog polish: staggered card-entrance motion, full verdict-rail skeletons
-  (incremental field reveal), elapsed run timer (header).
+- [x] **P2.2b** Deferred backlog polish: card-entrance motion, verdict-rail reveals, elapsed run timer.
 
-**Exit:** new code consumes tokens via the `ThemeExtension` (no inline `QC` in new screens); the new
-icon shows in window + taskbar; the three polish items land with goldens; reduce-motion is respected;
-goldens stay deterministic.
+**Result:** `QuorumBrand` ThemeExtension reads FROM the `QC` consts (single source) for new surfaces;
+the terminal keeps `QC.*` (its painters have no `BuildContext`) so the existing goldens stay
+byte-identical. New ascending-bars app icon via `flutter_launcher_icons`. Adopted the adversarial
+critiques' two scope cuts: a **single unified finite `_Reveal`** (no per-index stagger) and the
+existing fixed-height verdict skeleton (no per-field incremental reveal). The elapsed timer is
+golden-deterministic via an injected `elapsedOverride` (the live `Timer` lives in `TerminalSurface`,
+never `TerminalBody`). Motion settles to identical pixels, so only `terminal_midrun.png` re-baselined
+(shows `02:14`, visually reviewed). 4 commits (C1 ThemeExtension, C2 icon, C3 motion, C4 timer).
 
 ### P2.3 — Settings & Model Studio (quick/deep) *(depends on P2.1b/c + P2.2)*
 

@@ -55,6 +55,19 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # Generates the multi-DPI Windows app icon from a single source PNG (build-time tool only).
+  flutter_launcher_icons: ^0.14.4
+
+# Multi-DPI app icon generation (run: dart run flutter_launcher_icons). Source = the ascending-bars
+# Quorum mark; overwrites windows/runner/resources/app_icon.ico in place (Runner.rc already points
+# at it). The source PNG is a build-time input, intentionally NOT under flutter.assets.
+flutter_launcher_icons:
+  image_path: "assets/icon/quorum_icon.png"
+  windows:
+    generate: true
+    image_path: "assets/icon/quorum_icon.png"
+    icon_size: 256
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

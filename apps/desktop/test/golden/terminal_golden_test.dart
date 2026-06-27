@@ -108,7 +108,9 @@ void main() {
 
   testWidgets('terminal — mid-run streaming', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1320, 820));
-    await tester.pumpWidget(_wrap(TerminalBody(state: _midRun)));
+    // Fixed elapsed so the header timer is golden-deterministic (no live clock in the harness).
+    await tester.pumpWidget(
+        _wrap(TerminalBody(state: _midRun, elapsedOverride: const Duration(minutes: 2, seconds: 14))));
     await tester.pumpAndSettle();
     await expectLater(find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_midrun.png'));
   });
