@@ -6,6 +6,7 @@
 /// keys so a manifest-shape bump never hard-fails the client.
 library;
 
+import 'agent_model.dart';
 import 'run_view_state.dart';
 
 class RunSummary {
@@ -34,6 +35,10 @@ class RunSummary {
   final CostSnapshot? cost;
   final String? error;
 
+  /// "Dream Team" provenance: the **resolved** model that actually played each role (role_key ->
+  /// AgentModel), for the Hub "cast list". Null on a plain quick/deep run (and on pre-P2.5 manifests).
+  final Map<String, AgentModel>? agentModels;
+
   const RunSummary({
     required this.runId,
     required this.status,
@@ -51,6 +56,7 @@ class RunSummary {
     this.verdict,
     this.cost,
     this.error,
+    this.agentModels,
   });
 
   factory RunSummary.fromJson(Map<String, dynamic> j) {
@@ -73,6 +79,7 @@ class RunSummary {
       verdict: v is Map ? Verdict.fromJson(v.cast<String, dynamic>()) : null,
       cost: c is Map ? CostSnapshot.fromJson(c.cast<String, dynamic>()) : null,
       error: j['error'] as String?,
+      agentModels: agentModelsFromJson(j['agent_models']),
     );
   }
 

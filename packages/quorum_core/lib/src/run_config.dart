@@ -4,6 +4,8 @@
 /// desktop app and a future mobile client share it. [toJson] is the exact wire body.
 library;
 
+import 'agent_model.dart';
+
 class RunConfig {
   /// `demo` | `pro` | `vibe`. ALWAYS serialized: the sidecar defaults `mode` to `vibe`, so omitting
   /// it would silently turn a demo into a real (cost-incurring) run.
@@ -36,8 +38,9 @@ class RunConfig {
   /// Demo-only per-step delay (seconds). Omitted for real runs.
   final double? stepDelay;
 
-  // P2.5 "Dream Team" seam (per-agent model assignment) — additive, not yet wired:
-  // final Map<String, String>? agentModels;
+  /// "Dream Team" (P2.5): per-agent-role model overrides (`role_key -> AgentModel`). Null/absent → the
+  /// shared quick/deep split runs every role (additive). The engine resolves each role independently.
+  final Map<String, AgentModel>? agentModels;
 
   const RunConfig({
     this.mode = 'demo',
@@ -57,7 +60,7 @@ class RunConfig {
     this.outputLanguage = 'English',
     this.apiKeys,
     this.stepDelay,
-    // this.agentModels,
+    this.agentModels,
   });
 
   /// Inverse of [toJson] — used to persist/restore a chosen config and saved presets locally.
@@ -81,6 +84,7 @@ class RunConfig {
         outputLanguage: j['output_language'] as String? ?? 'English',
         apiKeys: (j['api_keys'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
         stepDelay: (j['step_delay'] as num?)?.toDouble(),
+        agentModels: agentModelsFromJson(j['agent_models']),
       );
 
   /// The exact `POST /runs` body. `mode` / `research_depth` / `output_language` are always present
@@ -106,7 +110,8 @@ class RunConfig {
     if (anthropicEffort != null) json['anthropic_effort'] = anthropicEffort;
     if (apiKeys != null) json['api_keys'] = apiKeys;
     if (stepDelay != null) json['step_delay'] = stepDelay;
-    // if (agentModels != null) json['agent_models'] = agentModels;
+    final am = agentModelsToJson(agentModels);
+    if (am != null) json['agent_models'] = am;
     return json;
   }
 
@@ -128,6 +133,7 @@ class RunConfig {
     String? outputLanguage,
     Map<String, String>? apiKeys,
     double? stepDelay,
+    Map<String, AgentModel>? agentModels,
   }) {
     return RunConfig(
       mode: mode ?? this.mode,
@@ -147,6 +153,7 @@ class RunConfig {
       outputLanguage: outputLanguage ?? this.outputLanguage,
       apiKeys: apiKeys ?? this.apiKeys,
       stepDelay: stepDelay ?? this.stepDelay,
+      agentModels: agentModels ?? this.agentModels,
     );
   }
 }

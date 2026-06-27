@@ -12,6 +12,8 @@ runs, not a debate participant.
 
 from __future__ import annotations
 
+from typing import Any
+
 # role_key (wire / UI) -> graph node name (the string passed to workflow.add_node in setup.py).
 ROLE_TO_NODE: dict[str, str] = {
     "market_analyst": "Market Analyst",
@@ -34,3 +36,33 @@ ROLE_TO_NODE: dict[str, str] = {
 DEEP_ROLES: frozenset[str] = frozenset({"research_manager", "portfolio_manager"})
 
 ROLE_KEYS: tuple[str, ...] = tuple(ROLE_TO_NODE)
+
+
+def resolve_agent_models(
+    overrides: dict[str, dict[str, Any]] | None,
+    config: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """The **effective** ``{provider, model[, effort]}`` for each of the 12 roles after fallback —
+    self-describing provenance the manifest records (the Hub "cast list" + Track Record).
+
+    An overridden role records its spec; an unset role records the global provider + the quick/deep
+    model that actually ran it (``deep_think_llm`` for the two judge roles, else ``quick_think_llm``).
+    """
+    overrides = overrides or {}
+    global_provider = config.get("llm_provider")
+    deep_model = config.get("deep_think_llm")
+    quick_model = config.get("quick_think_llm")
+    resolved: dict[str, dict[str, Any]] = {}
+    for role_key in ROLE_TO_NODE:
+        spec = overrides.get(role_key)
+        if isinstance(spec, dict) and spec.get("provider") and spec.get("model"):
+            entry = {"provider": spec["provider"], "model": spec["model"]}
+            if spec.get("effort"):
+                entry["effort"] = spec["effort"]
+            resolved[role_key] = entry
+        else:
+            resolved[role_key] = {
+                "provider": global_provider,
+                "model": deep_model if role_key in DEEP_ROLES else quick_model,
+            }
+    return resolved

@@ -23,6 +23,9 @@ class Bench {
   final String? backendUrl;
   final int researchDepth;
 
+  /// Per-role "Dream Team" lineup saved with this preset (role_key -> AgentModel), if any.
+  final Map<String, AgentModel>? agentModels;
+
   const Bench({
     required this.name,
     this.provider,
@@ -33,6 +36,7 @@ class Bench {
     this.effort,
     this.backendUrl,
     this.researchDepth = 1,
+    this.agentModels,
   });
 
   Map<String, dynamic> toJson() => {
@@ -45,6 +49,7 @@ class Bench {
         if (effort != null) 'effort': effort,
         if (backendUrl != null) 'backend_url': backendUrl,
         'research_depth': researchDepth,
+        'agent_models': ?agentModelsToJson(agentModels),
       };
 
   factory Bench.fromJson(Map<String, dynamic> j) => Bench(
@@ -57,6 +62,7 @@ class Bench {
         effort: j['effort'] as String?,
         backendUrl: j['backend_url'] as String?,
         researchDepth: (j['research_depth'] as num?)?.toInt() ?? 1,
+        agentModels: agentModelsFromJson(j['agent_models']),
       );
 }
 
@@ -84,6 +90,10 @@ class SettingsState {
   /// Tickers the user tracks on the Hub (uppercased). A run-level list, not part of a [Bench] preset.
   final List<String> watchlist;
 
+  /// "Dream Team" per-role model overrides (role_key -> AgentModel); null = the quick/deep split runs
+  /// every role. Independent of the global provider, so [withProvider] does NOT clear it.
+  final Map<String, AgentModel>? agentModels;
+
   /// Idempotency latch for the first-launch `.env` → vault import (see [maybeSeedKeysFromEnv]).
   final bool seededFromEnv;
 
@@ -102,6 +112,7 @@ class SettingsState {
     this.outputLanguage = 'English',
     this.benches = const [],
     this.watchlist = const [],
+    this.agentModels,
     this.seededFromEnv = false,
   });
 
@@ -120,6 +131,7 @@ class SettingsState {
     String? outputLanguage,
     List<Bench>? benches,
     List<String>? watchlist,
+    Map<String, AgentModel>? agentModels,
     bool? seededFromEnv,
   }) {
     return SettingsState(
@@ -137,6 +149,7 @@ class SettingsState {
       outputLanguage: outputLanguage ?? this.outputLanguage,
       benches: benches ?? this.benches,
       watchlist: watchlist ?? this.watchlist,
+      agentModels: agentModels ?? this.agentModels,
       seededFromEnv: seededFromEnv ?? this.seededFromEnv,
     );
   }
@@ -159,6 +172,28 @@ class SettingsState {
         outputLanguage: outputLanguage,
         benches: benches,
         watchlist: watchlist,
+        agentModels: agentModels, // per-role choices are independent of the global provider
+        seededFromEnv: seededFromEnv,
+      );
+
+  /// copyWith can't set [agentModels] back to null (the `?? this.x` swallows it). This explicit setter
+  /// (used by clear / Bench-apply) can clear the lineup.
+  SettingsState withAgentModels(Map<String, AgentModel>? value) => SettingsState(
+        demoMode: demoMode,
+        ticker: ticker,
+        provider: provider,
+        deepModel: deepModel,
+        quickModel: quickModel,
+        customDeepModel: customDeepModel,
+        customQuickModel: customQuickModel,
+        effort: effort,
+        backendUrl: backendUrl,
+        researchDepth: researchDepth,
+        analysts: analysts,
+        outputLanguage: outputLanguage,
+        benches: benches,
+        watchlist: watchlist,
+        agentModels: value,
         seededFromEnv: seededFromEnv,
       );
 
@@ -177,6 +212,7 @@ class SettingsState {
         'output_language': outputLanguage,
         'benches': benches.map((b) => b.toJson()).toList(growable: false),
         'watchlist': watchlist,
+        'agent_models': ?agentModelsToJson(agentModels),
         'seeded_from_env': seededFromEnv,
       };
 
@@ -198,6 +234,7 @@ class SettingsState {
             .toList(growable: false),
         watchlist:
             ((j['watchlist'] as List?) ?? const []).map((e) => e as String).toList(growable: false),
+        agentModels: agentModelsFromJson(j['agent_models']),
         seededFromEnv: j['seeded_from_env'] as bool? ?? false,
       );
 
@@ -212,6 +249,7 @@ class SettingsState {
         effort: effort,
         backendUrl: backendUrl,
         researchDepth: researchDepth,
+        agentModels: agentModels,
       );
 }
 
@@ -298,7 +336,8 @@ class SettingsController extends Notifier<SettingsState> {
     _set(state.copyWith(benches: next));
   }
 
-  void applyBench(Bench b) => _set(state.copyWith(
+  void applyBench(Bench b) => _set(state
+      .copyWith(
         provider: b.provider,
         deepModel: b.deepModel,
         quickModel: b.quickModel,
@@ -307,10 +346,27 @@ class SettingsController extends Notifier<SettingsState> {
         effort: b.effort,
         backendUrl: b.backendUrl,
         researchDepth: b.researchDepth,
-      ));
+      )
+      // Explicit so a bench with no lineup CLEARS the current one (copyWith can't null it).
+      .withAgentModels(b.agentModels));
 
   void deleteBench(String name) =>
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
+
+  // --- Dream Team (per-role model overrides) -------------------------------------------------------
+  /// Assign (or, with a null [model], unassign) a role's model. An empty map collapses to null so an
+  /// unused lineup is omitted on the wire and from settings.json.
+  void setAgentModel(String role, AgentModel? model) {
+    final next = {...?state.agentModels};
+    if (model == null) {
+      next.remove(role);
+    } else {
+      next[role] = model;
+    }
+    _set(state.withAgentModels(next.isEmpty ? null : next));
+  }
+
+  void clearAgentModels() => _set(state.withAgentModels(null));
 
   // --- Watchlist (tracked tickers on the Hub) ------------------------------------------------------
   /// Add-only: a no-op if already tracked. (The star/row affordance uses [toggleWatch] to flip.)
@@ -403,10 +459,18 @@ class SettingsController extends Notifier<SettingsState> {
     }
 
     final provider = s.provider;
-    Map<String, String>? apiKeys;
-    if (provider != null) {
-      final key = await _vault.read(provider);
-      if (key != null && key.isNotEmpty) apiKeys = {provider: key};
+    // Merge vault keys for EVERY provider this run references — the global quick/deep provider plus
+    // every per-role (Dream Team) provider — so a multi-provider run injects all the keys it needs
+    // (the sidecar's JobIsolationContext installs them all). A provider with no stored key is omitted
+    // (ollama / keyless local servers send none).
+    final providers = <String>{
+      ?provider,
+      ...?s.agentModels?.values.map((m) => m.provider),
+    };
+    final merged = <String, String>{};
+    for (final p in providers) {
+      final key = await _vault.read(p);
+      if (key != null && key.isNotEmpty) merged[p] = key;
     }
     final backendUrl = s.backendUrl?.trim();
 
@@ -420,11 +484,12 @@ class SettingsController extends Notifier<SettingsState> {
       researchDepth: s.researchDepth,
       analysts: s.analysts,
       outputLanguage: s.outputLanguage,
-      // Only the knob for the chosen provider is set; the others stay null and are omitted on the wire.
+      // Only the knob for the chosen (global) provider is set; per-role effort rides in agentModels.
       googleThinkingLevel: provider == 'google' ? s.effort : null,
       openaiReasoningEffort: provider == 'openai' ? s.effort : null,
       anthropicEffort: provider == 'anthropic' ? s.effort : null,
-      apiKeys: apiKeys,
+      apiKeys: merged.isEmpty ? null : merged,
+      agentModels: s.agentModels,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quorum/state/settings_controller.dart';
+import 'package:quorum_core/quorum_core.dart';
 
 /// flutter_secure_storage's platform MethodChannel, backed by an in-memory map so the controller's
 /// vault reads/writes never touch the real OS keystore.
@@ -222,6 +223,56 @@ void main() {
 
       ctrl.deleteBench('Deep');
       expect(c.read(settingsControllerProvider).benches, isEmpty);
+    });
+  });
+
+  group('Dream Team (agent models)', () {
+    test('setAgentModel assigns/unassigns; clearAgentModels resets; empty collapses to null', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setAgentModel('bull_researcher', const AgentModel(provider: 'xai', model: 'grok-x'));
+      expect(c.read(settingsControllerProvider).agentModels!['bull_researcher'],
+          const AgentModel(provider: 'xai', model: 'grok-x'));
+      ctrl.setAgentModel('bull_researcher', null); // unassign the only role -> null
+      expect(c.read(settingsControllerProvider).agentModels, isNull);
+      ctrl.setAgentModel('trader', const AgentModel(provider: 'openai', model: 'gpt-5.5'));
+      ctrl.clearAgentModels();
+      expect(c.read(settingsControllerProvider).agentModels, isNull);
+    });
+
+    test('SettingsState + Bench round-trip the lineup', () {
+      const lineup = {'portfolio_manager': AgentModel(provider: 'anthropic', model: 'claude-opus-4-8')};
+      const s = SettingsState(agentModels: lineup);
+      expect(SettingsState.fromJson(s.toJson()).agentModels!['portfolio_manager'],
+          const AgentModel(provider: 'anthropic', model: 'claude-opus-4-8'));
+      final bench = s.toBench('Frontier');
+      expect(Bench.fromJson(bench.toJson()).agentModels!['portfolio_manager']!.provider, 'anthropic');
+    });
+
+    test('applyBench with no lineup CLEARS the current one; setProvider does NOT', () {
+      const lineup = {'bull_researcher': AgentModel(provider: 'xai', model: 'grok-x')};
+      final c = _container(const SettingsState(provider: 'google', agentModels: lineup));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setProvider('openai'); // global provider change keeps the lineup
+      expect(c.read(settingsControllerProvider).agentModels, lineup);
+      ctrl.applyBench(const Bench(name: 'plain', provider: 'openai')); // a bench with no lineup clears it
+      expect(c.read(settingsControllerProvider).agentModels, isNull);
+    });
+
+    test('buildLaunchConfig merges vault keys for EVERY referenced provider (keyless omitted)', () async {
+      final c = _container(const SettingsState(
+        demoMode: false, provider: 'google', deepModel: 'gemini-3.1-pro-preview',
+        agentModels: {
+          'portfolio_manager': AgentModel(provider: 'anthropic', model: 'claude-opus-4-8'),
+          'market_analyst': AgentModel(provider: 'ollama', model: 'llama3.2:latest'), // keyless
+        },
+      ));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      await ctrl.saveKey('google', 'g-key');
+      await ctrl.saveKey('anthropic', 'a-key');
+      final cfg = await ctrl.buildLaunchConfig();
+      expect(cfg.apiKeys, {'google': 'g-key', 'anthropic': 'a-key'}); // ollama omitted (no key)
+      expect(cfg.agentModels!['portfolio_manager']!.provider, 'anthropic');
     });
   });
 

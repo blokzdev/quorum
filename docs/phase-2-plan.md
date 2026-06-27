@@ -224,7 +224,11 @@ split (roster UI vs capability/key gate) per the scope critic.
   byte-identical); a 3-provider map resolves 3 clients honoring per-role provider/model; a
   roster-integrity test asserts every `ROLE_TO_NODE` node is a real `add_node` string (guards the
   `social`/"Sentiment Analyst" rename trap); per-role clients share the run's `callbacks` object.
-- [ ] **P2.5b Contract + domain + provenance** — `agent_models` on `RunRequest`
+- [x] **P2.5b Contract + domain + provenance** *(done — `AgentModel` type + `agent_models` on
+  RunRequest/RunConfig/RunSummary/SettingsState/Bench; `resolve_agent_models` → `_manifest_dict`
+  provenance; `buildLaunchConfig` multi-provider key merge; 3 round-trips + provenance + demo-inert
+  tests; 59 flutter + 553 pytest green; adversarial review found zero issues)* — `agent_models` on
+  `RunRequest`
   (`dict[str, dict[str, Any]]`), `RunConfig.agentModels` (an `AgentModel` value type) +
   toJson/fromJson/copyWith, `plan_run` → `config["agent_models"]` + the **resolved** map into `params`,
   **`_manifest_dict`** (the real builder, not `_persist`) emits `agent_models`, `RunSummary.agentModels`,

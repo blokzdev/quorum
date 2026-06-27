@@ -1,6 +1,7 @@
 /// Quorum's portable domain: the streaming event contract, run view-state, and pure reducer.
 library;
 
+export 'src/agent_model.dart';
 export 'src/api_client.dart';
 export 'src/catalog.dart';
 export 'src/engine_endpoint.dart';

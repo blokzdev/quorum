@@ -145,3 +145,24 @@ def test_model_supports_tools():
     assert model_supports_tools("anthropic", "claude-opus-4-8") is True
     assert model_supports_tools("ollama", "custom") is None  # user-specified -> warn, don't block
     assert model_supports_tools("openai", "") is None
+
+
+# --- Resolved provenance (P2.5b): effective per-role model after fallback -------------------------
+
+def test_resolve_agent_models_overrides_and_quick_deep_fallback():
+    from tradingagents.graph.agent_roles import resolve_agent_models
+
+    config = {"llm_provider": "openai", "deep_think_llm": "gpt-5.5", "quick_think_llm": "gpt-5.4-mini"}
+    overrides = {
+        "portfolio_manager": {"provider": "anthropic", "model": "claude-opus-4-8", "effort": "high"},
+        "bull_researcher": {"provider": "xai", "model": "grok-x"},
+    }
+    resolved = resolve_agent_models(overrides, config)
+
+    assert set(resolved) == set(ROLE_TO_NODE)  # all 12 roles present (a full cast list)
+    assert resolved["portfolio_manager"] == {"provider": "anthropic", "model": "claude-opus-4-8", "effort": "high"}
+    assert resolved["bull_researcher"] == {"provider": "xai", "model": "grok-x"}
+    # Unset judge role -> global provider + the DEEP model that actually ran it.
+    assert resolved["research_manager"] == {"provider": "openai", "model": "gpt-5.5"}
+    # Unset worker role -> global provider + the QUICK model.
+    assert resolved["market_analyst"] == {"provider": "openai", "model": "gpt-5.4-mini"}

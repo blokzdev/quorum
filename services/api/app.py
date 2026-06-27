@@ -12,7 +12,7 @@ import asyncio
 import json
 import os
 import threading
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -49,6 +49,10 @@ class RunRequest(BaseModel):
     openai_reasoning_effort: str | None = None
     anthropic_effort: str | None = None
     output_language: str = "English"
+    # "Dream Team" (P2.5): per-agent-role model overrides ({role_key: {provider, model, backend_url?,
+    # effort?}}). Inner type stays permissive so a forward-compat field never 422s the request; the
+    # engine reads keys defensively. Unset -> the shared quick/deep split runs every role.
+    agent_models: dict[str, dict[str, Any]] | None = None
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
     # demo mode only: per-step delay in seconds (0 = instant, for tests).
