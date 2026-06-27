@@ -50,26 +50,45 @@ These facts (verified by code reading) shape the sequencing:
 
 | # | Decision | Choice |
 |---|----------|--------|
-| 1 | Sequencing | De-risk-first, **installer in-scope**. Cheap gating spikes (P2.0) before feature work; installer is the closing milestone (P2.5). |
+| 1 | Sequencing | De-risk-first, **installer in-scope**. Gating spike (P2.0) before feature work; P2.5 builds the installer; **P2.6** signs it + hardens (security sweep, key rotation, tech-debt) + closes out. |
 | 2 | Hub scope | **Home**: Launch + Run history (with cached review) + Watchlist. **Run Comparison** (diff two runs of one ticker across model configs/dates) is the flagship "separate multi-agent view", scoped as a **stretch** (P2.4d). |
 | 3 | BYO key storage | `flutter_secure_storage`, one entry per provider, `.env` first-launch import, per-run injection via `RunRequest.api_keys` (sidecar stays stateless). See [ADR 0001](decisions/0001-byo-api-key-storage.md). |
 | 4 | Navigation | Lightweight in-app shell (enum / `IndexedStack` + `Navigator`) now; revisit GoRouter only if the post-V1 mobile remote needs deep-linking. |
 | 5 | Subphase naming | `P2.x`, one topic per commit — extends the Phase-1 `S0–S4` convention. |
-| 6 | Sidecar bundling | **Open** — decided by the P2.0a spike, then recorded as ADR 0002. |
+| 6 | Sidecar bundling | **Open** — decided by the P2.0 spike, then recorded as ADR 0002. |
+
+### Phase cadence & autonomy envelope
+
+Phase 2 runs as an autonomous **Ultracode phase-execution loop** (see the root `CLAUDE.md` "Working
+loop"): per subphase — plan → adversarially validate → **self-approve** (no human gate) → implement
+in small commits → test/emulate → refine until exit criteria pass. The settings below bound that
+autonomy for this phase:
+
+- **Merge model:** each subphase is a small PR into a long-running **`phase-2` integration branch**,
+  self-merged after green checks + self-review. **`main` stays untouched** until phase end, when a
+  single `phase-2 → main` PR + the close-out docs go up for final review.
+- **Validation cost boundary:** validate with **local Ollama `llama3.2:latest`** (free, tool-capable)
+  + cost-free **demo** mode wherever possible; use the **shared Gemini test key** (test-only; never
+  logged/committed) for the **cloud path** and hybrid local+cloud runs (e.g. quick=Ollama /
+  deep=Gemini). No other paid spend without asking.
+- **Sensitive ops — prep then pause:** do all automatable prep, then **stop and surface** before any
+  irreversible / account-dependent action — merging to `main`, **key rotation**, **cert/keystore
+  signing**, external publishing. These are concentrated in **P2.6**.
 
 ## Roadmap
 
-### P2.0 — De-risk spikes & release hygiene *(gating; mostly throwaway)*
+### P2.0 — Sidecar-bundling spike *(gating; mostly throwaway)*
 
-- [ ] **P2.0a Sidecar-bundling spike** — PyInstaller-freeze `services.api` into a standalone sidecar
+- [ ] **P2.0 Sidecar-bundling spike** — PyInstaller-freeze `services.api` into a standalone sidecar
   exe; prove the stdout `{port, token}` handshake + `/healthz` + a cost-free `demo` stream all work
   when launched as a frozen exe *outside* the repo `.venv`. Decide one-file vs one-dir vs embedded
   relocatable venv.
-- [ ] **P2.0b Secret hygiene** — rotate the shared Gemini test key; sweep fixtures/CI for
-  hardcoded/shared keys; confirm `.env` stays gitignored and clean of history.
 
-**Exit:** a frozen sidecar runs a demo end-to-end with no repo/.venv present; the Gemini key is
-rotated; the bundling strategy is chosen → ADR 0002.
+**Exit:** a frozen sidecar runs a demo end-to-end with no repo/.venv present; the bundling strategy
+is chosen → ADR 0002.
+
+> Secret hygiene + the shared Gemini test-key rotation moved to **P2.6** (finalization), per the
+> phase cadence below — they happen once, at the end, with the security sweep.
 
 ### P2.1 — Shared foundation (plumbing) *(blocks Hub + Studio)*
 
@@ -127,17 +146,34 @@ and launch a real `pro`/`vibe` run from the desktop (validated against local Oll
 history + watchlist, opens a cached review without re-running, and survives a sidecar restart; Hub
 goldens land.
 
-### P2.5 — Signed installer & CI *(depends on P2.0a; closing milestone)*
+### P2.5 — Installer packaging & Flutter CI *(depends on P2.0; build the distributable)*
 
 - [ ] **P2.5a** Bundle the frozen sidecar exe into the desktop package; rewrite
   `desktop_sidecar_endpoint.dart`'s spawn path to launch it (keep the `.venv` fallback for local dev).
-- [ ] **P2.5b** Installer packaging (MSIX vs Inno/WiX per P2.0a) + code-signing (cert + timestamp +
-  signing hook); include the C++ ATL build deps required by `flutter_secure_storage_windows`.
-- [ ] **P2.5c** CI — add a Flutter build + `flutter test` (incl. goldens) job and a release/packaging
-  job to [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+- [ ] **P2.5b** Installer packaging (MSIX vs Inno/WiX per P2.0); include the C++ ATL build deps
+  required by `flutter_secure_storage_windows`. Produces an installable build (unsigned / dev-signed
+  for now — production signing is P2.6).
+- [ ] **P2.5c** CI — add a Flutter build + `flutter test` (incl. goldens) job and a packaging job to
+  [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
-**Exit:** a signed installer yields a standalone Quorum that launches, spawns the bundled sidecar
-(no repo/.venv), and runs demo + a real run on a clean machine; CI gates Flutter + Python.
+**Exit:** a packaged Quorum installs + launches on a clean machine, spawns the bundled sidecar
+(no repo/.venv), and runs demo + a real run; CI gates Flutter + Python.
+
+### P2.6 — Hardening & finalization *(sensitive ops concentrated here; closing milestone)*
+
+- [ ] **P2.6a Security sweep** — secret hygiene: rotate the shared **Gemini test key**; sweep
+  fixtures/CI for hardcoded/shared keys; confirm `.env` stays gitignored + clean of history.
+  Re-verify the `JobIsolationContext` env snapshot/restore now that BYO-key runs are common; add a
+  `/healthz` contract-version check on the client.
+- [ ] **P2.6b Technical-debt pass** — TODO / dead-code cleanup; candidate: **P0.3b** (converge
+  `cli/main.py` onto `runtime.run_streaming`); contract / forward-compat audit.
+- [ ] **P2.6c Release signing** — code-signing with the keystore/cert (provisioning + timestamp +
+  signing hook) → a **signed** installer artifact; release job in CI.
+- [ ] **P2.6d Phase close-out** — completeness-critic pass (missing / regressed / deferred), update
+  `phase-2-plan.md`, then the `phase-2 → main` PR + the close-out docs PR.
+
+**Exit:** a **signed** release artifact runs on a clean machine; the Gemini key is rotated; the
+security sweep is clean; Phase 2 is closed out and merged to `main`.
 
 ## Deferred / post-Phase-2
 
@@ -146,7 +182,8 @@ Tracked, not built in Phase 2:
 - Run Comparison (if it slips from P2.4d)
 - Cost / usage-insights dashboard
 - Optional master-passphrase vault toggle (defense-in-depth on top of the OS keystore — see ADR 0001)
-- **P0.3b** — converge `cli/main.py` onto `runtime.run_streaming` (single canonical streaming path)
+- **P0.3b** — converge `cli/main.py` onto `runtime.run_streaming` (single canonical streaming path);
+  a candidate for the P2.6b tech-debt pass
 - Mobile-as-remote (LAN/WAN over the same API, with TLS + auth)
 - macOS port
 - Paper-trading sandbox (post-V1 P10/P11)

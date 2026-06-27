@@ -108,9 +108,24 @@ CI (`.github/workflows/ci.yml`) gates on **ruff + pytest** — keep new packages
 
 ## Working loop
 
-Research → Plan subphases → execute → test (golden + sidecar + headless real runs) → refine.
-Operate in **Ultracode** mode: author Workflows for substantive research/review fan-out and
-adversarially verify before committing. Ship small, reviewable commits with clear exit criteria.
+Operate in **Ultracode** mode as an autonomous **phase-execution loop** (the default MO for
+substantive multi-subphase work):
+
+1. **Start of phase** — lock the plan in a small docs PR (roadmap, subphases, exit criteria,
+   decisions/ADRs). Current: [`docs/phase-2-plan.md`](docs/phase-2-plan.md).
+2. **Per subphase** — plan thoroughly (research/explore Workflow) → **adversarially validate**
+   the plan against falsifiable exit criteria → **self-approve** (no human approval gate) →
+   implement in small reviewable commits → test/emulate (golden render-to-PNG + sidecar + headless
+   demo/real runs + `ruff`/`pytest` + `flutter test`) → refine until exit criteria pass. Tick the
+   plan checkboxes; add an ADR for any consequential decision.
+3. **End of phase** — completeness-critic pass, then a close-out docs PR.
+
+**Verification is the gate** — never mark a subphase done unverified; report failures faithfully.
+**Still surface (don't self-approve through):** hard-to-reverse / outward-facing / costly actions
+(merging to `main`, key rotation, cert/signing, paid spend beyond the agreed boundary, publishing),
+genuine product forks, and contract/security/scope changes — with a recommendation. Keep the user in
+the loop via **decision surfacing, not approval gating**. The per-phase cadence (merge model, cost
+boundary, sensitive-op handling) is set once at phase start — see the plan doc's "Phase cadence".
 
 ## Git
 
