@@ -34,6 +34,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.reporting import write_report_tree
 
+from .agent_roles import ROLE_TO_NODE
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
 from .propagation import Propagator
@@ -42,6 +43,78 @@ from .setup import GraphSetup
 from .signal_processing import SignalProcessor
 
 logger = logging.getLogger(__name__)
+
+
+def _role_kwargs(provider: str, spec: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    """Provider-specific constructor kwargs for a per-role (Dream Team) client: the role's own effort
+    if set, else the matching per-provider global knob (effort is naturally per-provider), routed to
+    the right param for the role's OWN provider, plus the cross-provider temperature. Mirrors
+    ``TradingAgentsGraph._get_provider_kwargs`` but parameterized by the role's provider, not the
+    global one."""
+    kwargs: dict[str, Any] = {}
+    p = provider.lower()
+    effort = spec.get("effort")
+    if p == "google":
+        v = effort or config.get("google_thinking_level")
+        if v:
+            kwargs["thinking_level"] = v
+    elif p == "openai":
+        v = effort or config.get("openai_reasoning_effort")
+        if v:
+            kwargs["reasoning_effort"] = v
+    elif p == "anthropic":
+        v = effort or config.get("anthropic_effort")
+        if v:
+            kwargs["effort"] = v
+    temperature = config.get("temperature")
+    if temperature is not None and temperature != "":
+        kwargs["temperature"] = float(temperature)
+    return kwargs
+
+
+def build_role_llms(
+    config: dict[str, Any],
+    callbacks: Any = None,
+    *,
+    create_client=create_llm_client,
+) -> dict[str, Any]:
+    """Build the Dream Team per-role override LLMs, keyed by graph **node name**, from
+    ``config['agent_models']`` (``{role_key: {provider, model, backend_url?, effort?}}``).
+
+    Additive: returns ``{}`` when unset, so ``GraphSetup`` falls back to quick/deep and a quick/deep
+    run is byte-for-byte unchanged. Clients are memoized on ``(provider, model, base_url, effort)`` so
+    a 12-role run that uses 3 distinct models builds 3 clients, not 12, and roles sharing a spec share
+    one client instance. Unknown roles / malformed specs are ignored (they fall back to quick/deep).
+    """
+    overrides = config.get("agent_models") or {}
+    if not overrides:
+        return {}
+    global_provider = (config.get("llm_provider") or "").lower()
+    global_backend = config.get("backend_url")
+    cache: dict[tuple, Any] = {}
+    role_llms: dict[str, Any] = {}
+    for role_key, spec in overrides.items():
+        node = ROLE_TO_NODE.get(role_key)
+        if node is None or not isinstance(spec, dict):
+            continue
+        provider, model = spec.get("provider"), spec.get("model")
+        if not provider or not model:
+            continue
+        # base_url: the role's own; else the global backend_url ONLY when the role shares the global
+        # provider — otherwise a cloud role would silently inherit a global local (e.g. Ollama) URL.
+        base_url = spec.get("backend_url")
+        if not base_url and provider.lower() == global_provider:
+            base_url = global_backend
+        cache_key = (provider.lower(), model, base_url, spec.get("effort"))
+        if cache_key not in cache:
+            kwargs = _role_kwargs(provider, spec, config)
+            if callbacks:
+                kwargs["callbacks"] = callbacks  # same callbacks object the quick/deep clients get
+            cache[cache_key] = create_client(
+                provider=provider, model=model, base_url=base_url, **kwargs
+            ).get_llm()
+        role_llms[node] = cache[cache_key]
+    return role_llms
 
 
 class TradingAgentsGraph:
@@ -96,6 +169,11 @@ class TradingAgentsGraph:
         self.deep_thinking_llm = deep_client.get_llm()
         self.quick_thinking_llm = quick_client.get_llm()
 
+        # Dream Team: build any per-role override clients (keyed by node name) from
+        # config["agent_models"]; empty when unset, so GraphSetup falls back to quick/deep and a
+        # quick/deep run is constructed identically.
+        role_llms = build_role_llms(self.config, llm_kwargs.get("callbacks"))
+
         self.memory_log = TradingMemoryLog(self.config)
 
         # Create tool nodes
@@ -111,6 +189,7 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.tool_nodes,
             self.conditional_logic,
+            role_llms=role_llms,
         )
 
         self.propagator = Propagator(

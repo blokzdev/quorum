@@ -43,6 +43,12 @@ class ModelCapabilities:
     # (Coding Plan, MiniMax-Text-01, etc.), so we only set it where the
     # model actually consumes it. (#826)
     requires_reasoning_split: bool = False
+    # Whether the model can do tool / function calling at all. The analyst roles
+    # (market / news / fundamentals) loop on tool calls, so a model with this
+    # False cannot play them — the engine-side backstop for the Dream Team gate
+    # (the desktop reads the catalog tool-capable flag). Default True: every
+    # frontier model supports tools; set False only for a known non-tool model.
+    supports_tool_calling: bool = True
 
 
 # DeepSeek's thinking models accept the ``tools`` array but reject the

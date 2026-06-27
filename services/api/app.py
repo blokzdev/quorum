@@ -21,6 +21,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from services.api.jobs import JobRegistry
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
+from tradingagents.llm_clients.tool_capability import model_supports_tools
 from tradingagents.runtime.events import CONTRACT_VERSION, EventType
 
 app = FastAPI(title="Quorum API", version=str(CONTRACT_VERSION))
@@ -73,9 +74,15 @@ async def healthz():
 
 @app.get("/catalog/providers")
 async def catalog():
+    # `tool_capable` (additive) feeds the Dream Team gate: market/news/fundamentals analysts loop on
+    # tool calls, so the desktop blocks a non-tool model there. null = unknown (e.g. a custom/local
+    # model) → the UI warns rather than blocks. Existing label/value are unchanged.
     providers = {
         provider: {
-            mode: [{"label": label, "value": value} for label, value in options]
+            mode: [
+                {"label": label, "value": value, "tool_capable": model_supports_tools(provider, value)}
+                for label, value in options
+            ]
             for mode, options in modes.items()
         }
         for provider, modes in MODEL_OPTIONS.items()

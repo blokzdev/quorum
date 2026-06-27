@@ -209,7 +209,10 @@ Framing: **static per-role routing** (cheap workers + strong judge — the canon
 pattern that maps onto the existing quick/deep topology), *not* a latency-adding cascade. P2.5c is
 split (roster UI vs capability/key gate) per the scope critic.
 
-- [ ] **P2.5a Engine — per-role routing + capability data** — `agent_roles.py` (frozen `ROLE_TO_NODE`,
+- [x] **P2.5a Engine — per-role routing + capability data** *(done — `build_role_llms` + `GraphSetup`
+  `role_llms` + `agent_roles.ROLE_TO_NODE` + `supports_tool_calling` + `/catalog` `tool_capable`; 9 unit
+  tests incl. additivity + roster-integrity; 548 pytest green; adversarial review of the frozen-package
+  change found zero issues)* — `agent_roles.py` (frozen `ROLE_TO_NODE`,
   12 roles); a `_resolve_role_llm` cache in `trading_graph` (key `provider/model/base_url/effort`;
   per-role effort off the role's own provider; shared `callbacks` threaded; **`base_url` falls back to
   the global only when the role shares the global provider**); `GraphSetup` optional `role_llms=None`
