@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-06-27 (P2.5c1 Dream Team roster shipped)
+**Last AI update:** 2026-06-27 (P2.5 Dream Team phase COMPLETE — c2 capability+key gate shipped)
 **Spend this phase:** ~a few cents paid · boundary = **Ollama + demo + the shared Gemini test key only**
 (one minimal Gemini cloud validation run, within boundary; no other paid spend without asking).
 
@@ -29,6 +29,12 @@
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-06-27 — **P2.5c2 capability + key gate** shipped (PR #15 → `phase-2`); **P2.5 Dream Team phase
+  complete**. The design fan-out wanted to exclude *both* openai_compatible and ollama from per-role
+  pickers AND its synthesis agent crashed on schema validation — I recovered the 3 analyst outputs from
+  the transcripts and synthesized the plan myself (the loop's "I own the synthesis" in action). Key
+  call locked in code: the capability BLOCK fires iff `tool_capable == false` (never `!= true`), so a
+  custom/local model warns-not-blocks — anything stricter would kill the local-analyst lineup.
 - 2026-06-27 — **P2.5c1 Dream Team roster** shipped (PR #13 → `phase-2`). One adversarial-pass catch worth
   knowing: the design fan-out wanted to exclude **Ollama** from per-role pickers; I verified against the
   engine that per-role Ollama works (baked-in localhost default) and **kept it** — excluding it would
