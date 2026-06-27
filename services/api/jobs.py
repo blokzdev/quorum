@@ -213,6 +213,13 @@ class JobRegistry:
             logger.debug("report write failed for %s", job.run_id, exc_info=True)
         try:
             run_dir.mkdir(parents=True, exist_ok=True)
+            # Point report_path at the run dir if the pretty tree write above failed, so the manifest
+            # and the persisted sections are still locatable for a cached review after a restart.
+            job.report_path = job.report_path or str(run_dir)
+            # Persist the canonical sections separately (run.json stays a lean summary): a cached review
+            # of a run whose in-memory final_state is gone (post-restart) reads these back from disk.
+            (run_dir / "reports.json").write_text(
+                json.dumps(self.report_sections(job), indent=2), encoding="utf-8")
             manifest = self._manifest_dict(job, status=status, ticker=ticker, trade_date=trade_date,
                                            asset_type=asset_type, params=params)
             (run_dir / "run.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -289,5 +296,18 @@ class JobRegistry:
 
     @staticmethod
     def report_sections(job: Job) -> dict[str, str]:
-        fs = job.final_state or {}
-        return {k: fs[k] for k in _CANONICAL_SECTIONS if fs.get(k)}
+        """Canonical report sections for a run. Fresh runs serve them from the in-memory final_state;
+        a run restored from disk after a restart (no final_state) reads them back from the persisted
+        ``reports.json`` so a cached review still renders the full reports."""
+        fs = job.final_state
+        if fs:
+            return {k: fs[k] for k in _CANONICAL_SECTIONS if fs.get(k)}
+        if job.report_path:
+            try:
+                rp = Path(job.report_path)
+                run_dir = rp if rp.is_dir() else rp.parent
+                data = json.loads((run_dir / "reports.json").read_text(encoding="utf-8"))
+                return {k: v for k, v in data.items() if k in _CANONICAL_SECTIONS and v}
+            except Exception:
+                logger.debug("reports.json read failed for %s", job.run_id, exc_info=True)
+        return {}
