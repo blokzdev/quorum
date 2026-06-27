@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quorum_core/quorum_core.dart';
 
+import '../dream_team_roster.dart';
 import '../state/app_surface.dart';
 import '../state/hub_provider.dart';
 import '../state/run_controller.dart';
@@ -560,6 +561,9 @@ class _CachedReview extends ConsumerWidget {
             ),
           ),
           const Divider(height: 1, color: QC.border),
+          // The Dream Team "cast list" — what model actually played each role. Self-guards to nothing
+          // for demo / pre-P2.5 runs (no resolved map), so those reviews render unchanged.
+          _CastListBar(summary: summary),
           Expanded(
             child: reports.when(
               data: (sections) => TerminalBody(
@@ -573,6 +577,153 @@ class _CachedReview extends ConsumerWidget {
                   subtitle: '$e',
                   onRetry: () => ref.invalidate(runReportsProvider(summary.runId))),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Dream Team cast list (post-run provenance) ----------------------------------------------------
+
+/// Whether a resolved role model was a user OVERRIDE vs the run's quick/deep fallback. A presentational
+/// *differs-from-default* heuristic, NOT ground truth: a role pinned to exactly the global model reads
+/// as default, and a manifest with null deep/quickModel degrades to a provider-only comparison.
+/// (resolve_agent_models flattens override-vs-fallback, so the bit is inferred — never build correctness
+/// on it; the c2 gate must not.)
+bool _isCastOverride(String roleKey, AgentModel m, RunSummary s) {
+  if (m.provider != s.provider) return true;
+  final expected = dreamTeamDeepRoles.contains(roleKey) ? s.deepModel : s.quickModel;
+  return expected != null && m.model != expected;
+}
+
+/// A collapsible "Cast" strip in the cached review: role → the model that actually ran it, grouped by
+/// the same 5 stages as the roster. Self-guards to [SizedBox.shrink] when there is no resolved map
+/// (demo / pre-P2.5 runs), so those reviews are pixel-identical to before.
+class _CastListBar extends StatefulWidget {
+  final RunSummary summary;
+  const _CastListBar({required this.summary});
+  @override
+  State<_CastListBar> createState() => _CastListBarState();
+}
+
+class _CastListBarState extends State<_CastListBar> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final models = widget.summary.agentModels;
+    if (models == null || models.isEmpty) return const SizedBox.shrink();
+    final overrides = models.entries.where((e) => _isCastOverride(e.key, e.value, widget.summary)).length;
+    return Container(
+      color: QC.surface1,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.groups_outlined, size: 15, color: QC.textMid),
+                  const SizedBox(width: 8),
+                  Text('Cast · ${models.length} roles',
+                      style: const TextStyle(
+                          color: QC.textMid, fontSize: 12, fontWeight: FontWeight.w600)),
+                  if (overrides > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: QC.accent.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: QC.accent.withValues(alpha: 0.5)),
+                      ),
+                      child: Text('$overrides pinned',
+                          style: const TextStyle(
+                              color: QC.accent, fontSize: 10, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                  const Spacer(),
+                  Icon(_open ? Icons.expand_less : Icons.expand_more, size: 18, color: QC.textLo),
+                ],
+              ),
+            ),
+          ),
+          if (_open) _CastList(summary: widget.summary),
+        ],
+      ),
+    );
+  }
+}
+
+/// The pure, grouped cast panel (golden/test-friendly). Renders every resolved role under its stage,
+/// the model in mono, with an accent "pinned" chip on inferred overrides.
+class _CastList extends StatelessWidget {
+  final RunSummary summary;
+  const _CastList({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final models = summary.agentModels ?? const <String, AgentModel>{};
+    final children = <Widget>[];
+    for (final (stageLabel, keys) in dreamTeamStages) {
+      final present = keys.where((k) => models[k] != null).toList(growable: false);
+      if (present.isEmpty) continue;
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 4),
+        child: Text(stageLabel.toUpperCase(),
+            style: const TextStyle(
+                color: QC.textLo, fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+      ));
+      for (final role in present) {
+        children.add(_CastRow(
+          roleKey: role,
+          model: models[role]!,
+          isOverride: _isCastOverride(role, models[role]!, summary),
+        ));
+      }
+    }
+    return Container(
+      width: double.infinity,
+      color: QC.surface1,
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+    );
+  }
+}
+
+class _CastRow extends StatelessWidget {
+  final String roleKey;
+  final AgentModel model;
+  final bool isOverride;
+  const _CastRow({required this.roleKey, required this.model, required this.isOverride});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(dreamTeamRoleLabel(roleKey),
+                style: const TextStyle(color: QC.textMid, fontSize: 12)),
+          ),
+          if (isOverride) ...[
+            const Icon(Icons.push_pin, size: 11, color: QC.accent),
+            const SizedBox(width: 5),
+          ],
+          Flexible(
+            child: Text('${_providerShort(model.provider)} · ${model.model}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    color: isOverride ? QC.textHi : QC.textLo,
+                    fontSize: 12,
+                    fontFamily: QC.fontMono,
+                    fontWeight: isOverride ? FontWeight.w600 : FontWeight.w400)),
           ),
         ],
       ),

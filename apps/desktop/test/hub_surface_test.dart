@@ -1,21 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quorum/dream_team_roster.dart';
 import 'package:quorum/state/hub_provider.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/hub_surface.dart';
 import 'package:quorum/ui/terminal_screen.dart';
 import 'package:quorum_core/quorum_core.dart';
 
-RunSummary _run(String id, String ticker, String rating, {String mode = 'pro'}) => RunSummary(
+RunSummary _run(String id, String ticker, String rating,
+        {String mode = 'pro', Map<String, AgentModel>? agentModels}) =>
+    RunSummary(
       runId: id, status: 'done', mode: mode, ticker: ticker, tradeDate: '2026-05-10',
-      provider: 'anthropic', deepModel: 'claude-opus-4-8',
+      provider: 'anthropic', deepModel: 'claude-opus-4-8', quickModel: 'claude-sonnet-4-6',
       verdict: Verdict(
         finalDecision: '$rating $ticker', rating: rating, confidence: 0.72, thesis: 'thesis',
         structured: const {'entry_price': 124.0, 'price_target': 152.0},
       ),
       cost: const CostSnapshot(llmCalls: 14, toolCalls: 8, tokensIn: 24800, tokensOut: 13200, estUsd: 0.42),
+      agentModels: agentModels,
     );
+
+/// A resolved 12-role lineup as the manifest records it: every role on the global anthropic quick/deep
+/// model except the given [overrides]. Mirrors `resolve_agent_models` (all 12 present on a pro run).
+Map<String, AgentModel> _resolvedLineup({Map<String, AgentModel> overrides = const {}}) => {
+      for (final k in dreamTeamRoleKeys)
+        k: overrides[k] ??
+            AgentModel(
+                provider: 'anthropic',
+                model: dreamTeamDeepRoles.contains(k) ? 'claude-opus-4-8' : 'claude-sonnet-4-6'),
+    };
 
 Widget _wrap(SettingsState initial, List<RunSummary> history,
         {Map<String, Map<String, String>>? reports}) =>
@@ -96,6 +110,44 @@ void main() {
     expect(find.text('Awaiting rebuttal…'), findsNothing);
     // Read-only review re-runs (not a fresh "Run analysis" launch).
     expect(find.text('Re-run NVDA'), findsOneWidget);
+  });
+
+  testWidgets('cached review shows the Dream Team cast list and flags inferred overrides',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1320, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final run = _run('rc', 'NVDA', 'Buy', agentModels: _resolvedLineup(overrides: {
+      'bull_researcher': const AgentModel(provider: 'xai', model: 'grok-x'),
+    }));
+    await tester.pumpWidget(_wrap(settings, [run], reports: {
+      'rc': {'final_trade_decision': 'BUY NVDA — starter long.'},
+    }));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('NVDA'));
+    await tester.pumpAndSettle();
+
+    // 12 resolved roles, exactly 1 inferred override (provider differs from the run's anthropic global).
+    expect(find.text('Cast · 12 roles'), findsOneWidget);
+    expect(find.text('1 pinned'), findsOneWidget);
+
+    await tester.tap(find.text('Cast · 12 roles')); // expand
+    await tester.pumpAndSettle();
+    // 'Bull Researcher' also labels the terminal pipeline node, so match >=1; the model id is unique.
+    expect(find.text('Bull Researcher'), findsWidgets);
+    expect(find.textContaining('grok-x'), findsOneWidget); // the overridden model, only in the cast list
+  });
+
+  testWidgets('a demo / no-lineup review renders no cast bar', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1320, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(settings, [_run('r1', 'NVDA', 'Buy', mode: 'demo')], reports: {
+      'r1': {'final_trade_decision': 'demo decision'},
+    }));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('NVDA'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cached run · NVDA'), findsOneWidget); // the review opened
+    expect(find.textContaining('Cast ·'), findsNothing); // agentModels null -> SizedBox.shrink
   });
 
   testWidgets('star on a run row toggles the watchlist', (tester) async {
