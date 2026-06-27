@@ -162,24 +162,39 @@ follow-ups.
 
 ### P2.4 — Hub / run history *(depends on P2.1a + net-new persistence)*
 
-- [ ] **P2.4a Backend persistence (+ Track Record seed hooks)** — write a `run.json` manifest
-  alongside the report tree in `jobs._write_reports` (run_id, ticker, trade_date, created_at, rating,
-  thesis, confidence, cost, **model/provider**, report_path, status); add a `GET /runs` list endpoint
-  in `app.py`; scan the manifest dir on `JobRegistry` startup so history survives restart.
-  **Track Record seed hooks (signature bet, built post-V1):** also persist the fields a future realized
-  hit-rate / alpha scorecard needs — the verdict/rating, the trade_date, and the **price/entry context
-  at call time** — so Track Record can be computed later with **no backfill**.
-- [ ] **P2.4b Domain** — `RunSummary` type + `ApiClient.listRuns()` in `quorum_core`; the reducer
-  carries run params / `assetType` so a run can be re-opened / re-run.
-- [ ] **P2.4c Hub UI (Home)** — Launch surface + Run history list (filter/sort, BUY/HOLD/SELL pills)
-  with click-through to a **cached run review** (re-render verdict rail + reports from `run.json` /
-  `/runs/{id}/reports`, no re-run) + Watchlist (tracked tickers → latest verdict + re-run).
-- [ ] **P2.4d Run Comparison** *(stretch)* — diff two runs of the same ticker across model
+- [x] **P2.4a Backend persistence (+ Track Record seed hooks)** — `JobRegistry._persist` writes a
+  `run.json` manifest beside the report tree (run_id, status, mode, ticker, trade_date, asset_type,
+  timestamps, **model/provider**, verdict {rating/thesis/confidence/structured entry-price ctx}, cost,
+  report_path) — written BEFORE the terminal status is exposed; `GET /runs` lists them from disk;
+  startup `_load_prior_runs` registers prior runs so they resolve after a restart. The manifest is a
+  summary built from explicit fields — **never the raw request, so api_keys are never persisted.**
+  **Track Record seed hooks:** verdict/rating + trade_date + the entry/price context + model/provider
+  are persisted, **no backfill** needed.
+- [x] **P2.4b Domain** — `RunSummary` + `ApiClient.listRuns()` in `quorum_core`, with `Verdict.fromJson`
+  / `CostSnapshot.fromJson`. (Re-open/re-run is driven off the `RunSummary` fields, not a reducer
+  change — the summary already carries provider/models/ticker.)
+- [x] **P2.4c Hub UI (Home)** — Launch surface + Run history list (ticker filter, BUY/HOLD/SELL filter
+  chips + pills, demo badge, cost, watch star) with click-through to a **cached run review** that
+  reconstructs a done `RunViewState` and re-renders through the existing `TerminalBody` (verdict rail
+  + tug-of-war + reports, no re-run) from `/runs/{id}/reports`; + Watchlist (tracked tickers → latest
+  verdict + one-tap re-run). Shell active surface moved to `appSurfaceProvider` so the Hub can jump to
+  the Terminal. `reports.json` persisted so restored runs are reviewable post-restart.
+- [ ] **P2.4d Run Comparison** *(stretch — deferred)* — diff two runs of the same ticker across model
   configs/dates.
 
 **Exit:** finishing a run writes a manifest (incl. the Track Record seed fields); `GET /runs` lists
 prior runs; the Hub home lists history + watchlist, opens a cached review without re-running, and
 survives a sidecar restart; Hub goldens land.
+
+✅ **Done** (P2.4a–c; D deferred as stretch) on `feat/p2.4-hub`. **Verification:** 53 `flutter test`
+(8 Hub widget tests + a read-verified Hub golden) + `pytest 539 passed` + `ruff` clean. An adversarial
+multi-agent review (security dim found **no key leak** — the manifest is built from explicit fields,
+never the request) caught a HIGH bug — the cached review dropped the bull/bear + risk-debate sections
+because `report_sections` whitelisted only top-level keys while the debate lives nested in
+`investment_debate_state`/`risk_debate_state`; fixed by decomposing them (+ a restart round-trip test)
+so the signature debate re-renders. Other review fixes landed (add-only watchlist, cached-review
+re-run CTA + no stale review on launch, launch-disabled-without-provider). The Hub golden shows
+launch/watchlist/history with color-coded verdict pills and the demo badge.
 
 ### P2.5 — Dream Team: per-agent model assignment *(signature bet; needs engine work)*
 

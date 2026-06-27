@@ -44,12 +44,17 @@ class TerminalBody extends StatelessWidget {
   /// the shell's [TerminalSurface]); the golden harness always passes a fixed value, so no
   /// `DateTime.now()` is ever reached in a golden.
   final Duration? elapsedOverride;
+
+  /// Label for the primary action button (when not running). Defaults to "Run analysis"; the Hub's
+  /// cached review passes "Re-run …" so a read-only past run doesn't present the same fresh-run CTA.
+  final String runLabel;
   const TerminalBody({
     super.key,
     required this.state,
     this.onRun,
     this.onCancel,
     this.elapsedOverride,
+    this.runLabel = 'Run analysis',
   });
 
   @override
@@ -58,7 +63,12 @@ class TerminalBody extends StatelessWidget {
       color: QC.bg,
       child: Column(
         children: [
-          _Header(state: state, onRun: onRun, onCancel: onCancel, elapsedOverride: elapsedOverride),
+          _Header(
+              state: state,
+              onRun: onRun,
+              onCancel: onCancel,
+              elapsedOverride: elapsedOverride,
+              runLabel: runLabel),
           const Divider(height: 1, color: QC.border),
           Expanded(
             child: Row(
@@ -90,7 +100,9 @@ class _Header extends StatelessWidget {
   final VoidCallback? onRun;
   final VoidCallback? onCancel;
   final Duration? elapsedOverride;
-  const _Header({required this.state, this.onRun, this.onCancel, this.elapsedOverride});
+  final String runLabel;
+  const _Header(
+      {required this.state, this.onRun, this.onCancel, this.elapsedOverride, this.runLabel = 'Run analysis'});
 
   /// Elapsed since the run started: the fixed [elapsedOverride] if given (goldens), else derived live
   /// from [RunViewState.startedAtTs]. Null when there is no valid start (e.g. demo before the seed).
@@ -155,7 +167,7 @@ class _Header extends StatelessWidget {
               onPressed: onRun,
               style: FilledButton.styleFrom(backgroundColor: QC.accent),
               icon: const Icon(Icons.play_arrow, size: 18),
-              label: const Text('Run analysis'),
+              label: Text(runLabel),
             ),
         ],
       ),

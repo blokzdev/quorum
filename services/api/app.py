@@ -116,6 +116,14 @@ async def create_run(req: RunRequest):
     return {"run_id": job.run_id, "status": job.status}
 
 
+@app.get("/runs")
+async def list_runs():
+    """Run history: the persisted ``run.json`` summaries (newest first), read from disk so the list
+    survives a sidecar restart. Each item carries the verdict/cost summary + model/provider — the
+    drill-down reports stay in the report tree, fetched per-run via ``GET /runs/{id}/reports``."""
+    return {"runs": registry.list_runs()}
+
+
 @app.get("/runs/{run_id}")
 async def get_run(run_id: str):
     job = registry.get(run_id)
