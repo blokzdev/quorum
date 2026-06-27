@@ -198,24 +198,62 @@ launch/watchlist/history with color-coded verdict pills and the demo badge.
 
 ### P2.5 — Dream Team: per-agent model assignment *(signature bet; needs engine work)*
 
-The differentiated "AI dream team": assign a different frontier model to each agent role — e.g. Opus
-on the portfolio manager, a fast cheap model on the analysts, Grok on the bull. The engine today only
-supports a shared quick/deep split, so this is a vertical feature, built to integrate maximally into
-the UI/UX.
+The differentiated "AI dream team": assign a different frontier model — from a different provider — to
+each of the **12 agent roles** (e.g. Opus on the Portfolio Manager, a fast cheap model on the analysts,
+Grok on the Bull). The engine today supports only a shared quick/deep split. Full design + the
+adversarially-validated decisions are in **[ADR 0004](decisions/0004-per-agent-model-routing.md)**;
+the headline: an **additive per-role client resolver** (unset roles fall back to today's quick/deep,
+byte-for-byte), a structured `agent_models` wire map, and a **capability gate** (the load-bearing
+correctness piece — a non-tool model on market/news/fundamentals silently produces an empty report).
+Framing: **static per-role routing** (cheap workers + strong judge — the canonical, cost-positive
+pattern that maps onto the existing quick/deep topology), *not* a latency-adding cascade. P2.5c is
+split (roster UI vs capability/key gate) per the scope critic.
 
-- [ ] **P2.5a Engine — per-role routing** — extend the engine to accept a per-agent-role model map
-  (config + `trading_graph` wiring), defaulting to today's quick/deep behavior when unset. **Extend,
-  don't rewrite**; keep the `tradingagents` package mergeable with upstream.
-- [ ] **P2.5b Contract + domain** — thread the per-role map through the sidecar `RunRequest`,
-  `quorum_core` `RunConfig`, and the run metadata (so the Hub/Track Record can record which model
-  played which role).
-- [ ] **P2.5c Model Studio UI — Dream Team** — extend P2.3's Studio into a per-agent assignment
-  surface (the 11-agent roster → a model picker per role), with presets and clear provenance, falling
-  back cleanly to the quick/deep preset.
+- [ ] **P2.5a Engine — per-role routing + capability data** — `agent_roles.py` (frozen `ROLE_TO_NODE`,
+  12 roles); a `_resolve_role_llm` cache in `trading_graph` (key `provider/model/base_url/effort`;
+  per-role effort off the role's own provider; shared `callbacks` threaded; **`base_url` falls back to
+  the global only when the role shares the global provider**); `GraphSetup` optional `role_llms=None`
+  kwarg (keyword-defaulted, byte-compatible with upstream's positional ctor); `supports_tool_calling`
+  on `ModelCapabilities` + a **Quorum-side** catalog tool-capable flag (NOT mutating `MODEL_OPTIONS`'s
+  tuple / `/catalog` contract) surfaced for the UI gate. **Extend, don't rewrite**; keep `tradingagents`
+  upstream-mergeable.
+  *Exit:* an empty `agent_models` builds the identical graph (additivity test — quick/deep golden
+  byte-identical); a 3-provider map resolves 3 clients honoring per-role provider/model; a
+  roster-integrity test asserts every `ROLE_TO_NODE` node is a real `add_node` string (guards the
+  `social`/"Sentiment Analyst" rename trap); per-role clients share the run's `callbacks` object.
+- [ ] **P2.5b Contract + domain + provenance** — `agent_models` on `RunRequest`
+  (`dict[str, dict[str, Any]]`), `RunConfig.agentModels` (an `AgentModel` value type) +
+  toJson/fromJson/copyWith, `plan_run` → `config["agent_models"]` + the **resolved** map into `params`,
+  **`_manifest_dict`** (the real builder, not `_persist`) emits `agent_models`, `RunSummary.agentModels`,
+  and `SettingsState`/`Bench` (+ `toBench`/`applyBench`; `withProvider` must **not** clear it).
+  `buildLaunchConfig` merges OS-vault keys for **every referenced provider** (∪ the global).
+  *Exit:* round-trip tests for **all three** serializations (RunConfig, Bench, SettingsState); a
+  multi-provider run injects every referenced key; the manifest records the resolved per-role map; a
+  demo run ignores `agent_models` and writes no provenance.
+- [ ] **P2.5c1 Model Studio — Dream Team roster** — a stage-grouped 12-role roster (Analyst desks /
+  Researcher debate / Managers / Risk team / Trader), each with a provider+model picker reusing the
+  Model Studio dropdowns; **muted "quick/deep fallback" chips** on unassigned roles (vs solid chips on
+  assigned); "apply to all" / per-stage set; Dream Team lineups saved as **Benches**; a post-run "cast
+  list" (role → model that ran) on the Hub/verdict.
+  *Exit:* the roster renders all 12 with correct fallback chips (golden: all-default + partially-
+  assigned); a saved Bench round-trips its roster; "apply to all" sets every role.
+- [ ] **P2.5c2 Capability + multi-provider key gate** — **block** non-tool-capable models on
+  market/news/fundamentals (reads the catalog tool-capable flag); **warn** (don't block) on the four
+  structured roles (PM warning notes degraded rating extraction); a consolidated **pre-launch
+  "needs keys for: X, Y"** diff of referenced providers vs the vault.
+  *Exit:* assigning a non-tool model to a tool-analyst role is blocked in the UI (tested against the
+  catalog flag); a run referencing an uncredentialed provider is gated before `POST /runs` (golden:
+  the warning state).
 
-**Exit:** a user can assign distinct models per agent role and launch a run that honors them
-(validated with a hybrid Ollama-quick / Gemini-deep mix across roles); unset roles fall back to
-quick/deep; Dream Team goldens land; the engine change is additive (quick/deep runs unchanged).
+**Exit (phase):** a user assigns distinct models per role and launches a run that honors them
+(validated with a hybrid local-Ollama + cloud-judge mix); unset roles fall back to quick/deep; the
+engine change is **additive** (quick/deep runs byte-identical); the capability gate blocks a non-tool
+model on the 3 tool-analyst roles; multi-provider keys are validated pre-launch; Dream Team goldens land.
+
+**Not in V1 (deferred):** a per-role *effort* UI control (plumbing ships dormant via `spec.effort`;
+V1 drives effort from the existing per-provider knobs); exposing `reflector`/`signal_processor`
+(internal); auto-escalation / model cascades (static assignment only); per-agent-within-a-role-group
+(role granularity is the 12-role roster).
 
 ### P2.6 — Installer packaging & Flutter CI *(depends on P2.0; build the distributable)*
 
