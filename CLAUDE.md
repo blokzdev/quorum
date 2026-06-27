@@ -27,6 +27,13 @@ sidecar (provider keys stay on the user's machine; mobile-as-remote reuses the s
 It is a **research / educational** tool, **not financial advice**. Keep that posture in the product
 (disclaimers, no real-money execution in early versions; paper-trading sandbox is a post-V1 phase).
 
+The repo is **public and Apache-2.0**, built on the open TradingAgents engine (attribution in
+[`NOTICE`](NOTICE); the README is Quorum's, not upstream's). The planned business model is
+**open-core** — the local client stays open and free; paid value (Track Record sync, hosted runs, the
+signal layer) lives server-side behind entitlement. See [`docs/monetization.md`](docs/monetization.md)
+and [ADR 0003](docs/decisions/0003-open-source-and-open-core-monetization.md). Price the *tooling*,
+never *advice* (regulatory posture).
+
 ## The engine (Python, `tradingagents/`)
 
 Built on **LangGraph**. Entry point: `tradingagents.graph.trading_graph.TradingAgentsGraph`.
@@ -132,5 +139,7 @@ boundary, sensitive-op handling) is set once at phase start — see the plan doc
 
 ## Git
 
-`origin` = `blokzdev/quorum` (private), `upstream` = `TauricResearch/TradingAgents` (pull engine
-fixes manually). `main` is the product line. Branch for changes; commit/push only when asked.
+`origin` = `blokzdev/quorum` (**public, Apache-2.0**), `upstream` = `TauricResearch/TradingAgents`
+(pull engine fixes manually). `main` is the product line. Branch for changes; commit/push only when
+asked. Note: GitHub treats `origin` as a standalone repo (not a fork), so `gh pr create` needs
+`--repo blokzdev/quorum` or it defaults the base to the upstream parent.
