@@ -1115,6 +1115,10 @@ class _DreamTeamRoster extends ConsumerStatefulWidget {
 class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
   late bool _expanded = widget.initiallyExpanded;
 
+  /// Transient apply-to-all / per-stage source. Null until a complete model is chosen in the
+  /// "Set all roles to…" picker — never persisted.
+  AgentModel? _applyTarget;
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -1170,14 +1174,62 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
             ),
           ),
           if (_expanded) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 12),
+            // Apply-to-all / per-stage source picker.
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              decoration: BoxDecoration(
+                color: brand.surface2,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: brand.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _FieldLabel('Set all roles to…',
+                      help: 'Pick one model, then apply it to the whole team or a single stage.'),
+                  const SizedBox(height: 8),
+                  _ModelAssignmentPicker(
+                    catalog: widget.catalog,
+                    initial: null,
+                    onChanged: (m) => setState(() => _applyTarget = m),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _SmallButton(
+                        label: 'Apply to all',
+                        filled: true,
+                        enabled: _applyTarget != null,
+                        brand: brand,
+                        onTap: () => ctrl.setAllAgentModels(_applyTarget!),
+                      ),
+                      const SizedBox(width: 8),
+                      _SmallButton(
+                        label: 'Clear all',
+                        danger: true,
+                        enabled: assigned > 0,
+                        brand: brand,
+                        onTap: ctrl.clearAgentModels,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             for (final (stageLabel, keys) in dreamTeamStages)
               _RosterStage(
                 stageLabel: stageLabel,
                 roleKeys: keys,
                 catalog: widget.catalog,
                 models: models,
+                applyTarget: _applyTarget,
                 onAssign: ctrl.setAgentModel,
+                onSetStage: (roleKeys, model) {
+                  for (final role in roleKeys) {
+                    ctrl.setAgentModel(role, model);
+                  }
+                },
               ),
           ],
         ],
@@ -1210,19 +1262,23 @@ class _CountBadge extends StatelessWidget {
   }
 }
 
-/// One stage group: an uppercased header + its role rows.
+/// One stage group: an uppercased header (with a "Set stage" affordance) + its role rows.
 class _RosterStage extends StatelessWidget {
   final String stageLabel;
   final List<String> roleKeys;
   final Catalog catalog;
   final Map<String, AgentModel>? models;
+  final AgentModel? applyTarget;
   final void Function(String role, AgentModel? model) onAssign;
+  final void Function(List<String> roleKeys, AgentModel model) onSetStage;
   const _RosterStage({
     required this.stageLabel,
     required this.roleKeys,
     required this.catalog,
     required this.models,
+    required this.applyTarget,
     required this.onAssign,
+    required this.onSetStage,
   });
 
   @override
@@ -1233,12 +1289,23 @@ class _RosterStage extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 16, bottom: 4),
-          child: Text(stageLabel.toUpperCase(),
-              style: TextStyle(
-                  color: brand.textLo,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6)),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(stageLabel.toUpperCase(),
+                    style: TextStyle(
+                        color: brand.textLo,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6)),
+              ),
+              _SetStageButton(
+                enabled: applyTarget != null,
+                brand: brand,
+                onTap: () => onSetStage(roleKeys, applyTarget!),
+              ),
+            ],
+          ),
         ),
         for (final role in roleKeys)
           _RoleRow(
@@ -1248,6 +1315,30 @@ class _RosterStage extends StatelessWidget {
             onAssign: (m) => onAssign(role, m),
           ),
       ],
+    );
+  }
+}
+
+/// A compact "Set stage" text affordance on a stage header (greyed until an apply target is picked).
+class _SetStageButton extends StatelessWidget {
+  final bool enabled;
+  final QuorumBrand brand;
+  final VoidCallback onTap;
+  const _SetStageButton({required this.enabled, required this.brand, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.4,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: 'Set stage',
+        child: GestureDetector(
+          onTap: enabled ? onTap : null,
+          child: Text('Set stage',
+              style: TextStyle(color: brand.accent, fontSize: 10.5, fontWeight: FontWeight.w700)),
+        ),
+      ),
     );
   }
 }

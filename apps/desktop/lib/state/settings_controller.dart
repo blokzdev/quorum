@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quorum_core/quorum_core.dart';
 
+import '../dream_team_roster.dart' show dreamTeamRoleKeys;
 import '../services/key_vault.dart';
 
 /// The persisted model-config subset of [SettingsState] — a named, reusable "Bench" (preset) the user
@@ -354,16 +355,26 @@ class SettingsController extends Notifier<SettingsState> {
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
 
   // --- Dream Team (per-role model overrides) -------------------------------------------------------
-  /// Assign (or, with a null [model], unassign) a role's model. An empty map collapses to null so an
-  /// unused lineup is omitted on the wire and from settings.json.
+  /// Assign (or, with a null [model], unassign) a role's model. A blank-model [model] also unassigns —
+  /// defense in depth behind the picker's transient-edit discipline, so an `AgentModel(model: '')` can
+  /// never persist (the engine and the manifest both silently drop a blank-model spec, which would make
+  /// the roster claim a role is assigned while the run uses the fallback). An empty map collapses to
+  /// null so an unused lineup is omitted on the wire and from settings.json.
   void setAgentModel(String role, AgentModel? model) {
     final next = {...?state.agentModels};
-    if (model == null) {
+    if (model == null || model.model.trim().isEmpty) {
       next.remove(role);
     } else {
       next[role] = model;
     }
     _set(state.withAgentModels(next.isEmpty ? null : next));
+  }
+
+  /// Pin [model] to all 12 Dream Team roles in one write (apply-to-all). A blank-model [model] is a
+  /// no-op (same invariant as [setAgentModel]).
+  void setAllAgentModels(AgentModel model) {
+    if (model.model.trim().isEmpty) return;
+    _set(state.withAgentModels({for (final role in dreamTeamRoleKeys) role: model}));
   }
 
   void clearAgentModels() => _set(state.withAgentModels(null));
