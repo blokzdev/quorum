@@ -5,10 +5,19 @@ library;
 class ModelOption {
   final String label;
   final String value;
-  const ModelOption(this.label, this.value);
 
-  factory ModelOption.fromJson(Map<String, dynamic> j) =>
-      ModelOption(j['label'] as String? ?? '', j['value'] as String? ?? '');
+  /// Whether this model can do tool-calling, surfaced per option on `/catalog` (`tool_capable`):
+  /// `true`/`false` when known, `null` when unknown (a `custom`/local id the engine can't classify).
+  /// Feeds the Dream Team capability gate — the tool-analyst roles BLOCK a `false`, WARN on `null`.
+  /// Additive + tolerant: a payload without the key reads as `null`.
+  final bool? toolCapable;
+  const ModelOption(this.label, this.value, {this.toolCapable});
+
+  factory ModelOption.fromJson(Map<String, dynamic> j) => ModelOption(
+        j['label'] as String? ?? '',
+        j['value'] as String? ?? '',
+        toolCapable: j['tool_capable'] as bool?,
+      );
 }
 
 class ProviderCatalog {

@@ -50,6 +50,26 @@ const Map<String, String> dreamTeamRoleLabels = {
 /// Mirrors `agent_roles.DEEP_ROLES`. Drives the "Falls back · DEEP/QUICK" chip on unassigned roles.
 const Set<String> dreamTeamDeepRoles = {'research_manager', 'portfolio_manager'};
 
+/// Roles that `bind_tools` and loop on tool calls — a model that can't tool-call silently produces an
+/// EMPTY/hallucinated report (bind_tools doesn't raise), so the capability gate BLOCKS a known-non-tool
+/// model here (and WARNS on an unknown/custom one). source of truth: the market / news / fundamentals
+/// analysts in `tradingagents/agents/analysts/` + the `/catalog` `tool_capable` flag.
+const Set<String> dreamTeamToolRoles = {
+  'market_analyst',
+  'news_analyst',
+  'fundamentals_analyst',
+};
+
+/// Roles that use `with_structured_output` and degrade to free-text when a model can't emit structured
+/// JSON — the gate WARNS (never blocks) that rating/plan extraction may degrade. source of truth:
+/// sentiment_analyst, research_manager, trader, portfolio_manager (see `bind_structured` usage).
+const Set<String> dreamTeamStructuredRoles = {
+  'social_analyst',
+  'research_manager',
+  'trader',
+  'portfolio_manager',
+};
+
 /// The roster grouped into 5 stages, in pipeline order (analysts → research debate → trader → risk
 /// team → portfolio), matching the order the engine runs them and the terminal pipeline rail. Each
 /// entry is `(stageLabel, orderedRoleKeys)`.

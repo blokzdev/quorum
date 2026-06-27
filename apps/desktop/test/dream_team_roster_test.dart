@@ -48,5 +48,16 @@ void main() {
       expect([for (final (label, _) in dreamTeamStages) label],
           ['Analyst desks', 'Research debate', 'Trader', 'Risk team', 'Portfolio']);
     });
+
+    test('tool-roles and structured-roles are valid, disjoint subsets of the 12', () {
+      expect(dreamTeamToolRoles, {'market_analyst', 'news_analyst', 'fundamentals_analyst'});
+      expect(dreamTeamStructuredRoles,
+          {'social_analyst', 'research_manager', 'trader', 'portfolio_manager'});
+      // Both are subsets of the roster.
+      expect(dreamTeamToolRoles.difference(dreamTeamRoleKeys.toSet()), isEmpty);
+      expect(dreamTeamStructuredRoles.difference(dreamTeamRoleKeys.toSet()), isEmpty);
+      // A role is never both tool-gated and structured-gated.
+      expect(dreamTeamToolRoles.intersection(dreamTeamStructuredRoles), isEmpty);
+    });
   });
 }
