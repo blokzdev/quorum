@@ -7,11 +7,12 @@ here. Keep it current; it is loaded into context each session.
 
 > Status: **Phase 2 in progress** (Phase 1 vertical slice complete, de-forked 2026-06-26). The Python
 > engine is mature; the Flutter desktop app + FastAPI sidecar are a proven vertical slice. Phase 2
-> (Hub, Settings/Model Studio, applied brand, installer) is planned and locked in
-> **[docs/phase-2-plan.md](docs/phase-2-plan.md)** — subphases P2.0–P2.6, exit criteria, and
-> decisions (e.g. BYO key storage, [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md)).
+> (Hub, Settings/Model Studio, **Dream Team** per-agent models, applied brand, installer) is planned
+> and locked in **[docs/phase-2-plan.md](docs/phase-2-plan.md)** — subphases P2.0–P2.7, exit criteria,
+> and decisions (e.g. BYO key storage, [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md)).
 > Production keystore signing + GA are **Phase 3 (V1 Release & Hardening)**; mobile remote +
-> paper-trading + macOS are post-V1.
+> paper-trading + macOS are post-V1. Product vision + the 3 signature bets (Track Record, Dream Team,
+> debate terminal + FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
 > The engine package stays named `tradingagents` to preserve merge-ability with upstream
 > `TauricResearch/TradingAgents`.
 
