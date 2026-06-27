@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'ui/quorum_colors.dart';
-import 'ui/terminal_screen.dart';
+import 'ui/quorum_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,7 +46,7 @@ class QuorumApp extends StatelessWidget {
         textTheme: base.textTheme.apply(fontFamily: QC.fontUi),
         primaryTextTheme: base.primaryTextTheme.apply(fontFamily: QC.fontUi),
       ),
-      home: const Scaffold(body: TerminalScreen()),
+      home: const QuorumShell(),
     );
   }
 }

@@ -100,13 +100,13 @@ watchdog). Spike scaffolding in [`packaging/spike/`](../packaging/spike/). See
 > Secret hygiene + the shared Gemini test-key rotation moved to **Phase 3** (V1 Release & Hardening),
 > per the phase cadence below — they happen once, at GA, with the security sweep.
 
-### P2.1 — Shared foundation (plumbing) *(blocks Hub + Studio)*
+### P2.1 — Shared foundation (plumbing) *(blocks Hub + Studio)* — ✅ DONE
 
-- [ ] **P2.1a Navigation shell** — replace `home: TerminalScreen` with a shell hosting Hub /
+- [x] **P2.1a Navigation shell** — replace `home: TerminalScreen` with a shell hosting Hub /
   Terminal / Settings surfaces.
-- [ ] **P2.1b `catalogProvider`** — wire the unused `ApiClient.catalog()` to fetch + cache
+- [x] **P2.1b `catalogProvider`** — wire the unused `ApiClient.catalog()` to fetch + cache
   `/catalog/providers` in a Riverpod provider.
-- [ ] **P2.1c `RunConfig` value-object** — refactor `RunController.start()` to thread the full
+- [x] **P2.1c `RunConfig` value-object** — refactor `RunController.start()` to thread the full
   `createRun` body (`mode / ticker / provider / deep_model / quick_model / analysts / research_depth
   / api_keys / output_language`), replacing the hardcoded demo params. Design it to extend cleanly to
   a per-agent model map (P2.5).

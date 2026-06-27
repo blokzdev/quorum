@@ -18,7 +18,7 @@ void main() {
 
     await tester.runAsync(() async {
       final ctrl = container.read(runControllerProvider.notifier);
-      await ctrl.start(mode: 'demo', ticker: 'NVDA', stepDelay: 0.1);
+      await ctrl.start(config: const RunConfig(mode: 'demo', ticker: 'NVDA', stepDelay: 0.1));
 
       final deadline = DateTime.now().add(const Duration(seconds: 45));
       while (DateTime.now().isBefore(deadline) &&
