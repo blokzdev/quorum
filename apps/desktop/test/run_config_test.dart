@@ -19,6 +19,24 @@ void main() {
       expect(const RunConfig(mode: 'pro').toJson()['mode'], 'pro');
     });
 
+    test('agent_models (Dream Team) round-trips under exact snake_case keys; omitted when null', () {
+      expect(const RunConfig(mode: 'pro').toJson().containsKey('agent_models'), isFalse);
+      const cfg = RunConfig(mode: 'pro', ticker: 'NVDA', agentModels: {
+        'portfolio_manager': AgentModel(provider: 'anthropic', model: 'claude-opus-4-8', effort: 'high'),
+        'market_analyst':
+            AgentModel(provider: 'ollama', model: 'llama3.2:latest', backendUrl: 'http://localhost:11434/v1'),
+      });
+      final j = cfg.toJson();
+      expect(j['agent_models']['portfolio_manager'],
+          {'provider': 'anthropic', 'model': 'claude-opus-4-8', 'effort': 'high'});
+      expect(j['agent_models']['market_analyst'],
+          {'provider': 'ollama', 'model': 'llama3.2:latest', 'backend_url': 'http://localhost:11434/v1'});
+      final back = RunConfig.fromJson(j);
+      expect(back.agentModels!['portfolio_manager'],
+          const AgentModel(provider: 'anthropic', model: 'claude-opus-4-8', effort: 'high'));
+      expect(back.agentModels!['market_analyst']!.backendUrl, 'http://localhost:11434/v1');
+    });
+
     test('null fields are omitted; set fields use the exact snake_case keys', () {
       const cfg = RunConfig(
         mode: 'pro',

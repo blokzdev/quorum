@@ -110,6 +110,25 @@ def test_plan_run_threads_provider_effort_knobs():
     assert plan_run({"ticker": "SPY", "provider": "google"})["config"].get("google_thinking_level") is None
 
 
+def test_plan_run_threads_agent_models_and_resolved_provenance():
+    plan = plan_run({
+        "ticker": "SPY", "provider": "openai", "deep_model": "gpt-5.5", "quick_model": "gpt-5.4-mini",
+        "agent_models": {"bull_researcher": {"provider": "xai", "model": "grok-x"}},
+    })
+    # the raw overrides reach config (the graph resolves per role)
+    assert plan["config"]["agent_models"] == {"bull_researcher": {"provider": "xai", "model": "grok-x"}}
+    # the RESOLVED cast list is recorded for provenance: the override + quick/deep fallback for the rest
+    am = plan["params"]["agent_models"]
+    assert am["bull_researcher"] == {"provider": "xai", "model": "grok-x"}
+    assert am["portfolio_manager"] == {"provider": "openai", "model": "gpt-5.5"}  # DEEP fallback
+
+
+def test_plan_run_without_agent_models_records_no_provenance():
+    plan = plan_run({"ticker": "SPY", "provider": "openai"})
+    assert "agent_models" not in plan["config"]
+    assert plan["params"]["agent_models"] is None
+
+
 def test_plan_run_vibe_extracts_ticker_from_intent():
     plan = plan_run({"mode": "vibe", "intent": "what's the vibe on NVDA this week?"})
     assert plan["ticker"] == "NVDA"
@@ -263,6 +282,34 @@ def test_restored_run_includes_debate_sections(monkeypatch, tmp_path):
     assert sections["aggressive"] == "A"
     assert sections["conservative"] == "C"
     assert sections["neutral"] == "N"
+
+
+def test_manifest_records_agent_models_provenance(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    registry = JobRegistry(results_dir=tmp_path)
+    job = registry.create({
+        "mode": "pro", "ticker": "SPY", "provider": "openai",
+        "agent_models": {"bull_researcher": {"provider": "xai", "model": "grok-x"}},
+    })
+    _wait_done(job)
+    m = registry.list_runs()[0]
+    assert m["agent_models"]["bull_researcher"] == {"provider": "xai", "model": "grok-x"}
+    assert m["agent_models"]["portfolio_manager"]["provider"] == "openai"  # resolved fallback
+
+
+def test_demo_run_ignores_agent_models(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+    created = client.post("/runs", json={
+        "mode": "demo", "ticker": "NVDA", "step_delay": 0,
+        "agent_models": {"bull_researcher": {"provider": "xai", "model": "grok-x"}},
+    })
+    run_id = created.json()["run_id"]
+    _poll_status(client, run_id, "done")
+    m = next(r for r in client.get("/runs").json()["runs"] if r["run_id"] == run_id)
+    assert m["agent_models"] is None  # demo never reaches plan_run -> no provenance
 
 
 def test_cooperative_cancel_stops_the_run(monkeypatch, tmp_path):

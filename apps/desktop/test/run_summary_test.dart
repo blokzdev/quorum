@@ -37,6 +37,21 @@ void main() {
     expect(s.cost!.estUsd, 0.42);
   });
 
+  test('parses agent_models provenance (the Dream Team cast list); null on a plain run', () {
+    final s = RunSummary.fromJson({
+      'run_id': 'x', 'ticker': 'NVDA', 'mode': 'pro', 'status': 'done',
+      'agent_models': {
+        'bull_researcher': {'provider': 'xai', 'model': 'grok-x'},
+        'portfolio_manager': {'provider': 'openai', 'model': 'gpt-5.5'},
+      },
+    });
+    expect(s.agentModels!['bull_researcher'], const AgentModel(provider: 'xai', model: 'grok-x'));
+    expect(s.agentModels!['portfolio_manager']!.model, 'gpt-5.5');
+
+    final plain = RunSummary.fromJson({'run_id': 'x', 'ticker': 'NVDA', 'mode': 'pro', 'status': 'done'});
+    expect(plain.agentModels, isNull);
+  });
+
   test('RunSummary tolerates a minimal/partial manifest', () {
     final s = RunSummary.fromJson(
         {'run_id': 'x', 'ticker': 'AAPL', 'mode': 'demo', 'status': 'cancelled'});

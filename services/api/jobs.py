@@ -115,10 +115,23 @@ def plan_run(req: dict[str, Any]) -> dict[str, Any]:
         if req.get(knob):
             config[knob] = req[knob]
 
+    # "Dream Team" (P2.5): per-role model overrides the graph resolves per role. When present, also
+    # record the RESOLVED per-role map (effective provider/model after quick/deep fallback) as run
+    # provenance for the manifest. Absent on a plain quick/deep run → no provenance recorded.
+    agent_models = req.get("agent_models") or None
+    resolved_agent_models = None
+    if agent_models:
+        config["agent_models"] = agent_models
+        # Lazy import: agent_roles lives under the (heavy) graph package, and plan_run only runs on the
+        # pro/vibe path — the demo path must not pull the engine (ADR 0002).
+        from tradingagents.graph.agent_roles import resolve_agent_models
+        resolved_agent_models = resolve_agent_models(agent_models, config)
+
     params = {
         "mode": req.get("mode", "vibe"), "research_depth": depth,
         "provider": config["llm_provider"], "deep_model": config["deep_think_llm"],
         "quick_model": config["quick_think_llm"],
+        "agent_models": resolved_agent_models,
     }
     return {
         "config": config, "selected": selected, "ticker": ticker, "trade_date": trade_date,
@@ -282,6 +295,8 @@ class JobRegistry:
             "report_path": job.report_path,
             "verdict": verdict,
             "cost": cost,
+            # Dream Team provenance: the resolved role->{provider,model} cast list (None on a plain run).
+            "agent_models": p.get("agent_models"),
             "error": job.error,
         }
 
