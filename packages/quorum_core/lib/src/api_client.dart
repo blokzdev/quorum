@@ -20,6 +20,10 @@ class ApiClient {
 
   Future<Map<String, dynamic>> catalog() => _getJson('/catalog/providers');
 
+  /// Host-only: provider keys read from the sidecar host's `.env`, for a one-time import into the
+  /// desktop's OS keystore. Returns `{provider: key}`; values are never logged.
+  Future<Map<String, dynamic>> envKeys() => _getJson('/env-keys');
+
   /// POST /runs -> 202 {run_id}. [body] is the run request (mode/ticker/provider/...).
   Future<String> createRun(Map<String, dynamic> body) async {
     final r = await _client.post(

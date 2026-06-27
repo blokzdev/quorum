@@ -74,5 +74,29 @@ void main() {
       expect(bare.containsKey('openai_reasoning_effort'), isFalse);
       expect(bare.containsKey('anthropic_effort'), isFalse);
     });
+
+    test('fromJson(toJson(cfg)) round-trips the fields', () {
+      const cfg = RunConfig(
+        mode: 'pro',
+        ticker: 'TSLA',
+        provider: 'google',
+        deepModel: 'gemini-3.1-pro-preview',
+        quickModel: 'gemini-3.5-flash',
+        googleThinkingLevel: 'high',
+        researchDepth: 2,
+        backendUrl: 'https://x',
+        apiKeys: {'google': 'k'},
+      );
+      final back = RunConfig.fromJson(cfg.toJson());
+      expect(back.mode, 'pro');
+      expect(back.ticker, 'TSLA');
+      expect(back.provider, 'google');
+      expect(back.deepModel, 'gemini-3.1-pro-preview');
+      expect(back.quickModel, 'gemini-3.5-flash');
+      expect(back.googleThinkingLevel, 'high');
+      expect(back.researchDepth, 2);
+      expect(back.backendUrl, 'https://x');
+      expect(back.apiKeys, {'google': 'k'});
+    });
   });
 }

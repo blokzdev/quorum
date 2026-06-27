@@ -60,6 +60,29 @@ class RunConfig {
     // this.agentModels,
   });
 
+  /// Inverse of [toJson] — used to persist/restore a chosen config and saved presets locally.
+  /// (`api_keys` round-trips if present, but the desktop never persists keys to disk — they live in
+  /// the OS keystore and are merged in only at launch.)
+  factory RunConfig.fromJson(Map<String, dynamic> j) => RunConfig(
+        mode: j['mode'] as String? ?? 'demo',
+        intent: j['intent'] as String?,
+        ticker: j['ticker'] as String?,
+        tradeDate: j['trade_date'] as String?,
+        assetType: j['asset_type'] as String?,
+        analysts: (j['analysts'] as List?)?.map((e) => e as String).toList(growable: false),
+        researchDepth: (j['research_depth'] as num?)?.toInt() ?? 1,
+        provider: j['provider'] as String?,
+        deepModel: j['deep_model'] as String?,
+        quickModel: j['quick_model'] as String?,
+        backendUrl: j['backend_url'] as String?,
+        googleThinkingLevel: j['google_thinking_level'] as String?,
+        openaiReasoningEffort: j['openai_reasoning_effort'] as String?,
+        anthropicEffort: j['anthropic_effort'] as String?,
+        outputLanguage: j['output_language'] as String? ?? 'English',
+        apiKeys: (j['api_keys'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
+        stepDelay: (j['step_delay'] as num?)?.toDouble(),
+      );
+
   /// The exact `POST /runs` body. `mode` / `research_depth` / `output_language` are always present
   /// (safe server defaults, but explicit); every other field is emitted only when non-null, under the
   /// snake_case keys the sidecar `RunRequest` expects.
