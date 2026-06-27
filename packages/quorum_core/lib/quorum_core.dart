@@ -5,5 +5,6 @@ export 'src/api_client.dart';
 export 'src/engine_endpoint.dart';
 export 'src/events.dart';
 export 'src/reducer.dart';
+export 'src/run_config.dart';
 export 'src/run_view_state.dart';
 export 'src/sse_transport.dart';
