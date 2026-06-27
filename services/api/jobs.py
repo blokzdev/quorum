@@ -83,6 +83,11 @@ def plan_run(req: dict[str, Any]) -> dict[str, Any]:
         config["output_language"] = req["output_language"]
     if req.get("backend_url"):
         config["backend_url"] = req["backend_url"]
+    # Per-provider effort/thinking knobs: the graph reads these from config in _get_provider_kwargs;
+    # the UI sends only the one matching the chosen provider, and clients ignore unsupported efforts.
+    for knob in ("google_thinking_level", "openai_reasoning_effort", "anthropic_effort"):
+        if req.get(knob):
+            config[knob] = req[knob]
 
     params = {
         "mode": req.get("mode", "vibe"), "research_depth": depth,

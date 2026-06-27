@@ -42,6 +42,11 @@ class RunRequest(BaseModel):
     deep_model: str | None = None
     quick_model: str | None = None
     backend_url: str | None = None
+    # Per-provider effort/thinking knob — the UI sends only the one for the chosen provider; the
+    # engine reads these from config (_get_provider_kwargs) and clients ignore unsupported efforts.
+    google_thinking_level: str | None = None
+    openai_reasoning_effort: str | None = None
+    anthropic_effort: str | None = None
     output_language: str = "English"
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
@@ -84,7 +89,12 @@ async def catalog():
 
 @app.post("/runs", status_code=202)
 async def create_run(req: RunRequest):
-    job = registry.create(req.model_dump())
+    body = req.model_dump()
+    # Defense-in-depth: a demo run never touches the engine or keys, so drop any api_keys before the
+    # request is stored on the job (the engine path already routes demo before plan_run).
+    if body.get("mode") == "demo":
+        body["api_keys"] = None
+    job = registry.create(body)
     return {"run_id": job.run_id, "status": job.status}
 
 
