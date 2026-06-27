@@ -81,6 +81,26 @@ const List<(String, List<String>)> dreamTeamStages = [
   ('Portfolio', ['portfolio_manager']),
 ];
 
+/// What capability gate applies to a role's model pick.
+enum RoleGate {
+  /// Tool-loop roles (market/news/fundamentals): a KNOWN non-tool model is BLOCKED; an UNKNOWN
+  /// (custom/local) one is WARNED.
+  block,
+
+  /// Structured roles: a known non-tool model is WARNED (degrades to free-text), never blocked.
+  warn,
+
+  /// Free-text roles: no gate.
+  none,
+}
+
+/// The capability-gate class for a role (block = tool role, warn = structured role, none = free-text).
+RoleGate roleGateClass(String roleKey) {
+  if (dreamTeamToolRoles.contains(roleKey)) return RoleGate.block;
+  if (dreamTeamStructuredRoles.contains(roleKey)) return RoleGate.warn;
+  return RoleGate.none;
+}
+
 /// Display label for a role key (falls back to the raw key if somehow unknown).
 String dreamTeamRoleLabel(String roleKey) => dreamTeamRoleLabels[roleKey] ?? roleKey;
 

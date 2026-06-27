@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quorum_core/quorum_core.dart';
 
 import '../dream_team_roster.dart';
+import '../provider_meta.dart'; // providerNeedsKey (+ the shared provider->key-env mirror)
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
@@ -11,35 +12,8 @@ import 'brand.dart';
 
 // --- Engine contract mirrors -----------------------------------------------------------------------
 // The desktop can't import the Python maps and the catalog endpoint doesn't carry them, so these are
-// hand-kept in sync with the engine. Each has a pointer to its source of truth.
-
-/// Provider -> API-key env var, mirroring `tradingagents/llm_clients/api_key_env.py`
-/// PROVIDER_API_KEY_ENV. A non-null value means the provider authenticates with a key, so Model
-/// Studio shows the (write-only) key field. `null` (bedrock = AWS chain, ollama = local) hides it.
-const _providerKeyEnv = <String, String?>{
-  'openai': 'OPENAI_API_KEY',
-  'anthropic': 'ANTHROPIC_API_KEY',
-  'google': 'GOOGLE_API_KEY',
-  'azure': 'AZURE_OPENAI_API_KEY',
-  'bedrock': null,
-  'xai': 'XAI_API_KEY',
-  'deepseek': 'DEEPSEEK_API_KEY',
-  'qwen': 'DASHSCOPE_API_KEY',
-  'qwen-cn': 'DASHSCOPE_CN_API_KEY',
-  'glm': 'ZHIPU_API_KEY',
-  'glm-cn': 'ZHIPU_CN_API_KEY',
-  'minimax': 'MINIMAX_API_KEY',
-  'minimax-cn': 'MINIMAX_CN_API_KEY',
-  'openrouter': 'OPENROUTER_API_KEY',
-  'mistral': 'MISTRAL_API_KEY',
-  'kimi': 'MOONSHOT_API_KEY',
-  'groq': 'GROQ_API_KEY',
-  'nvidia': 'NVIDIA_API_KEY',
-  'ollama': null,
-  'openai_compatible': 'OPENAI_COMPATIBLE_API_KEY',
-};
-
-bool _needsKey(String provider) => _providerKeyEnv[provider] != null;
+// hand-kept in sync with the engine. Each has a pointer to its source of truth. (The provider->key-env
+// map moved to provider_meta.dart so the Hub key gate shares it.)
 
 /// Providers exposing an effort/thinking knob, with the field label and allowed values. Only these
 /// three are offered — `buildLaunchConfig` maps the chosen value onto the matching RunConfig knob
@@ -109,6 +83,35 @@ List<ModelOption> _unionModels(Catalog c, String provider) {
 /// commit, the chip, and the count all share — so the UI can never read "assigned" while the engine
 /// (which drops a blank-model spec) runs the fallback.
 bool _roleAssigned(AgentModel? m) => m != null && m.model.trim().isNotEmpty;
+
+/// The catalog's `tool_capable` flag for a (provider, model), or null when the model isn't a catalog
+/// option — a custom/retired id we can't classify. null = UNKNOWN, which WARNS (never blocks).
+bool? _toolCapableOf(Catalog catalog, String? provider, String? model) {
+  if (provider == null || model == null || model.trim().isEmpty) return null;
+  for (final o in _unionModels(catalog, provider)) {
+    if (o.value == model) return o.toolCapable;
+  }
+  return null;
+}
+
+enum _GateOutcome { ok, warn, block }
+
+/// The capability verdict for a (role gate class, model's tool_capable). The BLOCK condition is
+/// EXACTLY `toolCapable == false` — never `!= true` — so a custom/unknown (null) model on a tool role
+/// WARNS rather than blocking (which would kill the legitimate cheap-local-analyst lineup).
+_GateOutcome _gateOutcome(RoleGate gate, bool? toolCapable) {
+  switch (gate) {
+    case RoleGate.block:
+      if (toolCapable == false) return _GateOutcome.block;
+      if (toolCapable == null) return _GateOutcome.warn; // unknown/custom on a tool role
+      return _GateOutcome.ok;
+    case RoleGate.warn:
+      if (toolCapable == false) return _GateOutcome.warn; // structured degrades to free-text
+      return _GateOutcome.ok;
+    case RoleGate.none:
+      return _GateOutcome.ok;
+  }
+}
 
 const _languages = ['English', 'Spanish', 'Chinese', 'Japanese', 'German', 'French', 'Korean'];
 
@@ -302,7 +305,7 @@ class SettingsBody extends ConsumerWidget {
                           onChanged: ctrl.setBackendUrl,
                         ),
                       ],
-                      if (_needsKey(provider)) ...[
+                      if (providerNeedsKey(provider)) ...[
                         const SizedBox(height: 16),
                         _ApiKeyField(provider: provider),
                       ],
@@ -483,12 +486,19 @@ class _Dropdown<T> extends StatelessWidget {
 
   /// When true, a leading "—" entry maps back to null (clears the selection to the engine default).
   final bool allowClear;
+
+  /// Item values that render disabled (greyed, non-selectable) — the capability gate uses this to make
+  /// a non-tool model structurally un-pickable for a tool-analyst role.
+  final Set<T>? disabledValues;
   const _Dropdown(
       {required this.value,
       required this.items,
       required this.onChanged,
       this.hint,
-      this.allowClear = false});
+      this.allowClear = false,
+      this.disabledValues});
+
+  bool _disabled(T v) => disabledValues != null && disabledValues!.contains(v);
 
   @override
   Widget build(BuildContext context) {
@@ -524,7 +534,10 @@ class _Dropdown<T> extends StatelessWidget {
             for (final i in items)
               DropdownMenuItem<T?>(
                 value: i.value,
-                child: Text(i.label, overflow: TextOverflow.ellipsis),
+                enabled: !_disabled(i.value),
+                child: Text(i.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: _disabled(i.value) ? TextStyle(color: brand.textLo) : null),
               ),
           ],
           onChanged: onChanged,
@@ -1193,6 +1206,8 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                     catalog: widget.catalog,
                     initial: null,
                     onChanged: (m) => setState(() => _applyTarget = m),
+                    // Apply-to-all can land on the tool roles, so use the strict block gate.
+                    gate: RoleGate.block,
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -1393,7 +1408,11 @@ class _RoleRowState extends State<_RoleRow> {
                               color: brand.textHi, fontSize: 12.5, fontWeight: FontWeight.w600)),
                     ),
                     const SizedBox(width: 10),
-                    Flexible(child: _RoleChip(roleKey: widget.roleKey, model: widget.current)),
+                    Flexible(
+                        child: _RoleChip(
+                            roleKey: widget.roleKey,
+                            model: widget.current,
+                            catalog: widget.catalog)),
                     const SizedBox(width: 6),
                     Icon(_open ? Icons.expand_less : Icons.expand_more,
                         size: 18, color: brand.textLo),
@@ -1409,6 +1428,7 @@ class _RoleRowState extends State<_RoleRow> {
                 catalog: widget.catalog,
                 initial: widget.current,
                 onChanged: widget.onAssign,
+                gate: roleGateClass(widget.roleKey),
               ),
             ),
         ],
@@ -1418,33 +1438,60 @@ class _RoleRowState extends State<_RoleRow> {
 }
 
 /// The assigned/fallback chip on a role's summary line. Assigned → solid accent showing
-/// "provider · model"; unassigned → muted "Falls back · QUICK/DEEP" (DEEP for the two judges).
+/// "provider · model"; unassigned → muted "Falls back · QUICK/DEEP" (DEEP for the two judges). When an
+/// assignment is capability-invalid (a stale Bench/applied combo the picker would now block), the chip
+/// recolors: red for a tool role holding a non-tool model, amber for an unverified/degraded combo —
+/// the only place a never-opened bad assignment can surface.
 class _RoleChip extends StatelessWidget {
   final String roleKey;
   final AgentModel? model;
-  const _RoleChip({required this.roleKey, required this.model});
+  final Catalog catalog;
+  const _RoleChip({required this.roleKey, required this.model, required this.catalog});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final assigned = _roleAssigned(model);
+    final outcome = assigned
+        ? _gateOutcome(roleGateClass(roleKey), _toolCapableOf(catalog, model!.provider, model!.model))
+        : _GateOutcome.ok;
     final label = assigned
         ? '${_providerLabel(model!.provider)} · ${model!.model}'
         : 'Falls back · ${roleFallsBackToDeep(roleKey) ? 'DEEP' : 'QUICK'}';
+    final (Color border, Color fill, Color fg, IconData? icon) = switch (outcome) {
+      _GateOutcome.block => (brand.down, brand.down.withValues(alpha: 0.14), brand.down, Icons.error_outline),
+      _GateOutcome.warn => (brand.warning, brand.warning.withValues(alpha: 0.14), brand.warning, Icons.warning_amber),
+      _GateOutcome.ok when assigned => (brand.accent, brand.accent.withValues(alpha: 0.18), brand.textHi, null),
+      _GateOutcome.ok => (brand.border, brand.surface1, brand.textLo, null),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: assigned ? brand.accent.withValues(alpha: 0.18) : brand.surface1,
+        color: fill,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: assigned ? brand.accent : brand.border),
+        border: Border.all(color: border),
       ),
-      child: Text(label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-              color: assigned ? brand.textHi : brand.textLo,
-              fontSize: 11,
-              fontWeight: assigned ? FontWeight.w600 : FontWeight.w500)),
+      // OK chips render the bare Text exactly as before (byte-identical goldens); only warn/block add
+      // a leading icon (and thus the Row).
+      child: icon == null
+          ? Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: fg, fontSize: 11, fontWeight: assigned ? FontWeight.w600 : FontWeight.w500))
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 12, color: fg),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -1458,8 +1505,12 @@ class _ModelAssignmentPicker extends StatefulWidget {
   final Catalog catalog;
   final AgentModel? initial;
   final ValueChanged<AgentModel?> onChanged;
+
+  /// The capability gate for the target role: block (tool roles — non-tool models are disabled),
+  /// warn (structured roles), or none. The apply-to-all picker uses the strict [RoleGate.block].
+  final RoleGate gate;
   const _ModelAssignmentPicker(
-      {required this.catalog, required this.initial, required this.onChanged});
+      {required this.catalog, required this.initial, required this.onChanged, required this.gate});
   @override
   State<_ModelAssignmentPicker> createState() => _ModelAssignmentPickerState();
 }
@@ -1530,7 +1581,17 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final provider = _provider;
+    // Block gate: a known-non-tool model is disabled (un-pickable) on a tool role; its label gets a
+    // "· no tools" tag. Unknown (null) stays enabled — it warns, never blocks.
+    final models = provider == null ? const <ModelOption>[] : _unionModels(widget.catalog, provider);
+    final blocked = <String>{
+      if (widget.gate == RoleGate.block)
+        for (final o in models)
+          if (o.toolCapable == false) o.value,
+    };
+    final outcome = _gateOutcome(widget.gate, _toolCapableOf(widget.catalog, provider, _effectiveModel()));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1546,7 +1607,11 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
           _Dropdown<String>(
             value: _modelSelection,
             hint: 'Model',
-            items: [for (final o in _unionModels(widget.catalog, provider)) (label: o.label, value: o.value)],
+            disabledValues: blocked.isEmpty ? null : blocked,
+            items: [
+              for (final o in models)
+                (label: blocked.contains(o.value) ? '${o.label}  ·  no tools' : o.label, value: o.value),
+            ],
             onChanged: _onModel,
           ),
           if (_customMode) ...[
@@ -1557,7 +1622,42 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
               onChanged: _onCustom,
             ),
           ],
+          if (outcome != _GateOutcome.ok) ...[
+            const SizedBox(height: 8),
+            _CapabilityNotice(outcome: outcome, gate: widget.gate, brand: brand),
+          ],
         ],
+      ],
+    );
+  }
+}
+
+/// An inline capability advisory under a per-role picker: red when the selected model can't tool-call
+/// on a tool role (block), amber when tool support is unverified (custom/unknown) or a structured role
+/// may degrade to free-text. Never gates by itself — the disabled dropdown item is the hard block.
+class _CapabilityNotice extends StatelessWidget {
+  final _GateOutcome outcome;
+  final RoleGate gate;
+  final QuorumBrand brand;
+  const _CapabilityNotice({required this.outcome, required this.gate, required this.brand});
+
+  @override
+  Widget build(BuildContext context) {
+    final isBlock = outcome == _GateOutcome.block;
+    final color = isBlock ? brand.down : brand.warning;
+    final text = isBlock
+        ? 'This model can’t do tool calls — it would return an empty report. Pick a tool-capable model.'
+        : gate == RoleGate.block
+            ? 'Tool support unverified — this role may return an empty report.'
+            : 'May degrade to free-text; rating extraction is best-effort.';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(isBlock ? Icons.error_outline : Icons.warning_amber, size: 14, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text, style: TextStyle(color: color, fontSize: 11, height: 1.3)),
+        ),
       ],
     );
   }

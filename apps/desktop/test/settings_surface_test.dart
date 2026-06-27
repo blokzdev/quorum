@@ -30,6 +30,15 @@ final _catalog = Catalog(
       'quick': [ModelOption('V4 Flash', 'deepseek-v4-flash'), ModelOption('Custom model ID', 'custom')],
       'deep': [ModelOption('V4 Pro', 'deepseek-v4-pro'), ModelOption('Custom model ID', 'custom')],
     }),
+    // Carries an explicitly non-tool model so the capability gate's BLOCK path is exercisable (the real
+    // engine denylist is empty, so no live catalog model is false today).
+    'legacy': const ProviderCatalog('legacy', {
+      'quick': [
+        ModelOption('NoTool', 'old-x', toolCapable: false),
+        ModelOption('HasTool', 'new-x', toolCapable: true),
+      ],
+      'deep': [ModelOption('NoTool', 'old-x', toolCapable: false)],
+    }),
   },
 );
 
@@ -319,5 +328,112 @@ void main() {
     await tester.tap(find.text('Google Gemini').last, warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(container.read(settingsControllerProvider).agentModels, isNull); // dropped, not carried
+  });
+
+  // --- Capability gate (P2.5c2) ---------------------------------------------------------------------
+
+  testWidgets('gate: a non-tool model is DISABLED in a tool-analyst role picker (blocked)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Market Analyst')); // a TOOL role (RoleGate.block)
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('— Default').last); // role provider dropdown
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('legacy').last); // provider with a non-tool model
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'));
+    await tester.pumpAndSettle();
+
+    // The non-tool model renders with a "no tools" tag and a DISABLED DropdownMenuItem.
+    final noTool = find.textContaining('no tools');
+    expect(noTool, findsWidgets);
+    final item = tester.widget<DropdownMenuItem<String?>>(find
+        .ancestor(of: noTool.first, matching: find.byType(DropdownMenuItem<String?>))
+        .first);
+    expect(item.enabled, isFalse); // structurally un-pickable
+    // The tool-capable sibling is selectable.
+    await tester.tap(find.text('HasTool').last);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['market_analyst'],
+        const AgentModel(provider: 'legacy', model: 'new-x'));
+  });
+
+  testWidgets('gate: a custom id on a tool role WARNS but is NOT blocked (null = unknown)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('News Analyst')); // a TOOL role
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('— Default').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ollama (local)').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Custom model ID').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    final customField = find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.hintText == 'Custom model id (e.g. llama3.2:latest)');
+    await tester.enterText(customField, 'tiny-local:latest');
+    await tester.pump();
+
+    // Warned (unverified) but the assignment still committed — custom must never hard-block.
+    expect(find.textContaining('Tool support unverified'), findsOneWidget);
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['news_analyst'],
+        const AgentModel(provider: 'ollama', model: 'tiny-local:latest'));
+  });
+
+  testWidgets('gate: a non-tool model on a STRUCTURED role warns (degraded), never blocks',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Portfolio Manager')); // a STRUCTURED role (RoleGate.warn)
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('— Default').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('legacy').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    // On a structured role the non-tool model is NOT disabled — selectable, with a degrade warning.
+    await tester.tap(find.text('NoTool').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('degrade to free-text'), findsOneWidget);
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['portfolio_manager'],
+        const AgentModel(provider: 'legacy', model: 'old-x'));
+  });
+
+  testWidgets('gate: a stale non-tool assignment on a tool role surfaces as a red error chip',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A Bench/applied combo the picker would now block, loaded directly into state.
+    await tester.pumpWidget(_wrap(const SettingsState(
+      demoMode: false,
+      agentModels: {'fundamentals_analyst': AgentModel(provider: 'legacy', model: 'old-x')},
+    )));
+    await tester.pumpAndSettle();
+    // The roster auto-expands (agentModels != null); the invalid row shows the error icon on its chip.
+    expect(find.byIcon(Icons.error_outline), findsWidgets);
   });
 }
