@@ -63,7 +63,13 @@ class RunController extends Notifier<RunViewState> {
     _runId = null;
     await _sub?.cancel();
     _sub = null;
-    state = RunViewState.initial().copyWith(phase: RunPhase.running, ticker: cfg.ticker);
+    state = RunViewState.initial().copyWith(
+      phase: RunPhase.running,
+      ticker: cfg.ticker,
+      // Optimistic start (epoch seconds) so the header timer ticks immediately; the reducer
+      // overwrites it with the authoritative RunStarted.ts (except in demo, where ts is 0).
+      startedAtTs: DateTime.now().millisecondsSinceEpoch / 1000.0,
+    );
     try {
       final conn = await ref.read(engineEndpointProvider).connect();
       if (_disposed) return;

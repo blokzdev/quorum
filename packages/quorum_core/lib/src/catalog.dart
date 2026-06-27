@@ -37,7 +37,8 @@ class Catalog {
             .map((o) => ModelOption.fromJson((o as Map).cast<String, dynamic>()))
             .toList(growable: false);
       });
-      providers[prov as String] = ProviderCatalog(prov as String, modes);
+      final name = prov as String;
+      providers[name] = ProviderCatalog(name, modes);
     });
     return Catalog(
       contractVersion: (j['contract_version'] as num?)?.toInt() ?? 0,

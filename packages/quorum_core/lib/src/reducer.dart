@@ -15,7 +15,10 @@ RunViewState reduce(RunViewState s, QuorumEvent e) {
   switch (e) {
     case RunStarted():
       return base.copyWith(
-        runId: e.runId, ticker: e.ticker, tradeDate: e.tradeDate, phase: RunPhase.running);
+        runId: e.runId, ticker: e.ticker, tradeDate: e.tradeDate, phase: RunPhase.running,
+        // Authoritative start time; demo frames carry ts:0, so keep the client's optimistic
+        // startedAtTs (seeded in RunController.start) rather than overwriting it with 0.
+        startedAtTs: e.ts > 0 ? e.ts : null);
     case StageStarted():
       return base.copyWith(stages: {...s.stages, e.stage: NodeStatus.running});
     case StageDone():

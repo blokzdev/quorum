@@ -38,7 +38,19 @@ class TerminalBody extends StatelessWidget {
   final RunViewState state;
   final VoidCallback? onRun;
   final VoidCallback? onCancel;
-  const TerminalBody({super.key, required this.state, this.onRun, this.onCancel});
+
+  /// Test seam for golden determinism: a fixed elapsed value for the header timer. Null in production
+  /// (the header derives elapsed from [RunViewState.startedAtTs] against the wall clock, ticked by
+  /// the shell's [TerminalSurface]); the golden harness always passes a fixed value, so no
+  /// `DateTime.now()` is ever reached in a golden.
+  final Duration? elapsedOverride;
+  const TerminalBody({
+    super.key,
+    required this.state,
+    this.onRun,
+    this.onCancel,
+    this.elapsedOverride,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +58,7 @@ class TerminalBody extends StatelessWidget {
       color: QC.bg,
       child: Column(
         children: [
-          _Header(state: state, onRun: onRun, onCancel: onCancel),
+          _Header(state: state, onRun: onRun, onCancel: onCancel, elapsedOverride: elapsedOverride),
           const Divider(height: 1, color: QC.border),
           Expanded(
             child: Row(
@@ -66,15 +78,34 @@ class TerminalBody extends StatelessWidget {
   }
 }
 
+/// Formats an elapsed [Duration] as mm:ss (zero-padded).
+String _fmtElapsed(Duration d) {
+  final m = d.inMinutes;
+  final s = d.inSeconds % 60;
+  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
+
 class _Header extends StatelessWidget {
   final RunViewState state;
   final VoidCallback? onRun;
   final VoidCallback? onCancel;
-  const _Header({required this.state, this.onRun, this.onCancel});
+  final Duration? elapsedOverride;
+  const _Header({required this.state, this.onRun, this.onCancel, this.elapsedOverride});
+
+  /// Elapsed since the run started: the fixed [elapsedOverride] if given (goldens), else derived live
+  /// from [RunViewState.startedAtTs]. Null when there is no valid start (e.g. demo before the seed).
+  Duration? _elapsed() {
+    if (elapsedOverride != null) return elapsedOverride;
+    final ts = state.startedAtTs;
+    if (ts == null || ts <= 0) return null;
+    final secs = (DateTime.now().millisecondsSinceEpoch / 1000.0 - ts).round();
+    return secs >= 0 ? Duration(seconds: secs) : null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final running = state.phase == RunPhase.running;
+    final elapsed = _elapsed();
     return Container(
       height: 56,
       color: QC.surface1,
@@ -107,6 +138,11 @@ class _Header extends StatelessWidget {
           ],
           const SizedBox(width: 14),
           _PhaseChip(state.phase),
+          if (running && elapsed != null) ...[
+            const SizedBox(width: 12),
+            Text(_fmtElapsed(elapsed),
+                style: const TextStyle(color: QC.textMid, fontFamily: QC.fontMono, fontSize: 13)),
+          ],
           const Spacer(),
           if (running)
             TextButton.icon(
