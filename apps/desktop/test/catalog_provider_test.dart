@@ -50,4 +50,37 @@ void main() {
     expect(cat.providerNames, contains('anthropic'));
     expect(cat.optionsFor('anthropic', 'quick').single.value, 'claude-sonnet-4-6');
   });
+
+  test('a run error invalidates engineConnection + catalog so it refetches a live catalog', () async {
+    var catalogFetches = 0;
+    final client = MockClient.streaming((req, body) async {
+      if (req.url.path == '/catalog/providers') {
+        catalogFetches++;
+        return http.StreamedResponse(Stream.value(utf8.encode(_catalogBody)), 200);
+      }
+      // Any run call fails -> RunController flips to RunPhase.error.
+      return http.StreamedResponse(Stream.value(utf8.encode('boom')), 500);
+    });
+    final c = ProviderContainer(overrides: [
+      engineEndpointProvider.overrideWithValue(_FakeEndpoint()),
+      httpClientProvider.overrideWithValue(client),
+    ]);
+    addTearDown(c.dispose);
+
+    // Keep the catalog alive so its run-error listener stays active.
+    final sub = c.listen(catalogProvider, (_, _) {});
+    addTearDown(sub.close);
+    await c.read(catalogProvider.future);
+    expect(catalogFetches, 1);
+
+    // A failing run flips RunPhase.error, which must invalidate + refetch the catalog.
+    await c.read(runControllerProvider.notifier).start();
+    for (var i = 0; i < 200 && c.read(runControllerProvider).phase != RunPhase.error; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(c.read(runControllerProvider).phase, RunPhase.error);
+
+    await c.read(catalogProvider.future);
+    expect(catalogFetches, greaterThanOrEqualTo(2));
+  });
 }

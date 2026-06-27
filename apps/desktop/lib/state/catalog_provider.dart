@@ -10,12 +10,19 @@ final engineConnectionProvider = FutureProvider<EngineConnection>((ref) async {
 });
 
 /// The provider/model catalog (`GET /catalog/providers`), fetched lazily on first read and cached.
-/// Nothing watches it in P2.1 — Model Studio (P2.3) is the first consumer, so there is no boot-time
-/// fetch and first-screen latency is unchanged.
+/// Model Studio (P2.3) is the first consumer, so there is no boot-time fetch and first-screen latency
+/// is unchanged.
 ///
-// TODO(P2.3): invalidate engineConnectionProvider + catalogProvider on sidecar crash / RunPhase.error
-// (the endpoint memoizes the connection) before Settings relies on a live connection.
+/// A run that errors usually means the sidecar died, and the endpoint memoizes its connection — so on
+/// the error edge we drop both [engineConnectionProvider] and ourselves, and the next read reconnects
+/// and refetches a live catalog instead of serving one bound to a dead sidecar.
 final catalogProvider = FutureProvider<Catalog>((ref) async {
+  ref.listen(runControllerProvider, (prev, next) {
+    if (next.phase == RunPhase.error && prev?.phase != RunPhase.error) {
+      ref.invalidate(engineConnectionProvider);
+      ref.invalidateSelf();
+    }
+  });
   final conn = await ref.watch(engineConnectionProvider.future);
   // Reuse the shared http client; do NOT close this ApiClient (that would close the shared client,
   // which httpClientProvider owns and disposes).
