@@ -50,6 +50,26 @@ const Map<String, String> dreamTeamRoleLabels = {
 /// Mirrors `agent_roles.DEEP_ROLES`. Drives the "Falls back · DEEP/QUICK" chip on unassigned roles.
 const Set<String> dreamTeamDeepRoles = {'research_manager', 'portfolio_manager'};
 
+/// Roles that `bind_tools` and loop on tool calls — a model that can't tool-call silently produces an
+/// EMPTY/hallucinated report (bind_tools doesn't raise), so the capability gate BLOCKS a known-non-tool
+/// model here (and WARNS on an unknown/custom one). source of truth: the market / news / fundamentals
+/// analysts in `tradingagents/agents/analysts/` + the `/catalog` `tool_capable` flag.
+const Set<String> dreamTeamToolRoles = {
+  'market_analyst',
+  'news_analyst',
+  'fundamentals_analyst',
+};
+
+/// Roles that use `with_structured_output` and degrade to free-text when a model can't emit structured
+/// JSON — the gate WARNS (never blocks) that rating/plan extraction may degrade. source of truth:
+/// sentiment_analyst, research_manager, trader, portfolio_manager (see `bind_structured` usage).
+const Set<String> dreamTeamStructuredRoles = {
+  'social_analyst',
+  'research_manager',
+  'trader',
+  'portfolio_manager',
+};
+
 /// The roster grouped into 5 stages, in pipeline order (analysts → research debate → trader → risk
 /// team → portfolio), matching the order the engine runs them and the terminal pipeline rail. Each
 /// entry is `(stageLabel, orderedRoleKeys)`.
@@ -60,6 +80,26 @@ const List<(String, List<String>)> dreamTeamStages = [
   ('Risk team', ['aggressive_analyst', 'neutral_analyst', 'conservative_analyst']),
   ('Portfolio', ['portfolio_manager']),
 ];
+
+/// What capability gate applies to a role's model pick.
+enum RoleGate {
+  /// Tool-loop roles (market/news/fundamentals): a KNOWN non-tool model is BLOCKED; an UNKNOWN
+  /// (custom/local) one is WARNED.
+  block,
+
+  /// Structured roles: a known non-tool model is WARNED (degrades to free-text), never blocked.
+  warn,
+
+  /// Free-text roles: no gate.
+  none,
+}
+
+/// The capability-gate class for a role (block = tool role, warn = structured role, none = free-text).
+RoleGate roleGateClass(String roleKey) {
+  if (dreamTeamToolRoles.contains(roleKey)) return RoleGate.block;
+  if (dreamTeamStructuredRoles.contains(roleKey)) return RoleGate.warn;
+  return RoleGate.none;
+}
 
 /// Display label for a role key (falls back to the raw key if somehow unknown).
 String dreamTeamRoleLabel(String roleKey) => dreamTeamRoleLabels[roleKey] ?? roleKey;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quorum/dream_team_roster.dart';
@@ -7,6 +8,9 @@ import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/hub_surface.dart';
 import 'package:quorum/ui/terminal_screen.dart';
 import 'package:quorum_core/quorum_core.dart';
+
+/// In-memory flutter_secure_storage so the pre-launch key gate sees a controllable vault.
+const _channel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
 
 RunSummary _run(String id, String ticker, String rating,
         {String mode = 'pro', Map<String, AgentModel>? agentModels}) =>
@@ -58,6 +62,34 @@ Future<void> _pump(WidgetTester t, Widget w) async {
 void main() {
   // A launch ticker that never collides with the history rows below (the launch field shows it).
   const settings = SettingsState(ticker: 'SPY');
+
+  late Map<String, String> store;
+  setUp(() {
+    store = {};
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (call) async {
+      final args = (call.arguments as Map?)?.cast<String, dynamic>() ?? const {};
+      switch (call.method) {
+        case 'write':
+          store[args['key'] as String] = args['value'] as String;
+          return null;
+        case 'read':
+          return store[args['key'] as String];
+        case 'delete':
+          store.remove(args['key'] as String);
+          return null;
+        case 'readAll':
+          return Map<String, String>.from(store);
+        case 'deleteAll':
+          store.clear();
+          return null;
+        default:
+          return null;
+      }
+    });
+  });
+  tearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_channel, null));
 
   testWidgets('history renders rows with ticker + rating family + demo badge', (tester) async {
     await _pump(tester, _wrap(settings, [
@@ -193,5 +225,69 @@ void main() {
     // FilledButton.icon builds a private FilledButton subclass, so match by is-check, not byType.
     final btn = tester.widget<FilledButton>(find.byWidgetPredicate((w) => w is FilledButton));
     expect(btn.onPressed, isNull);
+  });
+
+  // --- Pre-launch key gate (P2.5c2) -----------------------------------------------------------------
+  FilledButton runButton(WidgetTester t) =>
+      t.widget<FilledButton>(find.byWidgetPredicate((w) => w is FilledButton));
+
+  testWidgets('key gate: a referenced provider with no key disables Run + shows the warning',
+      (tester) async {
+    // provider=anthropic, no key in the (empty) vault -> gated BEFORE POST /runs.
+    await _pump(tester,
+        _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'anthropic'), const []));
+    expect(find.textContaining('Needs keys for: Anthropic'), findsOneWidget);
+    expect(runButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('key gate: saving the missing key re-enables Run and clears the warning',
+      (tester) async {
+    await _pump(tester,
+        _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'anthropic'), const []));
+    expect(runButton(tester).onPressed, isNull);
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(HubSurface)));
+    await container.read(settingsControllerProvider.notifier).saveKey('anthropic', 'a-key');
+    await tester.pumpAndSettle(); // missingKeysProvider re-runs on keyVaultRevision bump
+    expect(find.textContaining('Needs keys for'), findsNothing);
+    expect(runButton(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('key gate: a per-role (Dream Team) provider missing its key is gated too',
+      (tester) async {
+    // Global google is credentialed; a per-role anthropic is not -> still gated.
+    await _pump(
+      tester,
+      _wrap(
+        const SettingsState(
+          ticker: 'SPY', demoMode: false, provider: 'google',
+          agentModels: {'bull_researcher': AgentModel(provider: 'anthropic', model: 'claude-opus-4-8')},
+        ),
+        const [],
+      ),
+    );
+    final container = ProviderScope.containerOf(tester.element(find.byType(HubSurface)));
+    await container.read(settingsControllerProvider.notifier).saveKey('google', 'g-key');
+    await tester.pumpAndSettle();
+    // google is satisfied but the per-role anthropic is not.
+    expect(find.textContaining('Needs keys for: Anthropic'), findsOneWidget);
+    expect(runButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('key gate: demo mode and keyless providers (ollama) never gate Run', (tester) async {
+    // Keyless local provider: no key needed -> not gated.
+    await _pump(
+      tester,
+      _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'ollama'), const []),
+    );
+    expect(find.textContaining('Needs keys for'), findsNothing); // ollama needs no key
+    expect(runButton(tester).onPressed, isNotNull);
+
+    // Demo mode bypasses the gate even with an uncredentialed keyed provider.
+    await tester.pumpWidget(
+        _wrap(const SettingsState(ticker: 'SPY', demoMode: true, provider: 'anthropic'), const []));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Needs keys for'), findsNothing);
+    expect(runButton(tester).onPressed, isNotNull);
   });
 }

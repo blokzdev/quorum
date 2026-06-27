@@ -12,21 +12,28 @@ import 'package:quorum_core/quorum_core.dart';
 /// chips — all-default + partially-assigned"). The roster is collapsed by default; `forceExpandDreamTeam`
 /// is the deterministic test seam that opens it (no tap/animation). Each role row is rendered COLLAPSED
 /// (label + chip), so all 12 chips are visible without 12 open pickers — keeping the surface bounded.
+// Models flagged tool_capable:true (the real-world default — the engine denylist is empty), so an
+// assigned tool role resolves OK (accent chip), keeping these goldens byte-identical to c1.
 final _catalog = Catalog(
   contractVersion: 1,
   analysts: const ['market', 'social', 'news', 'fundamentals'],
   providers: {
     'google': const ProviderCatalog('google', {
-      'quick': [ModelOption('Gemini 3.5 Flash', 'gemini-3.5-flash')],
-      'deep': [ModelOption('Gemini 3.1 Pro', 'gemini-3.1-pro-preview')],
+      'quick': [ModelOption('Gemini 3.5 Flash', 'gemini-3.5-flash', toolCapable: true)],
+      'deep': [ModelOption('Gemini 3.1 Pro', 'gemini-3.1-pro-preview', toolCapable: true)],
     }),
     'anthropic': const ProviderCatalog('anthropic', {
-      'quick': [ModelOption('Claude Sonnet 4.6', 'claude-sonnet-4-6')],
-      'deep': [ModelOption('Claude Opus 4.8', 'claude-opus-4-8')],
+      'quick': [ModelOption('Claude Sonnet 4.6', 'claude-sonnet-4-6', toolCapable: true)],
+      'deep': [ModelOption('Claude Opus 4.8', 'claude-opus-4-8', toolCapable: true)],
     }),
     'ollama': const ProviderCatalog('ollama', {
-      'quick': [ModelOption('Qwen3', 'qwen3:latest'), ModelOption('Custom model ID', 'custom')],
-      'deep': [ModelOption('GLM', 'glm-4.7-flash:latest'), ModelOption('Custom model ID', 'custom')],
+      'quick': [ModelOption('Qwen3', 'qwen3:latest', toolCapable: true), ModelOption('Custom model ID', 'custom')],
+      'deep': [ModelOption('GLM', 'glm-4.7-flash:latest', toolCapable: true), ModelOption('Custom model ID', 'custom')],
+    }),
+    // An explicitly non-tool model so the capability golden can show the red/amber chip states.
+    'legacy': const ProviderCatalog('legacy', {
+      'quick': [ModelOption('NoTool', 'old-x', toolCapable: false)],
+      'deep': [ModelOption('NoTool', 'old-x', toolCapable: false)],
     }),
   },
 );
@@ -97,5 +104,28 @@ void main() {
 
     await expectLater(
         find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_partial.png'));
+  });
+
+  testWidgets('dream team — capability gate chips (red block / amber degrade)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_wrap(const SettingsState(
+      demoMode: false,
+      agentModels: {
+        // A tool role holding a non-tool model -> RED error chip (the block surfaces even collapsed).
+        'fundamentals_analyst': AgentModel(provider: 'legacy', model: 'old-x'),
+        // A structured role holding a non-tool model -> AMBER degrade chip.
+        'portfolio_manager': AgentModel(provider: 'legacy', model: 'old-x'),
+        // A valid assignment -> normal accent chip (contrast).
+        'bull_researcher': AgentModel(provider: 'anthropic', model: 'claude-opus-4-8'),
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.error_outline), findsOneWidget); // fundamentals (tool, block)
+    expect(find.byIcon(Icons.warning_amber), findsOneWidget); // portfolio (structured, degrade)
+    await expectLater(
+        find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_capability.png'));
   });
 }

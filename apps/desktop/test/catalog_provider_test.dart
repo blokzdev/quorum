@@ -32,6 +32,22 @@ void main() {
     expect(cat.optionsFor('nope', 'deep'), isEmpty);
   });
 
+  test('ModelOption parses tool_capable (true/false/null) — additive + tolerant', () {
+    const body =
+        '{"contract_version":1,"providers":{"p":{"quick":['
+        '{"label":"Tooly","value":"a","tool_capable":true},'
+        '{"label":"NoTool","value":"b","tool_capable":false},'
+        '{"label":"Custom","value":"custom","tool_capable":null},'
+        '{"label":"Legacy","value":"c"}],'  // no tool_capable key at all -> null
+        '"deep":[]}},"analysts":[]}';
+    final cat = Catalog.fromJson(jsonDecode(body) as Map<String, dynamic>);
+    final opts = {for (final o in cat.optionsFor('p', 'quick')) o.value: o.toolCapable};
+    expect(opts['a'], isTrue);
+    expect(opts['b'], isFalse);
+    expect(opts['custom'], isNull); // explicit null
+    expect(opts['c'], isNull); // missing key reads as null (old payloads / additive)
+  });
+
   test('catalogProvider fetches + parses the live catalog (lazy, bearer-authed)', () async {
     final client = MockClient((req) async {
       if (req.url.path == '/catalog/providers') {

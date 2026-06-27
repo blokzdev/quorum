@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:quorum_core/quorum_core.dart';
 
 import '../dream_team_roster.dart' show dreamTeamRoleKeys;
+import '../provider_meta.dart' show providerRequiresKeyForLaunch;
 import '../services/key_vault.dart';
 
 /// The persisted model-config subset of [SettingsState] — a named, reusable "Bench" (preset) the user
@@ -305,6 +306,34 @@ class KeyVaultRevision extends Notifier<int> {
   void bump() => state = state + 1;
 }
 
+/// The providers a run will reference — the global provider ∪ every per-role (Dream Team) provider.
+/// The single source both [SettingsController.buildLaunchConfig]'s key merge and [missingKeysProvider]
+/// iterate, so the pre-launch gate can never disagree with what the run actually uses.
+Set<String> referencedProviders(String? provider, Map<String, AgentModel>? agentModels) => <String>{
+      ?provider,
+      ...?agentModels?.values.map((m) => m.provider),
+    };
+
+/// Referenced providers that REQUIRE a key to launch but have none in the vault — the data behind the
+/// pre-launch "Needs keys for: …" gate. Empty in demo mode (no keys are sent). Recomputes when the
+/// referenced providers change (the settings slice) or any vault key is written/deleted
+/// ([keyVaultRevisionProvider]). openai_compatible / ollama / bedrock never appear (key-optional or
+/// keyless), so a keyless local relay is never false-blocked.
+final missingKeysProvider = FutureProvider<List<String>>((ref) async {
+  final (demoMode, provider, agentModels) = ref.watch(
+      settingsControllerProvider.select((s) => (s.demoMode, s.provider, s.agentModels)));
+  ref.watch(keyVaultRevisionProvider);
+  if (demoMode) return const [];
+  final vault = ref.read(keyVaultProvider);
+  final missing = <String>[];
+  for (final p in referencedProviders(provider, agentModels)) {
+    if (!providerRequiresKeyForLaunch(p)) continue;
+    final key = await vault.read(p);
+    if (key == null || key.isEmpty) missing.add(p);
+  }
+  return missing;
+});
+
 class SettingsController extends Notifier<SettingsState> {
   @override
   SettingsState build() => ref.read(initialSettingsProvider);
@@ -473,11 +502,8 @@ class SettingsController extends Notifier<SettingsState> {
     // Merge vault keys for EVERY provider this run references — the global quick/deep provider plus
     // every per-role (Dream Team) provider — so a multi-provider run injects all the keys it needs
     // (the sidecar's JobIsolationContext installs them all). A provider with no stored key is omitted
-    // (ollama / keyless local servers send none).
-    final providers = <String>{
-      ?provider,
-      ...?s.agentModels?.values.map((m) => m.provider),
-    };
+    // (ollama / keyless local servers send none). Same set the pre-launch gate checks.
+    final providers = referencedProviders(provider, s.agentModels);
     final merged = <String, String>{};
     for (final p in providers) {
       final key = await _vault.read(p);

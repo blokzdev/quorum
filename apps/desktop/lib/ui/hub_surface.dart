@@ -183,6 +183,13 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
     final s = ref.watch(settingsControllerProvider);
     final running = ref.watch(runControllerProvider).phase == RunPhase.running;
     final needsProvider = !s.demoMode && s.provider == null;
+    // Pre-launch key gate: referenced providers (global ∪ Dream Team) that need a key but have none.
+    // Gate Run while the async vault check is still resolving too, so a missing key can never slip
+    // through the brief loading window (the notice only shows once we actually have the list).
+    final missingAsync = ref.watch(missingKeysProvider);
+    final missing = missingAsync.value ?? const <String>[];
+    final missingKeys = !s.demoMode && missing.isNotEmpty;
+    final gated = needsProvider || (!s.demoMode && (missingAsync.isLoading || missing.isNotEmpty));
     final config = s.demoMode
         ? 'Demo mode · cost-free synthetic run'
         : [
@@ -227,7 +234,7 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
               ),
               const SizedBox(width: 14),
               FilledButton.icon(
-                onPressed: (running || needsProvider) ? null : () => widget.onRun(),
+                onPressed: (running || gated) ? null : () => widget.onRun(),
                 style: FilledButton.styleFrom(
                     backgroundColor: QC.accent, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
                 icon: const Icon(Icons.play_arrow, size: 18),
@@ -235,6 +242,28 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
               ),
             ],
           ),
+          if (missingKeys) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.key_off_outlined, size: 15, color: QC.warning),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: 'Needs keys for: ${missing.map(_providerShort).join(', ')}. ',
+                          style: const TextStyle(
+                              color: QC.warning, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const TextSpan(
+                          text: 'Set them in Settings to launch.',
+                          style: TextStyle(color: QC.textLo, fontSize: 12)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
