@@ -29,15 +29,29 @@ def _free_port() -> int:
         s.close()
 
 
+_STILL_ACTIVE = 259  # GetExitCodeProcess code for a process that has not exited
+
+
 def _pid_alive(pid: int) -> bool:
     try:
         if os.name == "nt":
             import ctypes
-            handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+
+            kernel32 = ctypes.windll.kernel32
+            kernel32.OpenProcess.restype = ctypes.c_void_p  # avoid 64-bit handle truncation
+            handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
             if not handle:
                 return False
-            ctypes.windll.kernel32.CloseHandle(handle)
-            return True
+            try:
+                # OpenProcess hands back a live handle even for an already-exited PID, so confirm
+                # liveness via the exit code: only STILL_ACTIVE (259) means the process is running.
+                exit_code = ctypes.c_ulong()
+                ok = kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(exit_code))
+                if not ok:
+                    return False
+                return exit_code.value == _STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(ctypes.c_void_p(handle))
         os.kill(pid, 0)
         return True
     except (OSError, ValueError):

@@ -12,4 +12,4 @@ longer-form, durable artifacts.
 - **[decisions/](decisions/)** — Architecture Decision Records (ADRs), one file per decision with
   lasting consequence:
   - [0001 — BYO provider API-key storage](decisions/0001-byo-api-key-storage.md)
-  - _0002 — Sidecar bundling strategy (pending the P2.0 spike)_
+  - [0002 — Sidecar bundling strategy](decisions/0002-sidecar-bundling.md)

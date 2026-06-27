@@ -20,7 +20,6 @@ from typing import Any
 
 from services.api.event_log import EventLog
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.reporting import write_report_tree
 from tradingagents.runtime import events as ev
 from tradingagents.runtime.isolation import JobIsolationContext, build_api_keys_dict
@@ -144,6 +143,10 @@ class JobRegistry:
         if job.request.get("mode") == "demo":
             self._execute_demo(job)
             return
+        # Lazy import: keeps the engine (LangChain/LangGraph + data vendors) off the demo path and out
+        # of ``services.api.app``'s import graph, so a demo-capable bundle needn't ship the full ML
+        # stack. The engine still loads once per pro/vibe run (cached in sys.modules thereafter).
+        from tradingagents.graph.trading_graph import TradingAgentsGraph
         plan = plan_run(job.request)
         job.status = "running"
         self._results_dir.mkdir(parents=True, exist_ok=True)

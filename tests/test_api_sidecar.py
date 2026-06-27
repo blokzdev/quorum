@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 import services.api.app as app_module
 import services.api.jobs as jobs_mod
 import tradingagents.agents.utils.structured as structmod
+import tradingagents.graph.trading_graph as trading_graph_mod
 from services.api.jobs import JobRegistry, plan_run
 from tradingagents.runtime.events import EventType
 
@@ -116,7 +117,7 @@ def test_plan_run_without_ticker_raises():
 # --- Full job lifecycle ---
 
 def test_job_runs_and_streams_full_event_sequence(monkeypatch, tmp_path):
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     registry = JobRegistry(results_dir=tmp_path)
 
@@ -147,7 +148,7 @@ def test_job_runs_and_streams_full_event_sequence(monkeypatch, tmp_path):
 
 
 def test_reports_endpoint_data_after_run(monkeypatch, tmp_path):
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     registry = JobRegistry(results_dir=tmp_path)
     job = registry.create({"mode": "pro", "ticker": "SPY"})
@@ -159,7 +160,7 @@ def test_reports_endpoint_data_after_run(monkeypatch, tmp_path):
 
 def test_cooperative_cancel_stops_the_run(monkeypatch, tmp_path):
     slow = [{"market_report": f"m{i}"} for i in range(60)]
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(slow, sleep=0.02))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(slow, sleep=0.02))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     registry = JobRegistry(results_dir=tmp_path)
 
@@ -224,7 +225,7 @@ def test_unknown_run_returns_404():
 
 def test_post_run_streams_sse_to_completion(monkeypatch, tmp_path):
     monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
     client = TestClient(app_module.app)
