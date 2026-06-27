@@ -245,6 +245,17 @@ final initialSettingsProvider = Provider<SettingsState>((ref) => const SettingsS
 final settingsControllerProvider =
     NotifierProvider<SettingsController, SettingsState>(SettingsController.new);
 
+/// Monotonic counter bumped on every vault key write/delete (including the one-time `.env` seed and
+/// Forget-all-keys). Widgets that display whether a provider key is stored watch this and re-check the
+/// vault when it changes — the OS keystore itself emits no change notification.
+final keyVaultRevisionProvider = NotifierProvider<KeyVaultRevision, int>(KeyVaultRevision.new);
+
+class KeyVaultRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+  void bump() => state = state + 1;
+}
+
 class SettingsController extends Notifier<SettingsState> {
   @override
   SettingsState build() => ref.read(initialSettingsProvider);
@@ -292,11 +303,27 @@ class SettingsController extends Notifier<SettingsState> {
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
 
   // --- Keys (OS vault; never persisted to settings.json) -------------------------------------------
-  Future<void> saveKey(String provider, String key) => _vault.write(provider, key);
-  Future<void> deleteKey(String provider) => _vault.delete(provider);
+  // Each mutation bumps keyVaultRevisionProvider so any widget showing whether a key is stored can
+  // re-check the vault (the vault has no change notification of its own).
+  void _bumpKeys() => ref.read(keyVaultRevisionProvider.notifier).bump();
+
+  Future<void> saveKey(String provider, String key) async {
+    await _vault.write(provider, key);
+    _bumpKeys();
+  }
+
+  Future<void> deleteKey(String provider) async {
+    await _vault.delete(provider);
+    _bumpKeys();
+  }
+
   Future<String?> readKey(String provider) => _vault.read(provider);
   Future<bool> hasKey(String provider) async => (await _vault.read(provider))?.isNotEmpty ?? false;
-  Future<void> forgetAllKeys() => _vault.forgetAll();
+
+  Future<void> forgetAllKeys() async {
+    await _vault.forgetAll();
+    _bumpKeys();
+  }
 
   /// One-time import of provider keys from the sidecar host's gitignored `.env` into the OS vault, so a
   /// developer/user with keys already in `.env` doesn't have to re-type them. Idempotent via
@@ -318,6 +345,7 @@ class SettingsController extends Notifier<SettingsState> {
           await _vault.write(e.key, key);
         }
       }
+      _bumpKeys(); // let any open Model Studio key field refresh its "Stored" badge
       _set(state.copyWith(seededFromEnv: true));
     } catch (_) {
       // Leave seededFromEnv false so a later attempt (e.g. once the sidecar is up) can retry.

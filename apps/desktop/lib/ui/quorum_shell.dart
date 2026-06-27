@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../state/run_controller.dart';
 import 'quorum_colors.dart';
+import 'settings_surface.dart' show SettingsSurface;
 import 'terminal_screen.dart' show TerminalBody;
 
 /// The app's top-level surfaces.
@@ -111,8 +112,7 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
               children: const [
                 TerminalSurface(),
                 _Placeholder(title: 'Hub', subtitle: 'Multi-run history & launch — arriving in P2.4'),
-                _Placeholder(
-                    title: 'Settings', subtitle: 'Model Studio & API keys — arriving in P2.3'),
+                SettingsSurface(),
               ],
             ),
           ),
