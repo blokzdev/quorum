@@ -6,22 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quorum_core/quorum_core.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../state/app_surface.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
+import 'hub_surface.dart' show HubSurface;
 import 'quorum_colors.dart';
 import 'settings_surface.dart' show SettingsSurface;
 import 'terminal_screen.dart' show TerminalBody;
-
-/// The app's top-level surfaces.
-enum _Surface { terminal, hub, settings }
-
-extension _SurfaceLabel on _Surface {
-  String get label => switch (this) {
-        _Surface.terminal => 'Terminal',
-        _Surface.hub => 'Hub',
-        _Surface.settings => 'Settings',
-      };
-}
 
 /// The application shell: owns the frameless window's custom title bar + lifecycle (the SOLE owner of
 /// sidecar teardown on close), and hosts the Terminal / Hub / Settings surfaces via an IndexedStack.
@@ -37,7 +28,6 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
     with WidgetsBindingObserver, WindowListener {
   bool _closing = false;
   bool _isMaximized = false;
-  _Surface _surface = _Surface.terminal;
 
   @override
   void initState() {
@@ -96,23 +86,27 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
 
   @override
   Widget build(BuildContext context) {
+    final surface = ref.watch(appSurfaceProvider);
     return Scaffold(
       backgroundColor: QC.bg,
       body: Column(
         children: [
           _TitleBar(
             isMaximized: _isMaximized,
-            leading: _NavTabs(active: _surface, onSelect: (s) => setState(() => _surface = s)),
+            leading: _NavTabs(
+              active: surface,
+              onSelect: (s) => ref.read(appSurfaceProvider.notifier).go(s),
+            ),
             onMinimize: () => windowManager.minimize(),
             onToggleMaximize: _toggleMaximize,
             onClose: () => windowManager.close(),
           ),
           Expanded(
             child: IndexedStack(
-              index: _surface.index,
+              index: surface.index,
               children: const [
                 TerminalSurface(),
-                _Placeholder(title: 'Hub', subtitle: 'Multi-run history & launch — arriving in P2.4'),
+                HubSurface(),
                 SettingsSurface(),
               ],
             ),
@@ -174,8 +168,8 @@ class _TerminalSurfaceState extends ConsumerState<TerminalSurface> {
 
 /// In-shell surface switcher, rendered at the left of the title bar.
 class _NavTabs extends StatelessWidget {
-  final _Surface active;
-  final ValueChanged<_Surface> onSelect;
+  final AppSurface active;
+  final ValueChanged<AppSurface> onSelect;
   const _NavTabs({required this.active, required this.onSelect});
 
   @override
@@ -183,7 +177,7 @@ class _NavTabs extends StatelessWidget {
     return Row(
       children: [
         const SizedBox(width: 6),
-        for (final s in _Surface.values)
+        for (final s in AppSurface.values)
           _NavTabButton(surface: s, active: s == active, onSelect: onSelect),
       ],
     );
@@ -191,9 +185,9 @@ class _NavTabs extends StatelessWidget {
 }
 
 class _NavTabButton extends StatefulWidget {
-  final _Surface surface;
+  final AppSurface surface;
   final bool active;
-  final ValueChanged<_Surface> onSelect;
+  final ValueChanged<AppSurface> onSelect;
   const _NavTabButton({required this.surface, required this.active, required this.onSelect});
   @override
   State<_NavTabButton> createState() => _NavTabButtonState();
@@ -234,30 +228,6 @@ class _NavTabButtonState extends State<_NavTabButton> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// A centred "coming soon" placeholder for the not-yet-built Hub / Settings surfaces.
-class _Placeholder extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  const _Placeholder({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: QC.bg,
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title,
-              style: const TextStyle(color: QC.textHi, fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(subtitle, style: const TextStyle(color: QC.textLo, fontSize: 13)),
-        ],
       ),
     );
   }

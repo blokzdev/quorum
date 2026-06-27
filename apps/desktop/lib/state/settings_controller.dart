@@ -81,6 +81,9 @@ class SettingsState {
   final String outputLanguage;
   final List<Bench> benches;
 
+  /// Tickers the user tracks on the Hub (uppercased). A run-level list, not part of a [Bench] preset.
+  final List<String> watchlist;
+
   /// Idempotency latch for the first-launch `.env` → vault import (see [maybeSeedKeysFromEnv]).
   final bool seededFromEnv;
 
@@ -98,6 +101,7 @@ class SettingsState {
     this.analysts,
     this.outputLanguage = 'English',
     this.benches = const [],
+    this.watchlist = const [],
     this.seededFromEnv = false,
   });
 
@@ -115,6 +119,7 @@ class SettingsState {
     List<String>? analysts,
     String? outputLanguage,
     List<Bench>? benches,
+    List<String>? watchlist,
     bool? seededFromEnv,
   }) {
     return SettingsState(
@@ -131,6 +136,7 @@ class SettingsState {
       analysts: analysts ?? this.analysts,
       outputLanguage: outputLanguage ?? this.outputLanguage,
       benches: benches ?? this.benches,
+      watchlist: watchlist ?? this.watchlist,
       seededFromEnv: seededFromEnv ?? this.seededFromEnv,
     );
   }
@@ -152,6 +158,7 @@ class SettingsState {
         analysts: analysts,
         outputLanguage: outputLanguage,
         benches: benches,
+        watchlist: watchlist,
         seededFromEnv: seededFromEnv,
       );
 
@@ -169,6 +176,7 @@ class SettingsState {
         if (analysts != null) 'analysts': analysts,
         'output_language': outputLanguage,
         'benches': benches.map((b) => b.toJson()).toList(growable: false),
+        'watchlist': watchlist,
         'seeded_from_env': seededFromEnv,
       };
 
@@ -188,6 +196,8 @@ class SettingsState {
         benches: ((j['benches'] as List?) ?? const [])
             .map((b) => Bench.fromJson((b as Map).cast<String, dynamic>()))
             .toList(growable: false),
+        watchlist:
+            ((j['watchlist'] as List?) ?? const []).map((e) => e as String).toList(growable: false),
         seededFromEnv: j['seeded_from_env'] as bool? ?? false,
       );
 
@@ -301,6 +311,19 @@ class SettingsController extends Notifier<SettingsState> {
 
   void deleteBench(String name) =>
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
+
+  // --- Watchlist (tracked tickers on the Hub) ------------------------------------------------------
+  void toggleWatch(String ticker) {
+    final t = ticker.trim().toUpperCase();
+    if (t.isEmpty) return;
+    final next = state.watchlist.contains(t)
+        ? state.watchlist.where((w) => w != t).toList()
+        : [...state.watchlist, t];
+    _set(state.copyWith(watchlist: next));
+  }
+
+  void removeWatch(String ticker) => _set(
+      state.copyWith(watchlist: state.watchlist.where((w) => w != ticker).toList()));
 
   // --- Keys (OS vault; never persisted to settings.json) -------------------------------------------
   // Each mutation bumps keyVaultRevisionProvider so any widget showing whether a key is stored can

@@ -64,6 +64,7 @@ void main() {
         analysts: ['market', 'news'],
         outputLanguage: 'English',
         benches: [Bench(name: 'Fast', provider: 'openai', quickModel: 'gpt-5.4-mini', effort: 'low')],
+        watchlist: ['NVDA', 'TSLA'],
         seededFromEnv: true,
       );
       final back = SettingsState.fromJson(s.toJson());
@@ -81,6 +82,7 @@ void main() {
       expect(back.benches.single.name, 'Fast');
       expect(back.benches.single.provider, 'openai');
       expect(back.benches.single.effort, 'low');
+      expect(back.watchlist, ['NVDA', 'TSLA']);
     });
 
     test('defaults are demo-safe (cost-free, no provider)', () {
@@ -220,6 +222,20 @@ void main() {
 
       ctrl.deleteBench('Deep');
       expect(c.read(settingsControllerProvider).benches, isEmpty);
+    });
+  });
+
+  group('watchlist', () {
+    test('toggleWatch adds (uppercased) then toggles off; removeWatch deletes', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.toggleWatch('nvda');
+      expect(c.read(settingsControllerProvider).watchlist, ['NVDA']);
+      ctrl.toggleWatch('NVDA'); // already present -> removed
+      expect(c.read(settingsControllerProvider).watchlist, isEmpty);
+      ctrl.toggleWatch('TSLA');
+      ctrl.removeWatch('TSLA');
+      expect(c.read(settingsControllerProvider).watchlist, isEmpty);
     });
   });
 }
