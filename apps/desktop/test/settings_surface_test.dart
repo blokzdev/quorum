@@ -242,11 +242,11 @@ void main() {
 
     await tester.tap(find.text('— Default').last); // the role-row provider dropdown (not apply-to-all)
     await tester.pumpAndSettle();
-    await tester.tap(find.text('DeepSeek').last);
+    await tester.tap(find.text('DeepSeek').last, warnIfMissed: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Model'));
+    await tester.tap(find.text('Model'), warnIfMissed: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('V4 Pro').last);
+    await tester.tap(find.text('V4 Pro').last, warnIfMissed: false);
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
@@ -268,11 +268,11 @@ void main() {
 
     await tester.tap(find.text('— Default').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ollama (local)').last);
+    await tester.tap(find.text('Ollama (local)').last, warnIfMissed: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Model'));
+    await tester.tap(find.text('Model'), warnIfMissed: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Custom model ID').last); // the catalog's 'custom' sentinel
+    await tester.tap(find.text('Custom model ID').last, warnIfMissed: false); // the catalog's 'custom' sentinel
     await tester.pumpAndSettle();
 
     final customField = find.byWidgetPredicate(
@@ -302,11 +302,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('— Default').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('DeepSeek').last);
+    await tester.tap(find.text('DeepSeek').last, warnIfMissed: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Model'));
+    await tester.tap(find.text('Model'), warnIfMissed: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('V4 Pro').last);
+    await tester.tap(find.text('V4 Pro').last, warnIfMissed: false);
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
@@ -316,7 +316,7 @@ void main() {
     // Re-open the (now 'DeepSeek') provider dropdown and switch — the deepseek model is invalid now.
     await tester.tap(find.text('DeepSeek')); // the role-row selected display (unique)
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Google Gemini').last);
+    await tester.tap(find.text('Google Gemini').last, warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(container.read(settingsControllerProvider).agentModels, isNull); // dropped, not carried
   });
