@@ -35,12 +35,23 @@ class GraphSetup:
         deep_thinking_llm: Any,
         tool_nodes: dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
+        role_llms: dict[str, Any] | None = None,
     ):
-        """Initialize with required components."""
+        """Initialize with required components.
+
+        ``role_llms`` (Dream Team, additive): per-role override LLMs keyed by graph node name. When
+        empty/None, every node uses its quick/deep default exactly as before — the keyword default
+        keeps this signature byte-compatible with upstream's positional ``GraphSetup(quick, deep, …)``.
+        """
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
+        self.role_llms = role_llms or {}
+
+    def _llm_for(self, node_name: str, default: Any) -> Any:
+        """The per-role override LLM for a node, else the quick/deep ``default`` (today's behavior)."""
+        return self.role_llms.get(node_name) or default
 
     def setup_graph(
         self, selected_analysts=("market", "social", "news", "fundamentals")
@@ -56,31 +67,33 @@ class GraphSetup:
         """
         plan = build_analyst_execution_plan(selected_analysts)
 
+        # Each analyst resolves its LLM by its node name (Dream Team override, else quick).
         analyst_factories = {
-            "market": lambda: create_market_analyst(self.quick_thinking_llm),
-            "social": lambda: create_sentiment_analyst(self.quick_thinking_llm),
-            "news": lambda: create_news_analyst(self.quick_thinking_llm),
-            "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
+            "market": create_market_analyst,
+            "social": create_sentiment_analyst,
+            "news": create_news_analyst,
+            "fundamentals": create_fundamentals_analyst,
         }
 
-        # Create researcher and manager nodes
-        bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
-        bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
-        research_manager_node = create_research_manager(self.deep_thinking_llm)
-        trader_node = create_trader(self.quick_thinking_llm)
+        # Create researcher and manager nodes (research_manager + portfolio_manager default to DEEP).
+        bull_researcher_node = create_bull_researcher(self._llm_for("Bull Researcher", self.quick_thinking_llm))
+        bear_researcher_node = create_bear_researcher(self._llm_for("Bear Researcher", self.quick_thinking_llm))
+        research_manager_node = create_research_manager(self._llm_for("Research Manager", self.deep_thinking_llm))
+        trader_node = create_trader(self._llm_for("Trader", self.quick_thinking_llm))
 
         # Create risk analysis nodes
-        aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm)
-        neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
-        conservative_analyst = create_conservative_debator(self.quick_thinking_llm)
-        portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm)
+        aggressive_analyst = create_aggressive_debator(self._llm_for("Aggressive Analyst", self.quick_thinking_llm))
+        neutral_analyst = create_neutral_debator(self._llm_for("Neutral Analyst", self.quick_thinking_llm))
+        conservative_analyst = create_conservative_debator(self._llm_for("Conservative Analyst", self.quick_thinking_llm))
+        portfolio_manager_node = create_portfolio_manager(self._llm_for("Portfolio Manager", self.deep_thinking_llm))
 
         # Create workflow
         workflow = StateGraph(AgentState)
 
         # Add analyst nodes to the graph
         for spec in plan.specs:
-            workflow.add_node(spec.agent_node, analyst_factories[spec.key]())
+            llm = self._llm_for(spec.agent_node, self.quick_thinking_llm)
+            workflow.add_node(spec.agent_node, analyst_factories[spec.key](llm))
             workflow.add_node(spec.clear_node, create_msg_delete())
             workflow.add_node(spec.tool_node, self.tool_nodes[spec.key])
 

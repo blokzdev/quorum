@@ -315,6 +315,18 @@ def test_healthz_and_catalog_endpoints():
     assert body["analysts"] == ["market", "social", "news", "fundamentals"]
 
 
+def test_catalog_exposes_tool_capable_flag(monkeypatch):
+    # P2.5a: each option additively carries `tool_capable` for the Dream Team gate, without changing
+    # the existing label/value contract.
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    body = TestClient(app_module.app).get("/catalog/providers").json()
+    opt = body["providers"]["anthropic"]["deep"][0]
+    assert opt["label"] and opt["value"]  # existing contract preserved
+    assert opt["tool_capable"] is True
+    custom = next(o for o in body["providers"]["ollama"]["deep"] if o["value"] == "custom")
+    assert custom["tool_capable"] is None  # unknown user/local model -> UI warns, not blocks
+
+
 def test_bearer_auth_enforced(monkeypatch):
     monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
     client = TestClient(app_module.app)
