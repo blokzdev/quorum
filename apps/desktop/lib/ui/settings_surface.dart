@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quorum_core/quorum_core.dart';
 
+import '../dream_team_roster.dart';
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
@@ -80,6 +81,35 @@ const _providerLabels = <String, String>{
 };
 String _providerLabel(String p) => _providerLabels[p] ?? p;
 
+// --- Dream Team (per-role) helpers -----------------------------------------------------------------
+
+/// Providers offerable per role. Excludes ONLY `openai_compatible` — it has `require_base_url=True`
+/// engine-side (openai_client.py) and c1 has no per-role base-URL field, so a per-role
+/// `openai_compatible` with no URL is a guaranteed broken run. `ollama` is INTENTIONALLY kept: its
+/// ProviderSpec bakes in `http://localhost:11434/v1`, so a per-role Ollama resolves that default even
+/// when the global provider differs (verified openai_client.py base_url precedence) — the flagship
+/// "cheap local analyst + strong cloud judge" lineup. A per-role base-URL field is backlog (P2.5c2+).
+List<String> _rosterProviders(Catalog c) =>
+    c.providerNames.where((p) => p != 'openai_compatible').toList(growable: false);
+
+/// A role's full model set = the dedup-by-value union of the provider's quick + deep options, plus
+/// exactly one trailing `custom` sentinel (deduped, so a catalog that already lists `custom` doesn't
+/// double it). Prevents DropdownButton duplicate-value asserts when a model appears in both tiers.
+List<ModelOption> _unionModels(Catalog c, String provider) {
+  final seen = <String>{};
+  final out = <ModelOption>[];
+  for (final o in [...c.optionsFor(provider, 'quick'), ...c.optionsFor(provider, 'deep')]) {
+    if (seen.add(o.value)) out.add(o);
+  }
+  if (seen.add('custom')) out.add(const ModelOption('Custom model id…', 'custom'));
+  return out;
+}
+
+/// A role is *assigned* iff it carries a provider AND a non-blank model. The single predicate the wire
+/// commit, the chip, and the count all share — so the UI can never read "assigned" while the engine
+/// (which drops a blank-model spec) runs the fallback.
+bool _roleAssigned(AgentModel? m) => m != null && m.model.trim().isNotEmpty;
+
 const _languages = ['English', 'Spanish', 'Chinese', 'Japanese', 'German', 'French', 'Korean'];
 
 /// The Settings surface: resolves the provider/model [catalogProvider] (loading / error+Retry / empty
@@ -144,7 +174,12 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
 /// fixed [catalog], so it has no async dependencies — the golden target.
 class SettingsBody extends ConsumerWidget {
   final Catalog catalog;
-  const SettingsBody({super.key, required this.catalog});
+
+  /// Golden/test seam: force the (otherwise collapsed-by-default) Dream Team roster open so the
+  /// all-default state is render-to-PNG testable. Production never sets it; a configured roster
+  /// (non-null agentModels) auto-expands regardless.
+  final bool forceExpandDreamTeam;
+  const SettingsBody({super.key, required this.catalog, this.forceExpandDreamTeam = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -275,10 +310,16 @@ class SettingsBody extends ConsumerWidget {
                   ],
                 ),
 
+                // --- Dream Team (per-role overrides) -------------------------------------------------
+                _DreamTeamRoster(
+                  catalog: catalog,
+                  initiallyExpanded: forceExpandDreamTeam || s.agentModels != null,
+                ),
+
                 // --- Benches -------------------------------------------------------------------------
                 _Section(
                   title: 'Benches',
-                  subtitle: 'Save the current model config as a reusable preset.',
+                  subtitle: 'Save the current model config (incl. the Dream Team lineup) as a preset.',
                   children: [
                     _BenchManager(benches: s.benches),
                   ],
@@ -1058,6 +1099,379 @@ class _BenchManagerState extends ConsumerState<_BenchManager> {
   }
 }
 
+// --- Dream Team roster -----------------------------------------------------------------------------
+
+/// The "Dream Team" section: a collapsible, stage-grouped roster of the 12 agent roles, each with a
+/// per-role provider+model picker. Unassigned roles fall back to the global Model Studio quick/deep
+/// pick (shown as a muted chip). Binds [settingsControllerProvider] for the live lineup.
+class _DreamTeamRoster extends ConsumerStatefulWidget {
+  final Catalog catalog;
+  final bool initiallyExpanded;
+  const _DreamTeamRoster({required this.catalog, this.initiallyExpanded = false});
+  @override
+  ConsumerState<_DreamTeamRoster> createState() => _DreamTeamRosterState();
+}
+
+class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final s = ref.watch(settingsControllerProvider);
+    final ctrl = ref.read(settingsControllerProvider.notifier);
+    final models = s.agentModels;
+    final assigned = dreamTeamRoleKeys.where((k) => _roleAssigned(models?[k])).length;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: brand.surface1,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: brand.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            button: true,
+            expanded: _expanded,
+            label: 'Dream Team, $assigned of 12 roles assigned',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('DREAM TEAM',
+                            style: TextStyle(
+                                color: brand.textMid,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8)),
+                        const SizedBox(height: 4),
+                        Text('Pin a model to any role. Unassigned roles fall back to your Model Studio pick.',
+                            style: TextStyle(color: brand.textLo, fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _CountBadge(assigned: assigned, total: dreamTeamRoleKeys.length, brand: brand),
+                  const SizedBox(width: 8),
+                  Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 20, color: brand.textMid),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            const SizedBox(height: 4),
+            for (final (stageLabel, keys) in dreamTeamStages)
+              _RosterStage(
+                stageLabel: stageLabel,
+                roleKeys: keys,
+                catalog: widget.catalog,
+                models: models,
+                onAssign: ctrl.setAgentModel,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CountBadge extends StatelessWidget {
+  final int assigned;
+  final int total;
+  final QuorumBrand brand;
+  const _CountBadge({required this.assigned, required this.total, required this.brand});
+  @override
+  Widget build(BuildContext context) {
+    final on = assigned > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: on ? brand.accent.withValues(alpha: 0.16) : brand.surface2,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: on ? brand.accent : brand.border),
+      ),
+      child: Text('$assigned of $total',
+          style: TextStyle(
+              color: on ? brand.textHi : brand.textLo,
+              fontSize: 11,
+              fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+/// One stage group: an uppercased header + its role rows.
+class _RosterStage extends StatelessWidget {
+  final String stageLabel;
+  final List<String> roleKeys;
+  final Catalog catalog;
+  final Map<String, AgentModel>? models;
+  final void Function(String role, AgentModel? model) onAssign;
+  const _RosterStage({
+    required this.stageLabel,
+    required this.roleKeys,
+    required this.catalog,
+    required this.models,
+    required this.onAssign,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 4),
+          child: Text(stageLabel.toUpperCase(),
+              style: TextStyle(
+                  color: brand.textLo,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6)),
+        ),
+        for (final role in roleKeys)
+          _RoleRow(
+            roleKey: role,
+            catalog: catalog,
+            current: models?[role],
+            onAssign: (m) => onAssign(role, m),
+          ),
+      ],
+    );
+  }
+}
+
+/// A single role: a tappable summary line (label + assigned/fallback chip) that discloses the
+/// per-role provider+model picker. The picker's transient half-set state lives in
+/// [_ModelAssignmentPicker]; this row only forwards complete assignments (or null) to [onAssign].
+class _RoleRow extends StatefulWidget {
+  final String roleKey;
+  final Catalog catalog;
+  final AgentModel? current;
+  final ValueChanged<AgentModel?> onAssign;
+  const _RoleRow(
+      {required this.roleKey,
+      required this.catalog,
+      required this.current,
+      required this.onAssign});
+  @override
+  State<_RoleRow> createState() => _RoleRowState();
+}
+
+class _RoleRowState extends State<_RoleRow> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: brand.surface2,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: brand.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            button: true,
+            expanded: _open,
+            label: '${dreamTeamRoleLabel(widget.roleKey)} model',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _open = !_open),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(dreamTeamRoleLabel(widget.roleKey),
+                          style: TextStyle(
+                              color: brand.textHi, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(child: _RoleChip(roleKey: widget.roleKey, model: widget.current)),
+                    const SizedBox(width: 6),
+                    Icon(_open ? Icons.expand_less : Icons.expand_more,
+                        size: 18, color: brand.textLo),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: _ModelAssignmentPicker(
+                catalog: widget.catalog,
+                initial: widget.current,
+                onChanged: widget.onAssign,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The assigned/fallback chip on a role's summary line. Assigned → solid accent showing
+/// "provider · model"; unassigned → muted "Falls back · QUICK/DEEP" (DEEP for the two judges).
+class _RoleChip extends StatelessWidget {
+  final String roleKey;
+  final AgentModel? model;
+  const _RoleChip({required this.roleKey, required this.model});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final assigned = _roleAssigned(model);
+    final label = assigned
+        ? '${_providerLabel(model!.provider)} · ${model!.model}'
+        : 'Falls back · ${roleFallsBackToDeep(roleKey) ? 'DEEP' : 'QUICK'}';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: assigned ? brand.accent.withValues(alpha: 0.18) : brand.surface1,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: assigned ? brand.accent : brand.border),
+      ),
+      child: Text(label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              color: assigned ? brand.textHi : brand.textLo,
+              fontSize: 11,
+              fontWeight: assigned ? FontWeight.w600 : FontWeight.w500)),
+    );
+  }
+}
+
+/// A provider+model picker that emits a COMPLETE [AgentModel] (or null to unassign) — never a
+/// half-set/blank-model object. The in-progress provider (chosen before a model) lives only in this
+/// widget's State; [onChanged] fires null until a real model (a concrete option, or a non-empty
+/// custom id) is selected. This single invariant prevents an `AgentModel(model: '')` ever reaching
+/// the wire (where the engine and the manifest both silently drop it, making the roster lie).
+class _ModelAssignmentPicker extends StatefulWidget {
+  final Catalog catalog;
+  final AgentModel? initial;
+  final ValueChanged<AgentModel?> onChanged;
+  const _ModelAssignmentPicker(
+      {required this.catalog, required this.initial, required this.onChanged});
+  @override
+  State<_ModelAssignmentPicker> createState() => _ModelAssignmentPickerState();
+}
+
+class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
+  String? _provider;
+  String? _modelSelection; // a catalog option value, or the 'custom' sentinel, or null
+  String _customText = '';
+  bool _customMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _seedFromInitial();
+  }
+
+  void _seedFromInitial() {
+    final m = widget.initial;
+    _provider = m?.provider;
+    final model = m?.model;
+    if (_provider != null && model != null && model.isNotEmpty) {
+      final known = _unionModels(widget.catalog, _provider!)
+          .any((o) => o.value == model && o.value != 'custom');
+      if (known) {
+        _modelSelection = model;
+      } else {
+        _modelSelection = 'custom';
+        _customMode = true;
+        _customText = model;
+      }
+    }
+  }
+
+  /// The effective model id from the current selection: null when nothing real is chosen.
+  String? _effectiveModel() {
+    if (_modelSelection == 'custom') {
+      final t = _customText.trim();
+      return t.isEmpty ? null : t;
+    }
+    return _modelSelection;
+  }
+
+  void _emit() {
+    final p = _provider;
+    final m = _effectiveModel();
+    widget.onChanged(
+        (p != null && m != null && m.isNotEmpty) ? AgentModel(provider: p, model: m) : null);
+  }
+
+  void _onProvider(String? p) => setState(() {
+        _provider = p;
+        _modelSelection = null; // a model from the old provider is invalid; clear it
+        _customMode = false;
+        _customText = '';
+        _emit(); // unassigned until a model is picked for the new provider
+      });
+
+  void _onModel(String? v) => setState(() {
+        _modelSelection = v;
+        _customMode = v == 'custom';
+        _emit();
+      });
+
+  void _onCustom(String? v) => setState(() {
+        _customText = v ?? '';
+        _emit();
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = _provider;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Dropdown<String>(
+          value: provider,
+          hint: 'Provider',
+          allowClear: true, // '— Default' clears the role back to the quick/deep fallback
+          items: [for (final p in _rosterProviders(widget.catalog)) (label: _providerLabel(p), value: p)],
+          onChanged: _onProvider,
+        ),
+        if (provider != null) ...[
+          const SizedBox(height: 8),
+          _Dropdown<String>(
+            value: _modelSelection,
+            hint: 'Model',
+            items: [for (final o in _unionModels(widget.catalog, provider)) (label: o.label, value: o.value)],
+            onChanged: _onModel,
+          ),
+          if (_customMode) ...[
+            const SizedBox(height: 8),
+            _PlainTextField(
+              value: _customText,
+              hint: 'Custom model id (e.g. llama3.2:latest)',
+              onChanged: _onCustom,
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
 // --- Forget all keys -------------------------------------------------------------------------------
 class _ForgetAllKeysButton extends ConsumerWidget {
   const _ForgetAllKeysButton();
@@ -1110,32 +1524,38 @@ class _SmallButton extends StatelessWidget {
   final QuorumBrand brand;
   final bool filled;
   final bool danger;
+  final bool enabled;
   const _SmallButton(
       {required this.label,
       required this.onTap,
       required this.brand,
       this.filled = false,
-      this.danger = false});
+      this.danger = false,
+      this.enabled = true});
   @override
   Widget build(BuildContext context) {
     final fg = danger ? brand.down : (filled ? Colors.white : brand.textHi);
     final bg = filled ? brand.accent : Colors.transparent;
-    return Semantics(
-      button: true,
-      label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: filled ? brand.accent : brand.border),
+    return Opacity(
+      opacity: enabled ? 1 : 0.4,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: label,
+        child: GestureDetector(
+          onTap: enabled ? onTap : null,
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: filled ? brand.accent : brand.border),
+            ),
+            child: Text(label,
+                style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
-          child: Text(label,
-              style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
     );
