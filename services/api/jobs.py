@@ -36,6 +36,31 @@ _CANONICAL_SECTIONS = (
     "investment_plan", "trader_investment_plan", "final_trade_decision",
 )
 
+# The bull/bear tug-of-war + the three risk views the UI renders live nested in the engine's
+# investment_debate_state / risk_debate_state on a pro/vibe final_state (flat top-level on a demo
+# one). Decompose them by their wire-section name so a cached review reconstructs the FULL debate —
+# the product's signature surface — not just the analyst reports + verdict.
+_DEBATE_SECTIONS = {
+    "bull": ("investment_debate_state", "bull_history"),
+    "bear": ("investment_debate_state", "bear_history"),
+    "aggressive": ("risk_debate_state", "aggressive_history"),
+    "conservative": ("risk_debate_state", "conservative_history"),
+    "neutral": ("risk_debate_state", "neutral_history"),
+}
+_ALL_SECTIONS = frozenset(_CANONICAL_SECTIONS) | frozenset(_DEBATE_SECTIONS)
+
+
+def _sections_from_state(fs: dict[str, Any]) -> dict[str, str]:
+    """Renderable report sections from a completed final_state: the top-level canonical keys plus the
+    bull/bear/risk debate sections (flat on a demo state; nested under the *_debate_state dicts on a
+    pro/vibe one — mirrors the live decomposition in runtime/runner.py)."""
+    out = {k: fs[k] for k in _CANONICAL_SECTIONS if fs.get(k)}
+    for wire, (parent, child) in _DEBATE_SECTIONS.items():
+        val = fs.get(wire) or (fs.get(parent) or {}).get(child)
+        if val:
+            out[wire] = val
+    return out
+
 
 @dataclass
 class Job:
@@ -301,13 +326,13 @@ class JobRegistry:
         ``reports.json`` so a cached review still renders the full reports."""
         fs = job.final_state
         if fs:
-            return {k: fs[k] for k in _CANONICAL_SECTIONS if fs.get(k)}
+            return _sections_from_state(fs)
         if job.report_path:
             try:
                 rp = Path(job.report_path)
                 run_dir = rp if rp.is_dir() else rp.parent
                 data = json.loads((run_dir / "reports.json").read_text(encoding="utf-8"))
-                return {k: v for k, v in data.items() if k in _CANONICAL_SECTIONS and v}
+                return {k: v for k, v in data.items() if k in _ALL_SECTIONS and v}
             except Exception:
                 logger.debug("reports.json read failed for %s", job.run_id, exc_info=True)
         return {}

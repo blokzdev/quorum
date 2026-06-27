@@ -246,6 +246,25 @@ def test_restored_run_reports_read_from_disk(monkeypatch, tmp_path):
     assert sections["final_trade_decision"] == "DEC"
 
 
+def test_restored_run_includes_debate_sections(monkeypatch, tmp_path):
+    # The bull/bear tug-of-war + the three risk views live nested in the engine final_state
+    # (investment_debate_state / risk_debate_state); a cached review needs them decomposed and
+    # persisted, or the signature debate renders empty.
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    reg1 = JobRegistry(results_dir=tmp_path)
+    job = reg1.create({"mode": "pro", "ticker": "SPY"})
+    _wait_done(job)
+
+    reg2 = JobRegistry(results_dir=tmp_path)  # restart
+    sections = JobRegistry.report_sections(reg2.get(job.run_id))
+    assert sections["bull"] == "B"
+    assert sections["bear"] == "R"
+    assert sections["aggressive"] == "A"
+    assert sections["conservative"] == "C"
+    assert sections["neutral"] == "N"
+
+
 def test_cooperative_cancel_stops_the_run(monkeypatch, tmp_path):
     slow = [{"market_report": f"m{i}"} for i in range(60)]
     monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(slow, sleep=0.02))

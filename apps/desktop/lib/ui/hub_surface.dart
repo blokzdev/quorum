@@ -14,20 +14,36 @@ import 'terminal_screen.dart' show TerminalBody;
 /// the same [TerminalBody] (verdict rail, tug-of-war, report cards) — no re-run. Verdict + cost come
 /// from the [RunSummary]; the report sections come from `GET /runs/{id}/reports`; every stage/agent is
 /// marked done so the pipeline rail reads as complete.
-RunViewState cachedRunState(RunSummary s, Map<String, String> sections) => RunViewState(
-      runId: s.runId,
-      ticker: s.ticker,
-      tradeDate: s.tradeDate,
-      phase: s.phase,
-      stages: {for (final st in stageMeta.keys) st: NodeStatus.done},
-      agents: {
-        for (final ags in stageMeta.values)
-          for (final a in ags.$2) a: NodeStatus.done,
-      },
-      reports: {for (final e in sections.entries) e.key: ReportSection(e.key, e.value, null)},
-      cost: s.cost,
-      verdict: s.verdict,
-    );
+RunViewState cachedRunState(RunSummary s, Map<String, String> sections) {
+  final Map<AgentId, NodeStatus> agents;
+  final Map<Stage, NodeStatus> stages;
+  if (s.phase == RunPhase.done) {
+    agents = {for (final ags in stageMeta.values) for (final a in ags.$2) a: NodeStatus.done};
+    stages = {for (final st in stageMeta.keys) st: NodeStatus.done};
+  } else {
+    // A cancelled/partial run only reached the agents whose sections exist — don't overstate the
+    // pipeline as fully complete when the header says Cancelled.
+    agents = {
+      for (final key in sections.keys)
+        if (sectionAgent[key] != null) sectionAgent[key]!: NodeStatus.done,
+    };
+    stages = {
+      for (final st in stageMeta.entries)
+        if (st.value.$2.every((a) => agents[a] == NodeStatus.done)) st.key: NodeStatus.done,
+    };
+  }
+  return RunViewState(
+    runId: s.runId,
+    ticker: s.ticker,
+    tradeDate: s.tradeDate,
+    phase: s.phase,
+    stages: stages,
+    agents: agents,
+    reports: {for (final e in sections.entries) e.key: ReportSection(e.key, e.value, null)},
+    cost: s.cost,
+    verdict: s.verdict,
+  );
+}
 
 /// BUY/HOLD/SELL family for a raw rating (collapses the five-tier scale for filtering + pills).
 String ratingFamily(String? r) => switch (r?.toLowerCase()) {
@@ -63,8 +79,13 @@ class _HubSurfaceState extends ConsumerState<HubSurface> {
 
   @override
   Widget build(BuildContext context) {
-    // Refresh history when a run finishes (its manifest is persisted before the terminal status flips).
     ref.listen(runControllerProvider, (prev, next) {
+      // Launching a run (from the cached review, watchlist, or launch card) drops the open cached
+      // review, so returning to the Hub lands on Home — not a stale past run.
+      if (next.phase == RunPhase.running && _reviewing != null) {
+        setState(() => _reviewing = null);
+      }
+      // Refresh history when a run finishes (its manifest is persisted before the status flips).
       if (next.isTerminal && prev?.phase != next.phase) {
         ref.invalidate(runHistoryProvider);
       }
@@ -153,8 +174,14 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the field in sync when the ticker is set elsewhere (a watchlist/history re-run), without
+    // clobbering an in-progress edit (during typing, settings.ticker == _ticker.text already).
+    ref.listen(settingsControllerProvider.select((s) => s.ticker), (_, t) {
+      if (t != _ticker.text) _ticker.text = t;
+    });
     final s = ref.watch(settingsControllerProvider);
     final running = ref.watch(runControllerProvider).phase == RunPhase.running;
+    final needsProvider = !s.demoMode && s.provider == null;
     final config = s.demoMode
         ? 'Demo mode · cost-free synthetic run'
         : [
@@ -199,7 +226,7 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
               ),
               const SizedBox(width: 14),
               FilledButton.icon(
-                onPressed: running ? null : () => widget.onRun(),
+                onPressed: (running || needsProvider) ? null : () => widget.onRun(),
                 style: FilledButton.styleFrom(
                     backgroundColor: QC.accent, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
                 icon: const Icon(Icons.play_arrow, size: 18),
@@ -294,7 +321,7 @@ class _WatchlistSectionState extends ConsumerState<_WatchlistSection> {
   void _addTicker(SettingsController ctrl) {
     final t = _add.text.trim();
     if (t.isEmpty) return;
-    ctrl.toggleWatch(t);
+    ctrl.addWatch(t); // add-only: re-adding a tracked ticker is a no-op, never a silent removal
     _add.clear();
   }
 }
@@ -436,7 +463,8 @@ class _RunRow extends ConsumerWidget {
     final cost = run.cost?.estUsd;
     return Semantics(
       button: true,
-      label: '${run.ticker} ${ratingFamily(run.rating)} ${run.mode}',
+      container: true,
+      label: '${run.ticker} ${ratingFamily(run.rating)} $date ${run.mode}',
       child: InkWell(
         onTap: onOpen,
         borderRadius: BorderRadius.circular(10),
@@ -537,6 +565,7 @@ class _CachedReview extends ConsumerWidget {
               data: (sections) => TerminalBody(
                 state: cachedRunState(summary, sections),
                 onRun: () => _launchTicker(ref, summary.ticker),
+                runLabel: 'Re-run ${summary.ticker}', // a read-only review re-runs, not a fresh launch
               ),
               loading: () => const _Notice(spinner: true, title: 'Loading reports…'),
               error: (e, _) => _Notice(

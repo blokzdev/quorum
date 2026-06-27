@@ -313,6 +313,13 @@ class SettingsController extends Notifier<SettingsState> {
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
 
   // --- Watchlist (tracked tickers on the Hub) ------------------------------------------------------
+  /// Add-only: a no-op if already tracked. (The star/row affordance uses [toggleWatch] to flip.)
+  void addWatch(String ticker) {
+    final t = ticker.trim().toUpperCase();
+    if (t.isEmpty || state.watchlist.contains(t)) return;
+    _set(state.copyWith(watchlist: [...state.watchlist, t]));
+  }
+
   void toggleWatch(String ticker) {
     final t = ticker.trim().toUpperCase();
     if (t.isEmpty) return;
