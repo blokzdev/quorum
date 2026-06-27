@@ -5,10 +5,13 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 1 complete** (de-forked 2026-06-26). The Python engine is mature; the Flutter
-> desktop app + FastAPI sidecar are a proven vertical slice. Next is Phase 2 (Hub, Settings/Model
-> Studio, applied brand, signed installer). The engine package stays named `tradingagents` to
-> preserve merge-ability with upstream `TauricResearch/TradingAgents`.
+> Status: **Phase 2 in progress** (Phase 1 vertical slice complete, de-forked 2026-06-26). The Python
+> engine is mature; the Flutter desktop app + FastAPI sidecar are a proven vertical slice. Phase 2
+> (Hub, Settings/Model Studio, applied brand, signed installer) is planned and locked in
+> **[docs/phase-2-plan.md](docs/phase-2-plan.md)** — subphases P2.0–P2.5, exit criteria, and
+> decisions (e.g. BYO key storage, [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md)).
+> The engine package stays named `tradingagents` to preserve merge-ability with upstream
+> `TauricResearch/TradingAgents`.
 
 ## What this project is
 
