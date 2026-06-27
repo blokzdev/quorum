@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-06-27 (P2.5b)
+**Last AI update:** 2026-06-27 (doctrine: upside-harvesting)
 **Spend this phase:** ~a few cents paid · boundary = **Ollama + demo + the shared Gemini test key only**
 (one minimal Gemini cloud validation run, within boundary; no other paid spend without asking).
 
@@ -29,6 +29,10 @@
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-06-27 — Added **upside-harvesting** to the doctrine (your prompt): the design/validation fan-out
+  must *capture* vision-aligned over-scope ideas, not discard them — routed by home (future-phase feature
+  → `roadmap.md` band; homeless enhancement → `backlog.md`), gated by capture≠commit + a vision-aligned
+  bar so it strengthens the scope wall rather than dissolving it. CLAUDE.md rule 10 + backlog header.
 - 2026-06-27 — Locked the **Ultracode operating doctrine** into CLAUDE.md + this file (after an
   adversarial self-pressure-test): fresh-context pre-merge review, artifacts-over-assertions triage,
   the four-check scope wall, the spend/HITL queue. Trimmed the panel's optional CI staleness check

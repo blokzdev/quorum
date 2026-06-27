@@ -57,20 +57,30 @@ judgment.** When a guardrail feels like ceremony, that feeling is the drift, not
 9. **Done is falsifiable.** The adversarial pass runs once; it fixes real defects but does NOT reopen
    scope or re-plan unless a criterion is *actually failing*. "Could be stronger" is a backlog line, not
    a reopen. A subphase is done when every listed criterion verifiably passes.
-10. **Backlog** ([`docs/backlog.md`](docs/backlog.md), append-only, one line): the instant work fails the
+10. **Harvest the upside the deep work surfaces** (the constructive flip side of the wall). A thorough
+    fan-out generates vision-aligned adjacencies beyond the current scope; the maximize-within-scope rule
+    discards them *to a tracked destination, never to /dev/null*. Discipline so this strengthens the wall
+    instead of dissolving it: **capture ≠ commit** (logging an idea schedules nothing — acting on it still
+    pays the full four checks, drained at phase-end); **vision-aligned bar** (it must advance a stated bet
+    — Track Record / Dream Team / debate-terminal + FRED·Polymarket signals — or a named future phase,
+    else drop it for real; this is what stops backlog-rot); **route by home** — a coherent future-phase
+    *feature/capability* → [`docs/roadmap.md`](docs/roadmap.md) or the phase plan, tagged to its phase; a
+    smaller homeless *enhancement* → `docs/backlog.md`; both carry a provenance tag (which subphase's
+    fan-out surfaced it). Capture is an explicit output of the adversarial-validation step, not a reflex.
+11. **Backlog** ([`docs/backlog.md`](docs/backlog.md), append-only, one line): the instant work fails the
     four checks, append a line and move on (capture must be cheaper than doing the work). Drain at
     phase-end, never mid-phase. **Exception:** a `security` / `correctness` / `data-loss` item is
     surfaced to `HUMAN.md` the same session — it does not wait in the backlog.
 
 **Keep the human in the loop (decision surfacing, not approval gating).**
-11. Maintain **[`HUMAN.md`](HUMAN.md)** — the co-founder log (Blocked-on-you / Want-your-input /
+12. Maintain **[`HUMAN.md`](HUMAN.md)** — the co-founder log (Blocked-on-you / Want-your-input /
     Decided-FYI / What-shipped / Archive + a header tracking spend vs the agreed cost boundary). It's a
     **router + queue, never canonical**: a pointer + the human-action delta; ADR-worthy → write the ADR
     and link it. Blockers (§1) and forks (§2) are **pushed in the chat turn** the moment they arise,
     never buried; FYI/shipped are pull-only. Don't start work that depends on an open blocker. When
     unsure FYI-vs-fork, it's a fork. "Reversible" is judged at *phase-end* cost (rip out one commit, or
     ten?) — a contract/schema/token-name decision is a fork even if cheap to change now.
-12. **Still surface (never self-approve through):** merges to `main`, key rotation, cert/signing, paid
+13. **Still surface (never self-approve through):** merges to `main`, key rotation, cert/signing, paid
     spend beyond the agreed boundary, publishing, genuine product forks, contract/security/scope changes.
 
 **Persistence.** This doctrine is the contract; **memory is a backstop — on any conflict, CLAUDE.md

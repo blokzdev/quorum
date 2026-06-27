@@ -1,10 +1,16 @@
 # Backlog — out-of-scope work, captured then deferred
 
-> Append-only, one line per item. The instant work fails the scope-wall four-checks (CLAUDE.md →
-> Operating doctrine), append a line here and keep moving — capture must be cheaper than doing it. Do
-> NOT design, prioritize, or groom mid-phase; **drain at phase close-out** (triage into the next phase
-> plan or close as won't-do). A `security` / `correctness` / `data-loss` item does NOT belong here — it
-> goes straight to `HUMAN.md` the same session.
+> Append-only, one line per item. **Two capture sources** (CLAUDE.md → Operating doctrine): *reactive* —
+> work fails the scope-wall four-checks mid-implementation; and *generative* — the adversarial-validation
+> / design fan-out surfaces a vision-aligned adjacency beyond scope (harvest it, don't discard it). Either
+> way: append a line and keep moving — capture must be cheaper than doing it; **capture ≠ commit** (acting
+> still pays the full four-check wall). Do NOT design, prioritize, or groom mid-phase; **drain at phase
+> close-out** (triage into the next phase plan or close as won't-do).
+>
+> **Routing** — this file is for *homeless enhancements* only. A coherent future-phase **feature/capability**
+> goes to [`roadmap.md`](roadmap.md)'s phase band, NOT here. The vision-aligned bar gates entry (advances a
+> stated bet or named phase, else drop it for real). A `security` / `correctness` / `data-loss` item does
+> NOT belong here — it goes straight to `HUMAN.md` the same session.
 >
 > Format: `- [YYYY-MM-DD] (subphase) <what> — <enhancement | future-subphase | net-new-scope> — <S/M/L>`
 
