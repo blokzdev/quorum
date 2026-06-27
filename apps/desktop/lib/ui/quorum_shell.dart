@@ -7,7 +7,9 @@ import 'package:quorum_core/quorum_core.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../state/run_controller.dart';
+import '../state/settings_controller.dart';
 import 'quorum_colors.dart';
+import 'settings_surface.dart' show SettingsSurface;
 import 'terminal_screen.dart' show TerminalBody;
 
 /// The app's top-level surfaces.
@@ -111,8 +113,7 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
               children: const [
                 TerminalSurface(),
                 _Placeholder(title: 'Hub', subtitle: 'Multi-run history & launch — arriving in P2.4'),
-                _Placeholder(
-                    title: 'Settings', subtitle: 'Model Studio & API keys — arriving in P2.3'),
+                SettingsSurface(),
               ],
             ),
           ),
@@ -158,7 +159,16 @@ class _TerminalSurfaceState extends ConsumerState<TerminalSurface> {
     final state = ref.watch(runControllerProvider);
     final ctrl = ref.read(runControllerProvider.notifier);
     _syncTick(state.phase); // start/stop the 1s ticker (no synchronous setState here)
-    return TerminalBody(state: state, onRun: () => ctrl.start(), onCancel: ctrl.cancel);
+    return TerminalBody(
+      state: state,
+      // Launch with the config assembled from Settings/Model Studio (demo vs pro, provider, models,
+      // per-provider effort, endpoint, and the chosen provider's vault key for a real run).
+      onRun: () async {
+        final config = await ref.read(settingsControllerProvider.notifier).buildLaunchConfig();
+        await ctrl.start(config: config);
+      },
+      onCancel: ctrl.cancel,
+    );
   }
 }
 

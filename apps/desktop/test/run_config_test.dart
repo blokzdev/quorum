@@ -55,5 +55,48 @@ void main() {
       expect(next.ticker, 'NVDA');
       expect(next.provider, 'google');
     });
+
+    test('per-provider effort knobs round-trip under exact snake_case keys; omitted when null', () {
+      const cfg = RunConfig(
+        mode: 'pro',
+        provider: 'google',
+        googleThinkingLevel: 'high',
+        openaiReasoningEffort: 'medium',
+        anthropicEffort: 'low',
+      );
+      final j = cfg.toJson();
+      expect(j['google_thinking_level'], 'high');
+      expect(j['openai_reasoning_effort'], 'medium');
+      expect(j['anthropic_effort'], 'low');
+
+      final bare = const RunConfig(mode: 'demo').toJson();
+      expect(bare.containsKey('google_thinking_level'), isFalse);
+      expect(bare.containsKey('openai_reasoning_effort'), isFalse);
+      expect(bare.containsKey('anthropic_effort'), isFalse);
+    });
+
+    test('fromJson(toJson(cfg)) round-trips the fields', () {
+      const cfg = RunConfig(
+        mode: 'pro',
+        ticker: 'TSLA',
+        provider: 'google',
+        deepModel: 'gemini-3.1-pro-preview',
+        quickModel: 'gemini-3.5-flash',
+        googleThinkingLevel: 'high',
+        researchDepth: 2,
+        backendUrl: 'https://x',
+        apiKeys: {'google': 'k'},
+      );
+      final back = RunConfig.fromJson(cfg.toJson());
+      expect(back.mode, 'pro');
+      expect(back.ticker, 'TSLA');
+      expect(back.provider, 'google');
+      expect(back.deepModel, 'gemini-3.1-pro-preview');
+      expect(back.quickModel, 'gemini-3.5-flash');
+      expect(back.googleThinkingLevel, 'high');
+      expect(back.researchDepth, 2);
+      expect(back.backendUrl, 'https://x');
+      expect(back.apiKeys, {'google': 'k'});
+    });
   });
 }

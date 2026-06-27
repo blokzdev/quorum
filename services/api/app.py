@@ -42,6 +42,11 @@ class RunRequest(BaseModel):
     deep_model: str | None = None
     quick_model: str | None = None
     backend_url: str | None = None
+    # Per-provider effort/thinking knob — the UI sends only the one for the chosen provider; the
+    # engine reads these from config (_get_provider_kwargs) and clients ignore unsupported efforts.
+    google_thinking_level: str | None = None
+    openai_reasoning_effort: str | None = None
+    anthropic_effort: str | None = None
     output_language: str = "English"
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
@@ -82,9 +87,32 @@ async def catalog():
     }
 
 
+@app.get("/env-keys")
+async def env_keys():
+    """Host-only: surface provider keys from the local gitignored ``.env`` so the desktop can offer a
+    one-time import into its OS keystore. Loopback + bearer only (NOT in ``_PUBLIC_PATHS``); values
+    are NEVER logged and must never be exposed on a future remote-mobile surface (ADR 0001 — keys
+    stay on the sidecar host). Missing ``.env`` returns ``{}`` (never 500)."""
+    from dotenv import dotenv_values, find_dotenv
+
+    from tradingagents.llm_clients.api_key_env import PROVIDER_API_KEY_ENV
+
+    vals = dotenv_values(find_dotenv(usecwd=True))
+    out: dict[str, str] = {}
+    for provider, env_var in PROVIDER_API_KEY_ENV.items():
+        if env_var and vals.get(env_var):
+            out[provider] = vals[env_var]
+    return out
+
+
 @app.post("/runs", status_code=202)
 async def create_run(req: RunRequest):
-    job = registry.create(req.model_dump())
+    body = req.model_dump()
+    # Defense-in-depth: a demo run never touches the engine or keys, so drop any api_keys before the
+    # request is stored on the job (the engine path already routes demo before plan_run).
+    if body.get("mode") == "demo":
+        body["api_keys"] = None
+    job = registry.create(body)
     return {"run_id": job.run_id, "status": job.status}
 
 

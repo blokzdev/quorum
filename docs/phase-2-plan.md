@@ -135,9 +135,9 @@ never `TerminalBody`). Motion settles to identical pixels, so only `terminal_mid
 Ships the supported shared `quick_think_llm` + `deep_think_llm` split — the foundation the Dream Team
 (P2.5) extends into per-agent assignment.
 
-- [ ] **P2.3a Settings shell + secure key vault** — `flutter_secure_storage` per-provider entries,
+- [x] **P2.3a Settings shell + secure key vault** — `flutter_secure_storage` per-provider entries,
   `.env` first-launch import, a "Forget all keys" action; keys flow into `RunConfig.api_keys`.
-- [ ] **P2.3b Model Studio** — provider selector; quick/deep model dropdowns from `catalogProvider`;
+- [x] **P2.3b Model Studio** — provider selector; quick/deep model dropdowns from `catalogProvider`;
   conditional effort knobs (`google_thinking_level` | `openai_reasoning_effort` | `anthropic_effort`,
   shown only for the matching provider); custom-model escape hatch; `backend_url` for multi-endpoint
   providers; saved presets ("Benches").
@@ -145,6 +145,20 @@ Ships the supported shared `quick_think_llm` + `deep_think_llm` split — the fo
 **Exit:** a user can enter + store keys, pick provider + quick/deep models + effort, save a preset,
 and launch a real `pro`/`vibe` run from the desktop (validated against local Ollama
 `llama3.2:latest` or the Gemini test key); keys persist across restart; Settings/Studio goldens land.
+
+✅ **Done** (commits C1–C8 on `feat/p2.3-model-studio`). Engine effort wire-path + `RunConfig`
+effort fields; `KeyVault` over the OS credential store (write-only key field; `.env`→vault seed;
+Forget-all); Model Studio surface (provider/quick/deep/custom, conditional effort + `backend_url`,
+Benches) launching via `SettingsController.buildLaunchConfig`; `catalogProvider` recovers on run
+error. **Verification:** 40 `flutter test` green incl. a no-API-key-leak widget guard + the Model
+Studio golden (read-verified: the key value is never painted); an adversarial multi-agent review
+(security dim found no leak) whose confirmed fixes landed; and **headless sidecar real runs on both
+providers** — Ollama `llama3.2:latest` completed a real market-analyst report (incl. a tool call);
+Google Gemini reached the provider with the key injected via `api_keys`, and the key value was
+confirmed **absent from the sidecar log**. (GUI launch + the native build canary remain gated on the
+local VS C++/CMake install; the headless runs exercise the same sidecar contract.) Two LOW review
+nits — keyboard-operability of custom controls and filled-button WCAG contrast — are tracked as
+follow-ups.
 
 ### P2.4 — Hub / run history *(depends on P2.1a + net-new persistence)*
 

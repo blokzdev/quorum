@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -18,7 +19,28 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
     'fonts/Inter-ExtraBold.ttf',
   ]);
   await _load('JetBrainsMono', ['fonts/JetBrainsMono-Regular.ttf', 'fonts/JetBrainsMono-Medium.ttf']);
+  // Load the icon font(s) from the test asset bundle too, so Material glyphs (dropdown chevrons,
+  // check/stop/gavel icons, …) render as real icons in goldens instead of tofu boxes.
+  await _loadBundledIconFonts();
   await testMain();
+}
+
+/// Load MaterialIcons (and Cupertino, if present) from the built asset bundle via FontManifest.json.
+/// Best-effort: if the manifest can't be read the glyphs simply fall back to boxes (non-fatal).
+Future<void> _loadBundledIconFonts() async {
+  try {
+    final manifest = json.decode(await rootBundle.loadString('FontManifest.json')) as List<dynamic>;
+    for (final entry in manifest.cast<Map<String, dynamic>>()) {
+      final family = entry['family'] as String? ?? '';
+      if (!family.contains('MaterialIcons') && !family.contains('CupertinoIcons')) continue;
+      final loader = FontLoader(family);
+      for (final font in (entry['fonts'] as List).cast<Map<String, dynamic>>()) {
+        final asset = font['asset'] as String?;
+        if (asset != null) loader.addFont(rootBundle.load(asset));
+      }
+      await loader.load();
+    }
+  } catch (_) {/* icon glyphs fall back to boxes; non-fatal */}
 }
 
 Future<void> _load(String family, List<String> paths) async {

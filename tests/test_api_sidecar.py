@@ -99,6 +99,17 @@ def test_plan_run_pro_uses_explicit_fields():
     assert plan["config"]["max_risk_discuss_rounds"] == 3
 
 
+def test_plan_run_threads_provider_effort_knobs():
+    g = plan_run({"ticker": "SPY", "provider": "google", "google_thinking_level": "high"})
+    assert g["config"]["google_thinking_level"] == "high"
+    o = plan_run({"ticker": "SPY", "provider": "openai", "openai_reasoning_effort": "medium"})
+    assert o["config"]["openai_reasoning_effort"] == "medium"
+    a = plan_run({"ticker": "SPY", "provider": "anthropic", "anthropic_effort": "low"})
+    assert a["config"]["anthropic_effort"] == "low"
+    # Unset -> stays at the engine default (None), never a spurious value.
+    assert plan_run({"ticker": "SPY", "provider": "google"})["config"].get("google_thinking_level") is None
+
+
 def test_plan_run_vibe_extracts_ticker_from_intent():
     plan = plan_run({"mode": "vibe", "intent": "what's the vibe on NVDA this week?"})
     assert plan["ticker"] == "NVDA"
@@ -312,3 +323,41 @@ def test_demo_run_over_http_without_keys(monkeypatch, tmp_path):
     assert received[-1] == "run_done"
     _poll_status(client, run_id, "done")
     assert client.get(f"/runs/{run_id}/reports").json()["sections"]["final_trade_decision"].startswith("BUY")
+
+
+def test_demo_run_strips_api_keys_from_stored_request(monkeypatch, tmp_path):
+    # Defense-in-depth: a demo request must never retain BYO keys on the stored job.
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+    created = client.post("/runs", json={
+        "mode": "demo", "ticker": "NVDA", "step_delay": 0,
+        "api_keys": {"google": "should-be-stripped"},
+    })
+    assert created.status_code == 202
+    job = app_module.registry.get(created.json()["run_id"])
+    assert job is not None
+    assert job.request.get("api_keys") is None
+
+
+def test_env_keys_requires_bearer(monkeypatch):
+    monkeypatch.setenv("QUORUM_API_TOKEN", "secret-token")
+    client = TestClient(app_module.app)
+    assert client.get("/env-keys").status_code == 401
+    assert client.get("/env-keys", headers={"Authorization": "Bearer secret-token"}).status_code == 200
+
+
+def test_env_keys_reads_known_provider_keys_from_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    envf = tmp_path / ".env"
+    envf.write_text("GOOGLE_API_KEY=g-secret\nUNRELATED=x\n")
+    monkeypatch.setattr("dotenv.find_dotenv", lambda *a, **k: str(envf))
+    body = TestClient(app_module.app).get("/env-keys").json()
+    assert body.get("google") == "g-secret"
+    assert "unrelated" not in body  # only known providers are surfaced
+
+
+def test_env_keys_missing_dotenv_returns_empty(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr("dotenv.find_dotenv", lambda *a, **k: str(tmp_path / "absent.env"))
+    assert TestClient(app_module.app).get("/env-keys").json() == {}
