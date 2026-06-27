@@ -21,6 +21,12 @@ class RunConfig {
   final String? quickModel;
   final String? backendUrl;
 
+  /// Per-provider effort/thinking knob — only the one for the chosen provider is set; the others stay
+  /// null and are omitted. The engine ignores an effort a model doesn't support.
+  final String? googleThinkingLevel;
+  final String? openaiReasoningEffort;
+  final String? anthropicEffort;
+
   /// Always serialized (server-safe default).
   final String outputLanguage;
 
@@ -45,6 +51,9 @@ class RunConfig {
     this.deepModel,
     this.quickModel,
     this.backendUrl,
+    this.googleThinkingLevel,
+    this.openaiReasoningEffort,
+    this.anthropicEffort,
     this.outputLanguage = 'English',
     this.apiKeys,
     this.stepDelay,
@@ -69,6 +78,9 @@ class RunConfig {
     if (deepModel != null) json['deep_model'] = deepModel;
     if (quickModel != null) json['quick_model'] = quickModel;
     if (backendUrl != null) json['backend_url'] = backendUrl;
+    if (googleThinkingLevel != null) json['google_thinking_level'] = googleThinkingLevel;
+    if (openaiReasoningEffort != null) json['openai_reasoning_effort'] = openaiReasoningEffort;
+    if (anthropicEffort != null) json['anthropic_effort'] = anthropicEffort;
     if (apiKeys != null) json['api_keys'] = apiKeys;
     if (stepDelay != null) json['step_delay'] = stepDelay;
     // if (agentModels != null) json['agent_models'] = agentModels;
@@ -87,6 +99,9 @@ class RunConfig {
     String? deepModel,
     String? quickModel,
     String? backendUrl,
+    String? googleThinkingLevel,
+    String? openaiReasoningEffort,
+    String? anthropicEffort,
     String? outputLanguage,
     Map<String, String>? apiKeys,
     double? stepDelay,
@@ -103,6 +118,9 @@ class RunConfig {
       deepModel: deepModel ?? this.deepModel,
       quickModel: quickModel ?? this.quickModel,
       backendUrl: backendUrl ?? this.backendUrl,
+      googleThinkingLevel: googleThinkingLevel ?? this.googleThinkingLevel,
+      openaiReasoningEffort: openaiReasoningEffort ?? this.openaiReasoningEffort,
+      anthropicEffort: anthropicEffort ?? this.anthropicEffort,
       outputLanguage: outputLanguage ?? this.outputLanguage,
       apiKeys: apiKeys ?? this.apiKeys,
       stepDelay: stepDelay ?? this.stepDelay,

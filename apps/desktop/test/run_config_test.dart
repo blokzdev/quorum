@@ -55,5 +55,24 @@ void main() {
       expect(next.ticker, 'NVDA');
       expect(next.provider, 'google');
     });
+
+    test('per-provider effort knobs round-trip under exact snake_case keys; omitted when null', () {
+      const cfg = RunConfig(
+        mode: 'pro',
+        provider: 'google',
+        googleThinkingLevel: 'high',
+        openaiReasoningEffort: 'medium',
+        anthropicEffort: 'low',
+      );
+      final j = cfg.toJson();
+      expect(j['google_thinking_level'], 'high');
+      expect(j['openai_reasoning_effort'], 'medium');
+      expect(j['anthropic_effort'], 'low');
+
+      final bare = const RunConfig(mode: 'demo').toJson();
+      expect(bare.containsKey('google_thinking_level'), isFalse);
+      expect(bare.containsKey('openai_reasoning_effort'), isFalse);
+      expect(bare.containsKey('anthropic_effort'), isFalse);
+    });
   });
 }
