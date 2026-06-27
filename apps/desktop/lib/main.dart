@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'ui/brand.dart';
 import 'ui/quorum_colors.dart';
 import 'ui/quorum_shell.dart';
 
@@ -45,6 +46,8 @@ class QuorumApp extends StatelessWidget {
         // Inter app-wide; numeric widgets opt into JetBrains Mono via QC.fontMono.
         textTheme: base.textTheme.apply(fontFamily: QC.fontUi),
         primaryTextTheme: base.primaryTextTheme.apply(fontFamily: QC.fontUi),
+        // Brand tokens for new surfaces (Hub, Settings/Model Studio) via Theme.of(context).extension.
+        extensions: const [QuorumBrand.dark()],
       ),
       home: const QuorumShell(),
     );
