@@ -169,6 +169,65 @@ def test_reports_endpoint_data_after_run(monkeypatch, tmp_path):
     assert sections["final_trade_decision"] == "DEC"
 
 
+# --- Run manifest + history (P2.4a) ---
+
+def test_manifest_written_with_track_record_fields(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    registry = JobRegistry(results_dir=tmp_path)
+
+    job = registry.create({"mode": "pro", "ticker": "SPY",
+                           "provider": "anthropic", "deep_model": "claude-opus-4-8"})
+    _wait_done(job)
+
+    runs = registry.list_runs()
+    assert len(runs) == 1
+    m = runs[0]
+    assert m["run_id"] == job.run_id
+    assert m["ticker"] == "SPY"
+    assert m["status"] == "done"
+    assert m["mode"] == "pro"
+    assert m["provider"] == "anthropic"
+    assert m["deep_model"] == "claude-opus-4-8"
+    # Track Record seed fields: trade_date, timestamps, and the verdict (rating + entry/price context).
+    assert m["trade_date"]
+    assert m["created_at"] and m["finished_at"]
+    assert m["verdict"]["rating"] == "Buy"
+    assert m["verdict"]["structured"] == {"rating": "Buy", "investment_thesis": "solid moat"}
+    assert "cost" in m
+    assert list(tmp_path.glob("*/run.json"))  # the manifest is on disk, beside the report tree
+
+
+def test_history_survives_restart(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    reg1 = JobRegistry(results_dir=tmp_path)
+    job = reg1.create({"mode": "pro", "ticker": "SPY"})
+    _wait_done(job)
+    rid = job.run_id
+
+    # A fresh registry over the same dir = a sidecar restart.
+    reg2 = JobRegistry(results_dir=tmp_path)
+    assert any(r["run_id"] == rid for r in reg2.list_runs())
+    restored = reg2.get(rid)  # registered on startup so GET /runs/{id} still resolves post-restart
+    assert restored is not None and restored.status == "done"
+
+
+def test_list_runs_over_http(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+
+    created = client.post("/runs", json={"mode": "demo", "ticker": "NVDA", "step_delay": 0})
+    run_id = created.json()["run_id"]
+    _poll_status(client, run_id, "done")
+
+    body = client.get("/runs").json()
+    assert "runs" in body
+    match = [r for r in body["runs"] if r["run_id"] == run_id]
+    assert match and match[0]["mode"] == "demo" and match[0]["ticker"] == "NVDA"
+
+
 def test_cooperative_cancel_stops_the_run(monkeypatch, tmp_path):
     slow = [{"market_report": f"m{i}"} for i in range(60)]
     monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(slow, sleep=0.02))
