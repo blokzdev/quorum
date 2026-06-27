@@ -228,7 +228,7 @@ void main() {
   });
 
   // --- Pre-launch key gate (P2.5c2) -----------------------------------------------------------------
-  FilledButton _runButton(WidgetTester t) =>
+  FilledButton runButton(WidgetTester t) =>
       t.widget<FilledButton>(find.byWidgetPredicate((w) => w is FilledButton));
 
   testWidgets('key gate: a referenced provider with no key disables Run + shows the warning',
@@ -237,20 +237,20 @@ void main() {
     await _pump(tester,
         _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'anthropic'), const []));
     expect(find.textContaining('Needs keys for: Anthropic'), findsOneWidget);
-    expect(_runButton(tester).onPressed, isNull);
+    expect(runButton(tester).onPressed, isNull);
   });
 
   testWidgets('key gate: saving the missing key re-enables Run and clears the warning',
       (tester) async {
     await _pump(tester,
         _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'anthropic'), const []));
-    expect(_runButton(tester).onPressed, isNull);
+    expect(runButton(tester).onPressed, isNull);
 
     final container = ProviderScope.containerOf(tester.element(find.byType(HubSurface)));
     await container.read(settingsControllerProvider.notifier).saveKey('anthropic', 'a-key');
     await tester.pumpAndSettle(); // missingKeysProvider re-runs on keyVaultRevision bump
     expect(find.textContaining('Needs keys for'), findsNothing);
-    expect(_runButton(tester).onPressed, isNotNull);
+    expect(runButton(tester).onPressed, isNotNull);
   });
 
   testWidgets('key gate: a per-role (Dream Team) provider missing its key is gated too',
@@ -271,7 +271,7 @@ void main() {
     await tester.pumpAndSettle();
     // google is satisfied but the per-role anthropic is not.
     expect(find.textContaining('Needs keys for: Anthropic'), findsOneWidget);
-    expect(_runButton(tester).onPressed, isNull);
+    expect(runButton(tester).onPressed, isNull);
   });
 
   testWidgets('key gate: demo mode and keyless providers (ollama) never gate Run', (tester) async {
@@ -280,6 +280,6 @@ void main() {
       _wrap(const SettingsState(ticker: 'SPY', demoMode: false, provider: 'ollama'), const []),
     );
     expect(find.textContaining('Needs keys for'), findsNothing); // ollama needs no key
-    expect(_runButton(tester).onPressed, isNotNull);
+    expect(runButton(tester).onPressed, isNotNull);
   });
 }

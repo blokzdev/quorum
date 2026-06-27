@@ -30,6 +30,11 @@ final _catalog = Catalog(
       'quick': [ModelOption('Qwen3', 'qwen3:latest', toolCapable: true), ModelOption('Custom model ID', 'custom')],
       'deep': [ModelOption('GLM', 'glm-4.7-flash:latest', toolCapable: true), ModelOption('Custom model ID', 'custom')],
     }),
+    // An explicitly non-tool model so the capability golden can show the red/amber chip states.
+    'legacy': const ProviderCatalog('legacy', {
+      'quick': [ModelOption('NoTool', 'old-x', toolCapable: false)],
+      'deep': [ModelOption('NoTool', 'old-x', toolCapable: false)],
+    }),
   },
 );
 
@@ -99,5 +104,28 @@ void main() {
 
     await expectLater(
         find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_partial.png'));
+  });
+
+  testWidgets('dream team — capability gate chips (red block / amber degrade)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_wrap(const SettingsState(
+      demoMode: false,
+      agentModels: {
+        // A tool role holding a non-tool model -> RED error chip (the block surfaces even collapsed).
+        'fundamentals_analyst': AgentModel(provider: 'legacy', model: 'old-x'),
+        // A structured role holding a non-tool model -> AMBER degrade chip.
+        'portfolio_manager': AgentModel(provider: 'legacy', model: 'old-x'),
+        // A valid assignment -> normal accent chip (contrast).
+        'bull_researcher': AgentModel(provider: 'anthropic', model: 'claude-opus-4-8'),
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.error_outline), findsOneWidget); // fundamentals (tool, block)
+    expect(find.byIcon(Icons.warning_amber), findsOneWidget); // portfolio (structured, degrade)
+    await expectLater(
+        find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_capability.png'));
   });
 }
