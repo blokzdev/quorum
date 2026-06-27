@@ -151,8 +151,8 @@ goldens land.
 - [ ] **P2.5a** Bundle the frozen sidecar exe into the desktop package; rewrite
   `desktop_sidecar_endpoint.dart`'s spawn path to launch it (keep the `.venv` fallback for local dev).
 - [ ] **P2.5b** Installer packaging (MSIX vs Inno/WiX per P2.0); include the C++ ATL build deps
-  required by `flutter_secure_storage_windows`. Produces an installable build (unsigned / dev-signed
-  for now — production signing is P2.6).
+  required by `flutter_secure_storage_windows`. Validate the full install/launch flow with a
+  **debug / self-signed cert** — production keystore signing is deferred to P2.6c.
 - [ ] **P2.5c** CI — add a Flutter build + `flutter test` (incl. goldens) job and a packaging job to
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
@@ -167,8 +167,9 @@ goldens land.
   `/healthz` contract-version check on the client.
 - [ ] **P2.6b Technical-debt pass** — TODO / dead-code cleanup; candidate: **P0.3b** (converge
   `cli/main.py` onto `runtime.run_streaming`); contract / forward-compat audit.
-- [ ] **P2.6c Release signing** — code-signing with the keystore/cert (provisioning + timestamp +
-  signing hook) → a **signed** installer artifact; release job in CI.
+- [ ] **P2.6c Release signing** — swap the P2.5 debug/self-signed cert for the production
+  keystore/cert (provisioning + timestamp + signing hook) → a **signed** installer artifact;
+  release job in CI.
 - [ ] **P2.6d Phase close-out** — completeness-critic pass (missing / regressed / deferred), update
   `phase-2-plan.md`, then the `phase-2 → main` PR + the close-out docs PR.
 
