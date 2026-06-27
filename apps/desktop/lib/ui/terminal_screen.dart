@@ -10,6 +10,29 @@ const _motionSlow = Duration(milliseconds: 240);
 Duration _motion(BuildContext ctx, Duration d) =>
     (MediaQuery.maybeOf(ctx)?.disableAnimations ?? false) ? Duration.zero : d;
 
+/// A one-shot finite entrance — fade + a few-px rise — played once when a child first mounts. Built on
+/// TweenAnimationBuilder (no controller, no Timer), so it settles in a single pass: golden
+/// pumpAndSettle reaches the end frame, where Opacity(1)/translate(0) is pixel-identical to the bare
+/// child (goldens don't move), and reduce-motion collapses it to an instant end-frame via [_motion].
+class _Reveal extends StatelessWidget {
+  final Widget child;
+  const _Reveal({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: _motion(context, _motionNormal),
+      curve: Curves.easeOut,
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.translate(offset: Offset(0, (1 - t) * 6), child: child),
+      ),
+    );
+  }
+}
+
 /// The pure 3-pane research terminal, rendered from a [RunViewState]. No providers → golden-testable.
 class TerminalBody extends StatelessWidget {
   final RunViewState state;
@@ -287,26 +310,30 @@ class _ReasoningPane extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        if (hasLive) _LiveReasoningCard(agent: active, text: liveText),
+        if (hasLive) _Reveal(child: _LiveReasoningCard(agent: active, text: liveText)),
         for (final s in decision)
-          _SectionCard(s, emphasis: s.section == 'final_trade_decision', accent: ratingAccent),
+          _Reveal(
+            child: _SectionCard(s, emphasis: s.section == 'final_trade_decision', accent: ratingAccent),
+          ),
         if (hasDebate) ...[
-          const _GroupLabel('Research Debate'),
-          _TugOfWar(
-            bull: bull,
-            bear: bear,
-            managerPlan: rmPlan,
-            bullLive: active == AgentId.bull,
-            bearLive: active == AgentId.bear,
+          const _Reveal(child: _GroupLabel('Research Debate')),
+          _Reveal(
+            child: _TugOfWar(
+              bull: bull,
+              bear: bear,
+              managerPlan: rmPlan,
+              bullLive: active == AgentId.bull,
+              bearLive: active == AgentId.bear,
+            ),
           ),
         ],
         if (riskViews.isNotEmpty) ...[
-          const _GroupLabel('Risk Debate'),
-          for (final s in riskViews) _SectionCard(s),
+          const _Reveal(child: _GroupLabel('Risk Debate')),
+          for (final s in riskViews) _Reveal(child: _SectionCard(s)),
         ],
         if (analyst.isNotEmpty) ...[
-          const _GroupLabel('Analyst Evidence'),
-          for (final s in analyst) _SectionCard(s),
+          const _Reveal(child: _GroupLabel('Analyst Evidence')),
+          for (final s in analyst) _Reveal(child: _SectionCard(s)),
         ],
       ],
     );
@@ -665,23 +692,27 @@ class _VerdictRail extends StatelessWidget {
             _RatingPill(v.rating),
             if (v.confidence != null) ...[
               const SizedBox(height: 16),
-              _Confidence(v.confidence!),
+              _Reveal(child: _Confidence(v.confidence!)),
             ],
             if (v.thesis != null) ...[
               const SizedBox(height: 16),
-              SelectableText(v.thesis!,
-                  style: const TextStyle(
-                      color: QC.textHi, fontSize: 15, height: 1.5, fontStyle: FontStyle.italic)),
+              _Reveal(
+                child: SelectableText(v.thesis!,
+                    style: const TextStyle(
+                        color: QC.textHi, fontSize: 15, height: 1.5, fontStyle: FontStyle.italic)),
+              ),
             ],
             const SizedBox(height: 20),
-            _KvCard('Key Levels', [
-              if (v.entryPrice != null) ('Entry', v.entryPrice!.toStringAsFixed(0)),
-              if (v.priceTarget != null) ('Target', v.priceTarget!.toStringAsFixed(0)),
-              if (v.stopLoss != null) ('Stop', v.stopLoss!.toStringAsFixed(0)),
-              if (v.timeHorizon != null) ('Horizon', v.timeHorizon!),
-            ]),
+            _Reveal(
+              child: _KvCard('Key Levels', [
+                if (v.entryPrice != null) ('Entry', v.entryPrice!.toStringAsFixed(0)),
+                if (v.priceTarget != null) ('Target', v.priceTarget!.toStringAsFixed(0)),
+                if (v.stopLoss != null) ('Stop', v.stopLoss!.toStringAsFixed(0)),
+                if (v.timeHorizon != null) ('Horizon', v.timeHorizon!),
+              ]),
+            ),
           ],
-          if (state.cost != null) _KvCard('Run Cost', _costRows(state.cost!)),
+          if (state.cost != null) _Reveal(child: _KvCard('Run Cost', _costRows(state.cost!))),
         ],
       ),
     );
