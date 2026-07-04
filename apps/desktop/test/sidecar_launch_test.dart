@@ -115,4 +115,43 @@ void main() {
     );
     expect(spec, isNull);
   });
+
+  // --- bundled cwd fallback (review MEDIUM: the real env-derived path was untested) ---
+
+  test('bundled cwd uses LOCALAPPDATA/Quorum when set (no workdir override)', () async {
+    final appExe = await touch(['install', 'quorum.exe']);
+    await touch(['install', 'sidecar', 'quorum_sidecar.exe']);
+    final localApp = join([tmp.path, 'localappdata']);
+    final spec = await SidecarLauncher.resolve(
+      environment: {'LOCALAPPDATA': localApp},
+      appExecutable: appExe.path,
+      searchStart: tmp, // exercises the REAL env-derived workdir (no bundledWorkDir injected)
+    );
+    expect(spec!.workingDirectory, join([localApp, 'Quorum']));
+    expect(await Directory(spec.workingDirectory).exists(), isTrue);
+  });
+
+  test('bundled cwd falls back to USERPROFILE/AppData/Local when LOCALAPPDATA is unset', () async {
+    final appExe = await touch(['install', 'quorum.exe']);
+    await touch(['install', 'sidecar', 'quorum_sidecar.exe']);
+    final home = join([tmp.path, 'userhome']);
+    final spec = await SidecarLauncher.resolve(
+      environment: {'USERPROFILE': home}, // no LOCALAPPDATA -> the hardened second choice
+      appExecutable: appExe.path,
+      searchStart: tmp,
+    );
+    expect(spec!.workingDirectory, join([home, 'AppData', 'Local', 'Quorum']));
+    expect(await Directory(spec.workingDirectory).exists(), isTrue);
+  });
+
+  test('image name is the clean filename (reap filter), not a URI-encoded segment', () async {
+    final exe = await touch(['weird dir', 'quorum_sidecar.exe']); // space in a parent segment
+    final spec = await SidecarLauncher.resolve(
+      environment: {'QUORUM_SIDECAR_EXE': exe.path},
+      appExecutable: join([tmp.path, 'app.exe']),
+      searchStart: tmp,
+      bundledWorkDir: Directory(join([tmp.path, 'w'])),
+    );
+    expect(spec!.imageName, 'quorum_sidecar.exe'); // never 'weird%20dir'-style encoding
+  });
 }

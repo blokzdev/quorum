@@ -55,14 +55,14 @@ class SidecarLauncher {
     // 1. Explicit override (dev/test escape hatch).
     final override = env['QUORUM_SIDECAR_EXE'];
     if (override != null && override.trim().isNotEmpty && await File(override).exists()) {
-      return _bundledSpec(File(override), bundledWorkDir);
+      return _bundledSpec(File(override), bundledWorkDir, env);
     }
 
     // 2. Bundled exe shipped next to the app binary.
     final appDir = File(appExe).parent.path;
     final bundledExe = File(_join([appDir, 'sidecar', 'quorum_sidecar.exe']));
     if (await bundledExe.exists()) {
-      return _bundledSpec(bundledExe, bundledWorkDir);
+      return _bundledSpec(bundledExe, bundledWorkDir, env);
     }
 
     // 3. Dev fallback: the repo .venv, walking upward like Phase 1 always has.
@@ -80,14 +80,11 @@ class SidecarLauncher {
     return null;
   }
 
-  static Future<SidecarLaunchSpec> _bundledSpec(File exe, Directory? workDirOverride) async {
+  static Future<SidecarLaunchSpec> _bundledSpec(
+      File exe, Directory? workDirOverride, Map<String, String> env) async {
     // The engine writes report trees relative to cwd, and the install dir may be read-only — use a
     // per-user app-data dir (creating it) rather than the exe's own directory.
-    final workDir = workDirOverride ??
-        Directory(_join([
-          Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path,
-          'Quorum',
-        ]));
+    final workDir = workDirOverride ?? Directory(_join([_workDirBase(env), 'Quorum']));
     if (!await workDir.exists()) {
       await workDir.create(recursive: true);
     }
@@ -95,10 +92,28 @@ class SidecarLauncher {
       executable: exe.path,
       args: const [],
       workingDirectory: workDir.path,
-      imageName: exe.uri.pathSegments.last,
+      imageName: _basename(exe.path),
       lockKey: exe.path,
-      bundled: true,
+      bundled: true, // an env-override reuses bundled semantics (it stands in for the frozen exe)
     );
+  }
+
+  /// The per-user writable root for the sidecar's cwd: `%LOCALAPPDATA%`, else
+  /// `%USERPROFILE%\AppData\Local`, else the system temp dir as a last resort (a run in temp still
+  /// beats no run — but the two real per-user roots are tried first so reports land durably).
+  static String _workDirBase(Map<String, String> env) {
+    final local = env['LOCALAPPDATA'];
+    if (local != null && local.trim().isNotEmpty) return local;
+    final home = env['USERPROFILE'];
+    if (home != null && home.trim().isNotEmpty) return _join([home, 'AppData', 'Local']);
+    return Directory.systemTemp.path;
+  }
+
+  /// Encoding-safe filename (the `tasklist` reap filters on this image name). Splits on either
+  /// separator — [File.uri]'s `pathSegments` would percent-encode spaces/unicode and never match.
+  static String _basename(String path) {
+    final segs = path.split(RegExp(r'[/\\]'));
+    return segs.isEmpty ? path : segs.last;
   }
 
   static String _join(List<String> parts) => parts.join(Platform.pathSeparator);
