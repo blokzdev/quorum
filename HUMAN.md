@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-06-27 (P2.5 Dream Team phase COMPLETE — c2 capability+key gate shipped)
+**Last AI update:** 2026-07-04 (toolchain in ✓ — P2.6a build/spawn/watchdog spine proven on the real app)
 **Spend this phase:** ~a few cents paid · boundary = **Ollama + demo + the shared Gemini test key only**
 (one minimal Gemini cloud validation run, within boundary; no other paid spend without asking).
 
@@ -15,13 +15,7 @@
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- **2026-06-27 — Install the VS C++ / CMake desktop toolchain** (admin PowerShell; one-shot, silent):
-  ```powershell
-  & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "C:\Program Files\Microsoft Visual Studio\2022\Community" --add Microsoft.VisualStudio.Workload.NativeDesktop --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621 --includeRecommended --quiet --norestart
-  ```
-  Then `flutter doctor -v` should go green. **BLOCKS:** the C3 `flutter build windows --debug` canary,
-  live desktop GUI runs, and the P2.6 installer build. Everything to date is verified headlessly +
-  by tests/goldens; this only unblocks the *desktop binary* path.
+- _(none open — the VS C++/CMake toolchain is installed; see Archive)_
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -29,7 +23,14 @@
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
-- 2026-06-27 — **P2.5c2 capability + key gate** shipped (PR #15 → `phase-2`); **P2.5 Dream Team phase
+- 2026-07-04 — **P2.6a spine de-risked on the REAL app** (you installed the toolchain). Proven end-to-end,
+  not headless: (1) `flutter build windows --debug` → `quorum.exe`, exit 0; (2) the full-engine
+  **PyInstaller freeze** builds (125 MB) and a **real pro run** ran through the *frozen* sidecar against
+  Ollama — langgraph + the pandas/numpy/yfinance dataflows imported and produced a verdict (demo never
+  touches those, so this is the true transitive-deps proof); (3) rewrote the spawn path to launch the
+  bundled exe (`.venv` dev fallback) + **re-verified the `QUORUM_PARENT_PID` watchdog against the real
+  Flutter parent** — killed the app without `/T`, the orphaned sidecar self-exited in 3s. The plan's #1
+  freeze risk is cleared. Spawn-path change on branch `feat/p2.6a-sidecar-spawn-path` (PR pending review).
   complete**. The design fan-out wanted to exclude *both* openai_compatible and ollama from per-role
   pickers AND its synthesis agent crashed on schema validation — I recovered the 3 analyst outputs from
   the transcripts and synthesized the plan myself (the loop's "I own the synthesis" in action). Key
@@ -70,3 +71,5 @@
 ## 5 · 🗄️ Archive — *resolved blocks + decided forks, for traceability*
 
 - ✅ 2026-06-27 — GitHub Actions billing block → resolved by going public (free CI on public repos).
+- ✅ 2026-07-04 — VS C++/CMake desktop toolchain → **installed** by you; `flutter doctor` green (VS 2022
+  17.14, Win10 SDK 10.0.26100). Unblocked the Windows build, live GUI runs, and the P2.6 installer path.

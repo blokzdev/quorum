@@ -4,13 +4,16 @@ import 'dart:io';
 
 import 'package:quorum_core/quorum_core.dart';
 
-/// Desktop [EngineEndpoint]: spawns the bundled Python sidecar (in dev, the repo's `.venv`) and
-/// yields a connection once it has handshaked and passed `/healthz`. Promotes the proven
-/// `tool/spine_spike.dart` into a reusable service.
+import 'sidecar_launch.dart';
+
+/// Desktop [EngineEndpoint]: spawns the engine sidecar — the **bundled frozen exe** when packaged,
+/// else the repo `.venv` in dev (resolution order in [SidecarLauncher.resolve]) — and yields a
+/// connection once it has handshaked and passed `/healthz`.
 ///
 /// Lifecycle hardening (from the S2 adversarial pre-mortem):
-/// - **Single-instance:** [connect] reaps any stale sidecar recorded in a per-repo lockfile (verified
-///   to still be a live `python.exe` by PID) — this kills hot-restart zombie accumulation during dev.
+/// - **Single-instance:** [connect] reaps any stale sidecar recorded in a per-launch-target lockfile
+///   (verified by PID *and image name* — `python.exe` in dev, `quorum_sidecar.exe` bundled) — this
+///   kills hot-restart zombie accumulation during dev.
 /// - **Teardown:** [dispose] POSTs `/shutdown` then `taskkill /T /F`s the tree (`Process.kill` does
 ///   NOT reap children on Windows). The sidecar's `QUORUM_PARENT_PID` watchdog is the final backstop.
 ///
@@ -21,7 +24,7 @@ class DesktopSidecarEndpoint implements EngineEndpoint {
 
   Process? _proc;
   EngineConnection? _conn;
-  String? _repoRoot;
+  SidecarLaunchSpec? _spec;
 
   DesktopSidecarEndpoint({this.onLog});
 
@@ -31,21 +34,22 @@ class DesktopSidecarEndpoint implements EngineEndpoint {
   Future<EngineConnection> connect() async {
     if (_conn != null) return _conn!;
 
-    final repoRoot = await _findRepoRoot();
-    if (repoRoot == null) {
+    final spec = await SidecarLauncher.resolve();
+    if (spec == null) {
       throw EngineException(
-          'could not locate the repo .venv (dev mode) upward from ${Directory.current.path}');
+          'no engine sidecar found: neither a bundled sidecar/quorum_sidecar.exe next to the app '
+          'nor a repo .venv upward from ${Directory.current.path}');
     }
-    _repoRoot = repoRoot;
-    _reapStale(repoRoot); // kill a sidecar leaked by a prior hot-restart, if any
+    _spec = spec;
+    _reapStale(spec); // kill a sidecar leaked by a prior hot-restart, if any
 
-    final python = _join([repoRoot, '.venv', 'Scripts', 'python.exe']);
-    _log('spawning sidecar: $python -m services.api (cwd=$repoRoot)');
+    _log('spawning sidecar: ${spec.executable} ${spec.args.join(' ')} '
+        '(cwd=${spec.workingDirectory}, bundled=${spec.bundled})');
 
     final proc = await Process.start(
-      python,
-      ['-m', 'services.api'],
-      workingDirectory: repoRoot,
+      spec.executable,
+      spec.args,
+      workingDirectory: spec.workingDirectory,
       environment: {'QUORUM_PARENT_PID': '$pid'},
     );
     _proc = proc; // stored synchronously so a stop() during connect() can still kill it
@@ -79,7 +83,7 @@ class DesktopSidecarEndpoint implements EngineEndpoint {
     _log('handshake ok: $base (contract ${hs['contract_version']})');
 
     await _healthGate(base);
-    _writeLock(repoRoot, proc.pid, base.port);
+    _writeLock(spec, proc.pid, base.port);
     _conn = EngineConnection(base, token);
     return _conn!;
   }
@@ -110,7 +114,7 @@ class DesktopSidecarEndpoint implements EngineEndpoint {
   Future<void> dispose() async {
     final conn = _conn;
     final proc = _proc;
-    final repoRoot = _repoRoot;
+    final spec = _spec;
     _conn = null;
     _proc = null;
     if (conn != null) {
@@ -129,32 +133,32 @@ class DesktopSidecarEndpoint implements EngineEndpoint {
         proc.kill(ProcessSignal.sigterm);
       }
     }
-    if (repoRoot != null) {
+    if (spec != null) {
       try {
-        final lock = _lockFile(repoRoot);
+        final lock = _lockFile(spec);
         if (lock.existsSync()) lock.deleteSync();
       } catch (_) {}
     }
   }
 
-  // --- single-instance lockfile (per repo) to reap hot-restart zombies ---
+  // --- single-instance lockfile (per launch target) to reap hot-restart zombies ---
 
-  File _lockFile(String repoRoot) =>
-      File('${Directory.systemTemp.path}${Platform.pathSeparator}quorum_sidecar_${repoRoot.hashCode}.lock');
+  File _lockFile(SidecarLaunchSpec spec) =>
+      File('${Directory.systemTemp.path}${Platform.pathSeparator}quorum_sidecar_${spec.lockKey.hashCode}.lock');
 
-  void _writeLock(String repoRoot, int pid, int port) {
+  void _writeLock(SidecarLaunchSpec spec, int pid, int port) {
     try {
-      _lockFile(repoRoot).writeAsStringSync(jsonEncode({'pid': pid, 'port': port}));
+      _lockFile(spec).writeAsStringSync(jsonEncode({'pid': pid, 'port': port}));
     } catch (_) {}
   }
 
-  void _reapStale(String repoRoot) {
+  void _reapStale(SidecarLaunchSpec spec) {
     try {
-      final lock = _lockFile(repoRoot);
+      final lock = _lockFile(spec);
       if (!lock.existsSync()) return;
       final data = jsonDecode(lock.readAsStringSync()) as Map<String, dynamic>;
       final stalePid = data['pid'] as int?;
-      if (stalePid != null && _isLivePython(stalePid)) {
+      if (stalePid != null && _isLiveSidecar(stalePid, spec.imageName)) {
         _log('reaping stale sidecar pid=$stalePid');
         Process.runSync('taskkill', ['/T', '/F', '/PID', '$stalePid']);
       }
@@ -162,27 +166,14 @@ class DesktopSidecarEndpoint implements EngineEndpoint {
     } catch (_) {/* lock unreadable / already gone */}
   }
 
-  bool _isLivePython(int pid) {
+  bool _isLiveSidecar(int pid, String imageName) {
     if (!Platform.isWindows) return false;
-    // Verify it's actually a python.exe with this PID (guards against PID reuse killing a stranger).
+    // Verify the PID still belongs to OUR image (python.exe dev / quorum_sidecar.exe bundled) —
+    // guards against PID reuse killing a stranger.
     final r = Process.runSync(
-        'tasklist', ['/FI', 'PID eq $pid', '/FI', 'IMAGENAME eq python.exe', '/NH']);
+        'tasklist', ['/FI', 'PID eq $pid', '/FI', 'IMAGENAME eq $imageName', '/NH']);
     return (r.stdout as String).contains('$pid');
   }
 
   void _log(String line) => onLog?.call(line);
-
-  static String _join(List<String> parts) => parts.join(Platform.pathSeparator);
-
-  static Future<String?> _findRepoRoot() async {
-    var dir = Directory.current;
-    for (var i = 0; i < 12; i++) {
-      final py = File(_join([dir.path, '.venv', 'Scripts', 'python.exe']));
-      if (await py.exists()) return dir.path;
-      final parent = dir.parent;
-      if (parent.path == dir.path) break;
-      dir = parent;
-    }
-    return null;
-  }
 }
