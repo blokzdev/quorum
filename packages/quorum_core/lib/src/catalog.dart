@@ -124,3 +124,55 @@ class VendorCatalog {
     return null;
   }
 }
+
+// --- Local-model discovery (P3.2) ------------------------------------------------------------------
+
+/// One installed local (Ollama) model from `GET /catalog/local-models`. [toolCapable] mirrors the
+/// engine's per-model capability probe: `true`/`false` when Ollama reports it, `null` when unknown (an
+/// older Ollama that omits `capabilities`) — the picker's gate WARNS on `null`, never blocks.
+class LocalModel {
+  final String name;
+  final bool? toolCapable;
+  final int? size;
+  final String? family;
+  const LocalModel(this.name, {this.toolCapable, this.size, this.family});
+
+  factory LocalModel.fromJson(Map<String, dynamic> j) => LocalModel(
+        j['name'] as String? ?? '',
+        toolCapable: j['tool_capable'] as bool?,
+        size: (j['size'] as num?)?.toInt(),
+        family: j['family'] as String?,
+      );
+
+  /// As a picker option: the raw model id is both label and value, carrying [toolCapable] so the
+  /// capability gate treats a discovered non-tool model exactly like a catalog one.
+  ModelOption toOption() => ModelOption(name, name, toolCapable: toolCapable);
+
+  static List<LocalModel> listFromJson(Map<String, dynamic> j) =>
+      ((j['local_models'] as List?) ?? const [])
+          .map((m) => LocalModel.fromJson((m as Map).cast<String, dynamic>()))
+          .toList(growable: false);
+}
+
+/// The tool-capability of a (provider, model): from the catalog's options, or — for `ollama` — the
+/// DISCOVERED local model (P3.2). Returns `null` when the model is a custom/undiscovered id we can't
+/// classify — callers WARN on `null`, never block. The **single source** shared by the picker gate and
+/// the launch-time backstop, so the two can never disagree about what a run actually uses.
+bool? toolCapabilityOf(
+    Catalog catalog, String? provider, String? model, List<LocalModel> localModels) {
+  if (provider == null || model == null || model.trim().isEmpty) return null;
+  if (provider == 'ollama') {
+    for (final m in localModels) {
+      // Discovery is ground truth: a matched local model's flag wins outright, even when it's null (an
+      // older Ollama that omits `capabilities`) — null then flows through as UNKNOWN → warn, never block.
+      // (Ollama's static catalog options carry no tool_capable today, so there's nothing to fall back to.)
+      if (m.name == model) return m.toolCapable;
+    }
+  }
+  for (final mode in const ['quick', 'deep']) {
+    for (final o in catalog.optionsFor(provider, mode)) {
+      if (o.value == model) return o.toolCapable;
+    }
+  }
+  return null;
+}

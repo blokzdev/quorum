@@ -132,6 +132,66 @@ async def catalog_vendors():
     return {"contract_version": CONTRACT_VERSION, "categories": categories}
 
 
+def _resolve_ollama_native_base() -> str:
+    """The Ollama HOST root for the native REST API (/api/tags). The engine's Ollama base is the
+    OpenAI-compat endpoint (``…/v1``, overridable via ``OLLAMA_BASE_URL``); the native API lives at the
+    host root, so strip a trailing ``/v1``."""
+    base = (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1").rstrip("/")
+    if base.endswith("/v1"):
+        base = base[: -len("/v1")]
+    return base
+
+
+def _parse_ollama_models(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Map Ollama ``/api/tags`` JSON → the picker's ``{name, tool_capable, size, family}`` rows.
+
+    ``tool_capable`` is ``"tools" in capabilities`` — but a MISSING ``capabilities`` field (older Ollama)
+    yields ``None`` (UNKNOWN), which the desktop gate WARNS on and never blocks, so a stale-Ollama user is
+    never falsely locked out. Sorted (tool-capable first, then name) so the useful models surface on top.
+    """
+    out: list[dict[str, Any]] = []
+    for m in data.get("models", []) or []:
+        name = m.get("name") or m.get("model")
+        if not name:
+            continue
+        caps = m.get("capabilities")
+        tool_capable = ("tools" in caps) if isinstance(caps, list) else None
+        details = m.get("details") or {}
+        out.append({
+            "name": name,
+            "tool_capable": tool_capable,
+            "size": m.get("size"),
+            "family": details.get("family"),
+        })
+    # tool-capable (True) first, unknown (None) last, then alphabetical — a stable, useful ordering.
+    out.sort(key=lambda r: (r["tool_capable"] is not True, r["tool_capable"] is None, r["name"]))
+    return out
+
+
+async def _fetch_ollama_tags(base_url: str) -> dict[str, Any]:
+    # httpx is already an [api] dep + bundled (PyInstaller hiddenimports); import lazily to keep it off
+    # the demo path (ADR 0002). Short timeout so a slow/absent Ollama never hangs the picker.
+    import httpx
+
+    async with httpx.AsyncClient(timeout=2.5) as client:
+        resp = await client.get(f"{base_url}/api/tags")
+        resp.raise_for_status()
+        return resp.json()
+
+
+@app.get("/catalog/local-models")
+async def catalog_local_models():
+    """P3.2a: the DEVICE's installed Ollama models + per-model tool-capability, so the picker surfaces
+    real local models (Gemma/Qwen/GLM/…) instead of a hand-typed id. Bearer-gated. Degrades to an empty
+    list when Ollama is unreachable/slow — the desktop then keeps its static Ollama option."""
+    try:
+        data = await _fetch_ollama_tags(_resolve_ollama_native_base())
+        models = _parse_ollama_models(data)
+    except Exception:
+        models = []  # Ollama down / slow / malformed → empty; the desktop falls back cleanly.
+    return {"contract_version": CONTRACT_VERSION, "local_models": models}
+
+
 @app.get("/env-keys")
 async def env_keys():
     """Host-only: surface provider keys from the local gitignored ``.env`` so the desktop can offer a

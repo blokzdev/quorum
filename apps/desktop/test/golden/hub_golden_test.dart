@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quorum/state/catalog_provider.dart';
 import 'package:quorum/state/hub_provider.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/hub_surface.dart';
@@ -18,10 +19,19 @@ RunSummary _run(String id, String ticker, String rating, {String mode = 'pro', d
       cost: CostSnapshot(llmCalls: 14, toolCalls: 8, tokensIn: 24800, tokensOut: 13200, estUsd: cost),
     );
 
-Widget _hub({required SettingsState initial, List<RunSummary> history = const []}) => ProviderScope(
+Widget _hub({
+  required SettingsState initial,
+  List<RunSummary> history = const [],
+  Catalog? catalog,
+  List<LocalModel>? localModels,
+}) =>
+    ProviderScope(
       overrides: [
         initialSettingsProvider.overrideWithValue(initial),
         runHistoryProvider.overrideWith((ref) => Future.value(history)),
+        if (catalog != null) catalogProvider.overrideWith((ref) => Future.value(catalog)),
+        if (localModels != null)
+          localModelsProvider.overrideWith((ref) => Future.value(localModels)),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -103,5 +113,26 @@ void main() {
 
     expect(find.text('As-of 2024-05-10'), findsOneWidget);
     await expectLater(find.byType(HubSurface), matchesGoldenFile('goldens/hub_as_of.png'));
+  });
+
+  testWidgets('hub — capability backstop: non-tool local model refuses launch', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(960, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // The global quick model is a discovered non-tool Ollama model → every tool-analyst role would run
+    // it and produce empty reports, so the launch backstop refuses the run before POST /runs.
+    await tester.pumpWidget(_hub(
+      initial: const SettingsState(
+        demoMode: false, ticker: 'NVDA', provider: 'ollama', quickModel: 'dolphin-llama3:latest',
+        backendUrl: 'http://localhost:11434/v1',
+      ),
+      catalog: Catalog(contractVersion: 1, providers: {
+        'ollama': const ProviderCatalog('ollama', {'quick': [], 'deep': []}),
+      }),
+      localModels: const [LocalModel('dolphin-llama3:latest', toolCapable: false)],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('No tool support'), findsOneWidget);
+    await expectLater(find.byType(HubSurface), matchesGoldenFile('goldens/hub_capability_gate.png'));
   });
 }

@@ -74,11 +74,11 @@ Make the Ollama picker list the **device's real installed models** with per-mode
 **wake the dormant capability gate** — the direct answer to "does the app support recent local/edge models"
 (Gemma / Qwen / GLM / …): yes, any Ollama-served model, now surfaced rather than hand-typed.
 
-- [ ] **P3.2a Discovery endpoint** — a sidecar **`GET /catalog/local-models`** proxying the resolved
+- [x] **P3.2a Discovery endpoint** — a sidecar **`GET /catalog/local-models`** proxying the resolved
   `OLLAMA_BASE_URL`'s `/api/tags`, returning `[{name, tool_capable: 'tools' in capabilities, size, family}]`
   (keeps discovery server-side behind the bearer boundary; adds `httpx` to the sidecar). Degrades cleanly
   when Ollama is unreachable.
-- [ ] **P3.2b Discovered-model picker + live gate** — fold discovered models (with real `toolCapable`) into
+- [x] **P3.2b Discovered-model picker + live gate** — fold discovered models (with real `toolCapable`) into
   the Ollama option list so a discovered **non-tool** model renders as a **disabled "no tools"** item on the
   market/news/fundamentals roles and a tool-capable one is directly pickable; add the **launch-time backstop**
   (the run-create path gates the *effective* tool-role model — incl. the global quick model on unassigned
@@ -90,6 +90,17 @@ Make the Ollama picker list the **device's real installed models** with per-mode
   actually fired — real-path, per doctrine tripwire 7); Ollama-down falls back to the static list without
   hanging. *De-risk first:* confirm a `tools`-capable Ollama model (`llama3.2:latest`) actually fires
   `tool_calls` end-to-end before committing block-vs-warn (largely proven this session).
+
+  > ✅ **P3.2 complete** (2026-07-05, self-merged to `phase-3`). Fresh-context review: **mergeable**, all
+  > 5 exit criteria MET. A recon win: Ollama `/api/tags` carries `capabilities` inline (verified on the
+  > real device, 0.30.11) → single round-trip, and `httpx` was already a dep → zero bundle cost. Discovery
+  > + gate + backstop verified on the **real device**: the spawned sidecar discovered all 3 installed
+  > models with correct tool-capability, and a **live `llama3.2:latest` market-analyst run fired
+  > `tool_calls`** (a 2460-char report with real snapshot OHLCV) — de-risking block-vs-warn. The picker
+  > gate + launch backstop share one `toolCapabilityOf` (quorum_core) so they can't drift; a missing
+  > `capabilities` field (older Ollama) → null → WARN, never false-block. Golden `hub_capability_gate`
+  > (Run disabled + roles named) Read + verified. 3 LOW findings triaged (1 already fixed, 1 documented,
+  > 1 → backlog).
 
 ### P3.3 — Debate-terminal depth *(signature bet #2)*
 

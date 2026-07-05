@@ -24,6 +24,9 @@ class ApiClient {
   /// GET /catalog/vendors -> the per-category data-vendor catalog (P3.1).
   Future<Map<String, dynamic>> vendors() => _getJson('/catalog/vendors');
 
+  /// GET /catalog/local-models -> the device's installed Ollama models + tool-capability (P3.2).
+  Future<Map<String, dynamic>> localModels() => _getJson('/catalog/local-models');
+
   /// Host-only: provider keys read from the sidecar host's `.env`, for a one-time import into the
   /// desktop's OS keystore. Returns `{provider: key}`; values are never logged.
   Future<Map<String, dynamic>> envKeys() => _getJson('/env-keys');
