@@ -1136,7 +1136,8 @@ class _DataSourcesSection extends ConsumerWidget {
           _ApiKeyField(provider: macroVendor, label: _vendorLabel(macroVendor)),
           const SizedBox(height: 16),
         ],
-        // Prediction markets (Polymarket) — keyless and on by default.
+        // Prediction markets (Polymarket) — keyless and on by default. Lead with the honest keyless
+        // statement; the engine's (verbose) category description trails as parenthetical context.
         if (predictionMarkets != null)
           Row(
             children: [
@@ -1144,7 +1145,8 @@ class _DataSourcesSection extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${predictionMarkets.label}: Polymarket signals are on by default — no key needed.',
+                  'Polymarket signals are on by default — no key needed. '
+                  '(${predictionMarkets.label})',
                   style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.4),
                 ),
               ),

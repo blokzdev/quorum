@@ -380,6 +380,12 @@ Set<String> referencedVendorKeys(Map<String, String>? dataVendors) => <String>{
 /// selections. The optional macro vendor is never required (macro degrades without a key), so it is
 /// explicitly excluded even if it somehow appears in [dataVendors] (a stale bench / hand-edited
 /// settings.json) — gating it would false-block a run that just didn't opt into macro signals.
+///
+/// INVARIANT (why reading only explicit overrides is sound): every CORE category's engine DEFAULT is
+/// keyless (`yfinance`), so a keyed core vendor can only reach a run as an explicit override that lands
+/// in [dataVendors]. If a future engine bump makes a core category default to a KEYED vendor, this gate
+/// must instead consult the EFFECTIVE vendor (selected ?? default, via the VendorCatalog) or it would
+/// let an unkeyed run through that then crashes mid-flight (see docs/backlog.md — catalog-driven gate).
 Set<String> requiredVendorKeys(Map<String, String>? dataVendors) => <String>{
       ...?dataVendors?.values.where((v) => vendorNeedsKey(v) && v != macroVendor),
     };
