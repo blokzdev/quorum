@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**P3.1 Data sources shipped** to `phase-3` — BYO-key vendors + asset toggle; §4)
+**Last AI update:** 2026-07-05 (**P3.1 + P3.5 shipped** to `phase-3` — vendors/asset toggle + as-of date & look-ahead fix; §4)
 **Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
 data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
 Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
@@ -85,6 +85,20 @@ test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-05 — **P3.5 Historical as-of analysis** (merged to `phase-3`)
+- **As-of date picker** on the Hub launch card ("Today" ↔ a warning "As-of DATE" for a historical run;
+  future dates unpickable), a deterministic "as-of DATE" terminal indicator, and a **Polymarket
+  live-source caveat** (it always reflects *now*; FRED honours the date). `tradeDate` binds the existing
+  `RunConfig.tradeDate` — no wire change — and is a per-run input, deliberately **not persisted**.
+- **Look-ahead correctness fix (P3.5b):** the raw OHLCV tool trusted the LLM's chosen `end_date`, so a
+  past-date run could pull **future** rows into the model. Now clamped engine-side to the run's as-of
+  date (LLM-independent), verified through the real `plan_run → isolation → tool` path (zero future rows).
+- **Correctness item found + fixed in-session** (doctrine surface): the fresh-context review caught a
+  **sibling look-ahead leak in `get_news`** (future *articles* on a historical run) — closed by the same
+  shared guard. It was the only sibling; every other date-bounded tool is already as-of-aware.
+- Verified: fresh-context review = **ship** (all 5 criteria MET, clamp test falsified-red when neutered).
+  119 flutter + 376 pytest + ruff green. New `hub_as_of` golden + 4 re-baselined (Read + justified).
 
 ### 2026-07-05 — **P3.1 Data sources** (merged to `phase-3`)
 - **BYO-key data vendors + asset-type**, the first Phase-3 subphase: a per-category **Data sources**
