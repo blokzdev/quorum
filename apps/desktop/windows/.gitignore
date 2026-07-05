@@ -1,5 +1,10 @@
 flutter/ephemeral/
 
+# The Flutter runner manifest is a real BUILD SOURCE (referenced by runner/CMakeLists.txt), but the
+# root .gitignore's generic `*.manifest` (a Python-artifact pattern) swallows it — un-ignore it, or a
+# clean checkout / CI can't `flutter build windows` ("Cannot find source file: runner.exe.manifest").
+!runner/runner.exe.manifest
+
 # Visual Studio user-specific files.
 *.suo
 *.user
