@@ -5,7 +5,7 @@
   compile a per-user Inno Setup installer.
 
 .NOTES
-  Run from anywhere; paths resolve relative to the repo. Production keystore signing is Phase 3 — the
+  Run from anywhere; paths resolve relative to the repo. Production keystore signing is Phase 3 -- the
   -Sign switch here uses a debug self-signed cert to validate the pipeline only.
 
 .EXAMPLE
@@ -15,7 +15,7 @@
   powershell -File packaging\build_installer.ps1 -SkipFreeze -SkipFlutter
 #>
 param(
-  [string]$Version = "0.2.0",
+  [string]$Version = "",   # default: derived from apps/desktop/pubspec.yaml (single source of truth)
   [switch]$SkipFreeze,
   [switch]$SkipFlutter,
   [switch]$Sign
@@ -23,6 +23,12 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $pkg = $PSScriptRoot
+
+if (-not $Version) {
+  $pubspec = Get-Content (Join-Path $repo "apps\desktop\pubspec.yaml")
+  foreach ($l in $pubspec) { if ($l -match '^version:\s*([0-9]+(\.[0-9]+)*)') { $Version = $Matches[1]; break } }
+  if (-not $Version) { throw "could not derive version from pubspec.yaml (pass -Version)" }
+}
 Write-Host "== Quorum installer build (v$Version) ==" -ForegroundColor Cyan
 Write-Host "repo: $repo"
 
@@ -37,7 +43,11 @@ if (-not $SkipFreeze) {
   & $venvPy -m PyInstaller (Join-Path $pkg "quorum_sidecar.spec") `
     --distpath (Join-Path $pkg "dist") --workpath (Join-Path $pkg "build") --noconfirm
   if ($LASTEXITCODE -ne 0) { throw "PyInstaller freeze failed ($LASTEXITCODE)" }
-} else { Write-Host "`n[1/5] Skipping freeze (reusing $distSidecar)" }
+} else {
+  Write-Host "`n[1/5] Skipping freeze (reusing $distSidecar)" -ForegroundColor DarkYellow
+  $ex = Join-Path $distSidecar "quorum_sidecar.exe"
+  if (Test-Path $ex) { Write-Warning "reusing sidecar frozen $((Get-Item $ex).LastWriteTime) -- do NOT -SkipFreeze for a release build" }
+}
 if (-not (Test-Path (Join-Path $distSidecar "quorum_sidecar.exe"))) {
   throw "frozen sidecar missing: $distSidecar\quorum_sidecar.exe"
 }
@@ -46,9 +56,12 @@ if (-not (Test-Path (Join-Path $distSidecar "quorum_sidecar.exe"))) {
 if (-not $SkipFlutter) {
   Write-Host "`n[2/5] Building Flutter release..." -ForegroundColor Yellow
   Push-Location (Join-Path $repo "apps\desktop")
-  try { & flutter build windows --release; if ($LASTEXITCODE -ne 0) { throw "flutter build failed ($LASTEXITCODE)" } }
+  try { & flutter build windows --release --build-name=$Version; if ($LASTEXITCODE -ne 0) { throw "flutter build failed ($LASTEXITCODE)" } }
   finally { Pop-Location }
-} else { Write-Host "`n[2/5] Skipping Flutter build (reusing $release)" }
+} else {
+  Write-Host "`n[2/5] Skipping Flutter build (reusing $release)" -ForegroundColor DarkYellow
+  if (Test-Path (Join-Path $release "quorum.exe")) { Write-Warning "reusing app built $((Get-Item (Join-Path $release 'quorum.exe')).LastWriteTime) -- do NOT -SkipFlutter for a release build" }
+}
 if (-not (Test-Path (Join-Path $release "quorum.exe"))) { throw "release runner missing: $release\quorum.exe" }
 
 # --- 3. Assemble the staging tree -------------------------------------------------------------------
@@ -61,13 +74,23 @@ New-Item -ItemType Directory -Force -Path (Join-Path $staging "sidecar") | Out-N
 Copy-Item -Recurse -Force (Join-Path $distSidecar "*") (Join-Path $staging "sidecar")
 
 # App-local VC++ CRT so the app runs on a clean machine (empirically the only non-UCRT runtime dep;
-# ATL is statically linked into the secure-storage plugin). Pick the newest installed VC143.CRT\x64.
-$crtRoot = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Redist\MSVC"
-$crtDir = Get-ChildItem -Path $crtRoot -Directory -ErrorAction SilentlyContinue |
-  Sort-Object Name -Descending |
-  ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" } |
-  Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $crtDir) { throw "VC143.CRT redist not found under $crtRoot" }
+# ATL is statically linked into the secure-storage plugin). Discover across ANY VS 2022 edition
+# (Community/Professional/Enterprise/BuildTools), newest by [version] order (NOT lexical: 14.44 > 14.9).
+$vsRoot = "C:\Program Files\Microsoft Visual Studio\2022"
+$crtDir = $null
+if (Test-Path $vsRoot) {
+  $candidates = foreach ($ed in (Get-ChildItem $vsRoot -Directory)) {
+    $redist = Join-Path $ed.FullName "VC\Redist\MSVC"
+    if (Test-Path $redist) {
+      foreach ($ver in (Get-ChildItem $redist -Directory)) {
+        $crt = Join-Path $ver.FullName "x64\Microsoft.VC143.CRT"
+        if (Test-Path $crt) { [pscustomobject]@{ Ver = [version]$ver.Name; Path = $crt } }
+      }
+    }
+  }
+  $crtDir = ($candidates | Sort-Object Ver -Descending | Select-Object -First 1).Path
+}
+if (-not $crtDir) { throw "VC143.CRT redist not found under any VS 2022 edition ($vsRoot)" }
 foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
   Copy-Item -Force (Join-Path $crtDir $dll) $staging
 }

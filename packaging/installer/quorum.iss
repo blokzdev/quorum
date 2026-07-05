@@ -12,7 +12,8 @@
   #define StagingDir "..\staging"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  ; Fallback for a standalone ISCC compile; build_installer.ps1 always passes /DAppVersion from pubspec.
+  #define AppVersion "1.0.0"
 #endif
 #define AppName "Quorum"
 #define AppPublisher "Quorum"
