@@ -231,8 +231,10 @@ class StreamMapper:
             self._agent(AgentId.TRADER, "in_progress", out)
 
     #: The per-turn prefix each researcher node prepends to its argument (bull_researcher/bear_researcher),
-    #: so the interleaved ``history`` is cleanly splittable into ordered turns without snapshot-diffing.
-    _DEBATE_TURN_RE = re.compile(r"(Bull Analyst:|Bear Analyst:)\s*")
+    #: appended as ``history + "\n" + argument`` — so the prefix is ALWAYS at a line start. Anchoring the
+    #: split to ``^`` (MULTILINE) means a body that merely mentions "…the Bear Analyst: said…" mid-line
+    #: can't inject a false turn boundary.
+    _DEBATE_TURN_RE = re.compile(r"^(Bull Analyst:|Bear Analyst:)\s*", re.MULTILINE)
 
     @classmethod
     def _split_debate_turns(cls, history: str) -> list[tuple[str, str]]:

@@ -102,6 +102,17 @@ def test_debate_history_decomposed_into_ordered_turns():
     assert turns[-1].data["markdown"] == "bear round two"  # multi-line-safe body extraction
 
 
+def test_debate_turn_split_is_line_anchored_no_false_boundary():
+    # A turn BODY that mentions the other side's prefix mid-line must NOT inject a spurious turn — the
+    # split anchors on line-starts (the prefix is only ever appended after a newline).
+    history = "\nBull Analyst: Strong case; even the Bear Analyst: worry about supply is overblown."
+    turns = _debate_turns(_run_mapper(
+        [{"investment_debate_state": {"bull_history": "x", "history": history}}], selected=("market",)))
+    assert len(turns) == 1
+    assert turns[0].data["side"] == "bull"
+    assert 'Bear Analyst:' in turns[0].data["markdown"]  # the mention stays inside the bull turn
+
+
 def test_debate_turns_emitted_incrementally_across_chunks():
     # Each streamed chunk carries the FULL accumulated history; only the NEW turns are emitted.
     mapper = StreamMapper(["market"])
