@@ -124,3 +124,32 @@ class VendorCatalog {
     return null;
   }
 }
+
+// --- Local-model discovery (P3.2) ------------------------------------------------------------------
+
+/// One installed local (Ollama) model from `GET /catalog/local-models`. [toolCapable] mirrors the
+/// engine's per-model capability probe: `true`/`false` when Ollama reports it, `null` when unknown (an
+/// older Ollama that omits `capabilities`) — the picker's gate WARNS on `null`, never blocks.
+class LocalModel {
+  final String name;
+  final bool? toolCapable;
+  final int? size;
+  final String? family;
+  const LocalModel(this.name, {this.toolCapable, this.size, this.family});
+
+  factory LocalModel.fromJson(Map<String, dynamic> j) => LocalModel(
+        j['name'] as String? ?? '',
+        toolCapable: j['tool_capable'] as bool?,
+        size: (j['size'] as num?)?.toInt(),
+        family: j['family'] as String?,
+      );
+
+  /// As a picker option: the raw model id is both label and value, carrying [toolCapable] so the
+  /// capability gate treats a discovered non-tool model exactly like a catalog one.
+  ModelOption toOption() => ModelOption(name, name, toolCapable: toolCapable);
+
+  static List<LocalModel> listFromJson(Map<String, dynamic> j) =>
+      ((j['local_models'] as List?) ?? const [])
+          .map((m) => LocalModel.fromJson((m as Map).cast<String, dynamic>()))
+          .toList(growable: false);
+}

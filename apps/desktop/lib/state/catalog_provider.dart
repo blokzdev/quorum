@@ -37,3 +37,18 @@ final vendorCatalogProvider = FutureProvider<VendorCatalog>((ref) async {
   final api = ApiClient(conn, client: ref.read(httpClientProvider));
   return VendorCatalog.fromJson(await api.vendors());
 });
+
+/// The device's installed Ollama models (`GET /catalog/local-models`, P3.2) — folded into the Ollama
+/// model picker so real local models (Gemma/Qwen/GLM/…) are discovered rather than hand-typed, each with
+/// its real tool-capability for the gate. Degrades to an EMPTY list on any error (Ollama down, or no
+/// sidecar yet) so the picker cleanly falls back to its static option + custom-id path — a local-model
+/// discovery failure must never break Model Studio.
+final localModelsProvider = FutureProvider<List<LocalModel>>((ref) async {
+  try {
+    final conn = await ref.watch(engineConnectionProvider.future);
+    final api = ApiClient(conn, client: ref.read(httpClientProvider));
+    return LocalModel.listFromJson(await api.localModels());
+  } catch (_) {
+    return const <LocalModel>[];
+  }
+});

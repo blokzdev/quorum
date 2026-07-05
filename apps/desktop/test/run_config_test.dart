@@ -161,4 +161,37 @@ void main() {
       expect(vc.categoryFor('nope'), isNull);
     });
   });
+
+  group('LocalModel.fromJson (P3.2 /catalog/local-models)', () {
+    test('parses name/tool_capable/size/family; missing tool_capable → null (unknown)', () {
+      final models = LocalModel.listFromJson({
+        'contract_version': 1,
+        'local_models': [
+          {'name': 'llama3.2:latest', 'tool_capable': true, 'size': 2019393189, 'family': 'llama'},
+          {'name': 'dolphin-llama3:latest', 'tool_capable': false, 'size': 4, 'family': 'llama'},
+          {'name': 'mystery:latest', 'size': 1}, // no tool_capable → null (unknown), NOT false
+        ],
+      });
+      expect(models.map((m) => m.name),
+          ['llama3.2:latest', 'dolphin-llama3:latest', 'mystery:latest']);
+      expect(models[0].toolCapable, isTrue);
+      expect(models[1].toolCapable, isFalse);
+      expect(models[2].toolCapable, isNull); // absent field = unknown → the gate WARNS, never blocks
+      expect(models[0].size, 2019393189);
+      expect(models[0].family, 'llama');
+    });
+
+    test('toOption() carries name + toolCapable so the gate treats it like a catalog option', () {
+      const lm = LocalModel('llama3.2:latest', toolCapable: true, family: 'llama');
+      final opt = lm.toOption();
+      expect(opt.value, 'llama3.2:latest');
+      expect(opt.label, 'llama3.2:latest');
+      expect(opt.toolCapable, isTrue);
+    });
+
+    test('empty / absent local_models → empty list (clean fallback)', () {
+      expect(LocalModel.listFromJson({'local_models': []}), isEmpty);
+      expect(LocalModel.listFromJson({}), isEmpty);
+    });
+  });
 }
