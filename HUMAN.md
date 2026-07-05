@@ -24,7 +24,10 @@ test key only.)
   returned mergeable) → self-merged to `phase-3`. Cost stayed within boundary (Ollama + the shared Gemini
   test key only — a couple of depth-2/real-path runs). **Merges to `main` are founder-gated** (doctrine):
   the `phase-3 → main` PR is yours to review (recommend in slices, not one mega-diff) + approve. Backlog is
-  ready to drain at phase-end. Say the word and I'll open the `phase-3 → main` PR for your review.
+  drained (vendor-provenance → roadmap P7). End-of-phase audit passed (completeness verified, zero scope
+  creep, CI green: 385 pytest + 146 flutter + ruff). **The `phase-3 → main` PR is open for you:
+  [#29](https://github.com/blokzdev/quorum/pull/29)** — review it in slices (the 6 sub-PRs #22–#28,
+  linked in the PR body), then approve + merge. I have NOT merged it (founder-gated).
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
