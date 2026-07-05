@@ -106,12 +106,12 @@ Make the Ollama picker list the **device's real installed models** with per-mode
 
 Make the debate **read as a debate**. No new vendor/endpoint/hosted signal — pure runtime-event + UI depth.
 
-- [ ] **P3.3a Turn-structured debate events** — decompose `investment_debate_state` (`history`/`count`) into
+- [x] **P3.3a Turn-structured debate events** — decompose `investment_debate_state` (`history`/`count`) into
   **per-turn** bull/bear events so the tug-of-war renders an alternating turn thread that grows with
   `research_depth`, and drive the balance **lean from the structured `ResearchPlan.recommendation`** (a real
   5-tier rating) instead of prose keyword-matching. Resolve the dead `agent_done.confidence` seam (emit a
   real value **or** remove the field — no dead seam ships).
-- [ ] **P3.3b Risk-debate parity + structured chips** — surface the 3-way aggressive/conservative/neutral
+- [x] **P3.3b Risk-debate parity + structured chips** — surface the 3-way aggressive/conservative/neutral
   **risk debate** with its own synthesis visual + a **risk-judge ribbon** (its own section, not silently
   folded into `final_trade_decision`); show already-on-the-wire structured signals (sentiment band/score/
   confidence chip, trader action/entry/stop chips) on their section cards.
@@ -123,6 +123,17 @@ Make the debate **read as a debate**. No new vendor/endpoint/hosted signal — p
   terminal goldens carry a written visual-diff justification. *De-risk first:* verify per-turn boundaries are
   cleanly recoverable from `history` on a real depth-2 run (else snapshot-diff `bull_history`/`bear_history`
   per chunk) — the one thing that could make P3.3a a rabbit hole.
+
+  > ✅ **P3.3 complete** (2026-07-05, self-merged to `phase-3`). Fresh-context review: all 5 exit criteria
+  > MET, no HIGH/MED-blocking. The rabbit-hole de-risk resolved cleanly — turns recover from `history` via
+  > the `"Bull/Bear Analyst:"` line-anchored delimiter, confirmed on a **real Gemini depth-2 debate** (exactly
+  > 4 ordered turns, no stray delimiter in any body). The balance bar is driven by the structured 5-tier
+  > `recommendation` (already on the wire in the `investment_plan` section) — no runtime change; ditto the
+  > P3.3b chips (sentiment/trader structured, already on the wire). Golden pair (depth-1 vs depth-2) proves
+  > the decomposition is real; the dead `agent_done.confidence` seam is gone. Honest scope: the risk judge IS
+  > the PM decision in this engine, so the RISK VERDICT ribbon presents that as the risk-debate conclusion
+  > (no separate risk-manager node — a future engine change). 2 review findings → backlog (demo showcase,
+  > cached-review structured fidelity).
 
 ### P3.4 — UI/UX + a11y *(tight, client-only)*
 

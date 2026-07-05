@@ -44,6 +44,31 @@ void main() {
       expect(s.reasoningByAgent['market'], 'Hello world');
     });
 
+    test('debate_turn events fold into an ordered turn thread (P3.3a)', () {
+      var s = RunViewState.initial();
+      final turns = [
+        {'round': 1, 'side': 'bull', 'markdown': 'bull r1'},
+        {'round': 1, 'side': 'bear', 'markdown': 'bear r1'},
+        {'round': 2, 'side': 'bull', 'markdown': 'bull r2'},
+        {'round': 2, 'side': 'bear', 'markdown': 'bear r2'},
+      ];
+      for (var i = 0; i < turns.length; i++) {
+        s = reduce(s, _ev({'seq': i, 'run_id': 'r', 'ts': 0, 'type': 'debate_turn', 'data': turns[i]}));
+      }
+      expect(s.debateTurns.length, 4);
+      expect(s.debateTurns.map((t) => t.side).toList(), ['bull', 'bear', 'bull', 'bear']);
+      expect(s.debateTurns.map((t) => t.round).toList(), [1, 1, 2, 2]);
+      expect(s.debateTurns.first.markdown, 'bull r1');
+      expect(s.debateTurns.last.markdown, 'bear r2'); // arrival order preserved
+    });
+
+    test('agent_done no longer carries a (dead) confidence field — parses cleanly without it', () {
+      final e = _ev({'seq': 0, 'run_id': 'r', 'ts': 0, 'type': 'agent_done', 'data': {'agent': 'bull'}});
+      expect(e, isA<AgentDone>());
+      final s = reduce(RunViewState.initial(), e);
+      expect(s.agents[AgentId.bull], NodeStatus.done);
+    });
+
     test('is idempotent by seq (a re-delivered event is a no-op)', () {
       final e = _ev({'seq': 0, 'run_id': 'r', 'ts': 0, 'type': 'token', 'data': {'agent': 'bull', 'delta': 'x'}});
       var s = reduce(RunViewState.initial(), e);

@@ -359,7 +359,8 @@ class _ReasoningPane extends StatelessWidget {
     final bull = rep('bull');
     final bear = rep('bear');
     final rmPlan = rep('investment_plan');
-    final hasDebate = bull != null || bear != null || rmPlan != null;
+    final turns = state.debateTurns;
+    final hasDebate = bull != null || bear != null || rmPlan != null || turns.isNotEmpty;
     final riskViews = [for (final k in _riskKeys) if (rep(k) != null) rep(k)!];
     final analyst = [for (final k in _analystKeys) if (rep(k) != null) rep(k)!];
     final ratingAccent = ratingColor(state.verdict?.rating);
@@ -389,6 +390,7 @@ class _ReasoningPane extends StatelessWidget {
               bull: bull,
               bear: bear,
               managerPlan: rmPlan,
+              turns: turns,
               bullLive: active == AgentId.bull,
               bearLive: active == AgentId.bear,
             ),
@@ -397,6 +399,11 @@ class _ReasoningPane extends StatelessWidget {
         if (riskViews.isNotEmpty) ...[
           const _Reveal(child: _GroupLabel('Risk Debate')),
           for (final s in riskViews) _Reveal(child: _SectionCard(s)),
+          // P3.3b: the risk debate concludes with its own verdict ribbon (the Portfolio Manager's call
+          // on the 3-way aggressive/conservative/neutral synthesis), rather than being silently folded
+          // into the final-decision card at the top.
+          if (state.verdict != null || rep('final_trade_decision') != null)
+            _Reveal(child: _RiskVerdictRibbon(verdict: state.verdict, decision: rep('final_trade_decision'))),
         ],
         if (analyst.isNotEmpty) ...[
           const _Reveal(child: _GroupLabel('Analyst Evidence')),
@@ -414,28 +421,37 @@ class _TugOfWar extends StatelessWidget {
   final ReportSection? bull;
   final ReportSection? bear;
   final ReportSection? managerPlan;
+
+  /// P3.3a: the debate decomposed into ordered turns. When present, the debate renders as an
+  /// alternating turn thread (growing with research_depth); when empty (a cached review reconstructed
+  /// from persisted blobs), it falls back to the two-column bull/bear view.
+  final List<DebateTurnView> turns;
   final bool bullLive;
   final bool bearLive;
-  const _TugOfWar({this.bull, this.bear, this.managerPlan, this.bullLive = false, this.bearLive = false});
+  const _TugOfWar(
+      {this.bull, this.bear, this.managerPlan, this.turns = const [], this.bullLive = false, this.bearLive = false});
 
   @override
   Widget build(BuildContext context) {
-    final lean = _lean(managerPlan?.markdown);
+    final lean = debateLean(managerPlan);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _DebateColumn(agent: AgentId.bull, section: bull, live: bullLive)),
-                const SizedBox(width: 12),
-                Expanded(child: _DebateColumn(agent: AgentId.bear, section: bear, live: bearLive)),
-              ],
+          if (turns.isNotEmpty)
+            _DebateThread(turns: turns, bullLive: bullLive, bearLive: bearLive)
+          else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _DebateColumn(agent: AgentId.bull, section: bull, live: bullLive)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _DebateColumn(agent: AgentId.bear, section: bear, live: bearLive)),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 16),
           _TugBar(lean: lean),
           if (managerPlan != null) ...[
@@ -447,20 +463,116 @@ class _TugOfWar extends StatelessWidget {
     );
   }
 
-  /// Lean in [0,1] (0 = fully bear, 1 = fully bull), inferred from the manager's decision text.
-  static double _lean(String? text) {
-    if (text == null) return 0.5;
-    final t = text.toLowerCase();
-    const bullWords = ['bull', 'buy', 'long', 'constructive', 'upside', 'accumulate', 'outperform', 'overweight'];
-    const bearWords = ['bear', 'sell', 'short', 'caution', 'downside', 'overvalued', 'underperform', 'underweight'];
-    var score = 0;
-    for (final w in bullWords) {
-      if (t.contains(w)) score++;
-    }
-    for (final w in bearWords) {
-      if (t.contains(w)) score--;
-    }
-    return (0.5 + 0.11 * score).clamp(0.22, 0.78);
+}
+
+/// The debate balance lean in [0,1] (0 = fully bear, 1 = fully bull). Driven FIRST by the Research
+/// Manager's structured 5-tier `recommendation` (a real rating), falling back to prose keyword-scoring
+/// only when it's absent (an older run / a model that skipped structured output). Top-level + public so
+/// the structured-vs-keyword behaviour is unit-testable without poking the semantics tree.
+double debateLean(ReportSection? plan) {
+  final fromRating = _leanFromRating(plan?.structured?['recommendation'] as String?);
+  if (fromRating != null) return fromRating;
+  return _leanFromText(plan?.markdown);
+}
+
+/// The 5-tier PortfolioRating → a balance position. Buy leans hard bull, Sell hard bear.
+double? _leanFromRating(String? rating) => switch (rating) {
+      'Buy' => 0.86,
+      'Overweight' => 0.68,
+      'Hold' => 0.5,
+      'Underweight' => 0.32,
+      'Sell' => 0.14,
+      _ => null,
+    };
+
+double _leanFromText(String? text) {
+  if (text == null) return 0.5;
+  final t = text.toLowerCase();
+  const bullWords = ['bull', 'buy', 'long', 'constructive', 'upside', 'accumulate', 'outperform', 'overweight'];
+  const bearWords = ['bear', 'sell', 'short', 'caution', 'downside', 'overvalued', 'underperform', 'underweight'];
+  var score = 0;
+  for (final w in bullWords) {
+    if (t.contains(w)) score++;
+  }
+  for (final w in bearWords) {
+    if (t.contains(w)) score--;
+  }
+  return (0.5 + 0.11 * score).clamp(0.22, 0.78);
+}
+
+/// An alternating bull/bear turn thread (P3.3a): each turn is a tinted block offset toward its side
+/// (bull left, bear right) with a "BULL · ROUND N" header — so the debate reads as a back-and-forth
+/// that grows with research_depth. A trailing "building its case…" block shows the live speaker.
+class _DebateThread extends StatelessWidget {
+  final List<DebateTurnView> turns;
+  final bool bullLive;
+  final bool bearLive;
+  const _DebateThread({required this.turns, this.bullLive = false, this.bearLive = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < turns.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _DebateTurnBlock(turn: turns[i]),
+        ],
+        if (bullLive || bearLive) ...[
+          const SizedBox(height: 10),
+          _DebateTurnBlock.pending(bullLive ? AgentId.bull : AgentId.bear),
+        ],
+      ],
+    );
+  }
+}
+
+class _DebateTurnBlock extends StatelessWidget {
+  final DebateTurnView? turn;
+  final AgentId pendingAgent;
+  const _DebateTurnBlock({required this.turn}) : pendingAgent = AgentId.bull;
+  const _DebateTurnBlock.pending(this.pendingAgent) : turn = null;
+
+  @override
+  Widget build(BuildContext context) {
+    final isBull = turn != null ? turn!.side == 'bull' : pendingAgent == AgentId.bull;
+    final agent = isBull ? AgentId.bull : AgentId.bear;
+    final c = agentColor(agent);
+    final header = turn != null
+        ? '${agentName(agent).toUpperCase()} · ROUND ${turn!.round}'
+        : agentName(agent).toUpperCase();
+    final block = Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withValues(alpha: 0.32)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Text(header,
+                style: TextStyle(color: c, fontSize: 10.5, letterSpacing: 1.1, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 8),
+          if (turn != null)
+            SelectableText(turn!.markdown,
+                style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 13))
+          else
+            Text('Building its case…',
+                style: TextStyle(color: c.withValues(alpha: 0.85), fontSize: 12.5, fontStyle: FontStyle.italic)),
+        ],
+      ),
+    );
+    // Offset toward the speaker's side so the thread reads as an alternating debate.
+    return Row(children: [
+      if (!isBull) const SizedBox(width: 32),
+      Expanded(child: block),
+      if (isBull) const SizedBox(width: 32),
+    ]);
   }
 }
 
@@ -511,6 +623,7 @@ class _TugBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      container: true, // isolate the balance verdict as its own a11y node (not merged into the debate blob)
       label: 'Debate balance leans ${lean >= 0.5 ? 'bull' : 'bear'}',
       child: Column(children: [
         Row(children: const [
@@ -622,6 +735,48 @@ class _GroupLabel extends StatelessWidget {
       );
 }
 
+/// The risk debate's conclusion (P3.3b): a compact ribbon showing the Portfolio Manager's verdict on
+/// the 3-way aggressive/conservative/neutral synthesis. Sourced from the run verdict (rating) + the
+/// decision's one-liner — the full decision detail stays in the answer card up top; this just gives the
+/// risk section a visible resolution instead of trailing off into three uncommented stances.
+class _RiskVerdictRibbon extends StatelessWidget {
+  final Verdict? verdict;
+  final ReportSection? decision;
+  const _RiskVerdictRibbon({this.verdict, this.decision});
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = verdict?.rating;
+    final c = ratingColor(rating);
+    final oneLine = (decision?.markdown ?? verdict?.finalDecision ?? '').trim().split('\n').first;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withValues(alpha: 0.40)),
+      ),
+      child: Row(children: [
+        Icon(Icons.gavel_outlined, size: 15, color: c),
+        const SizedBox(width: 8),
+        Text('RISK VERDICT',
+            style: TextStyle(color: c, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+        if (rating != null) ...[const SizedBox(width: 8), _SignalChip(rating, c)],
+        if (oneLine.isNotEmpty) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(oneLine,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: QC.textMid, fontSize: 12.5)),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 class _LiveReasoningCard extends StatelessWidget {
   final AgentId agent;
   final String text;
@@ -649,6 +804,67 @@ class _LiveReasoningCard extends StatelessWidget {
           SelectableText(text, style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 14)),
         ],
       ),
+    );
+  }
+}
+
+String _cap(Object? s) {
+  final v = '$s';
+  return v.isEmpty ? v : v[0].toUpperCase() + v.substring(1);
+}
+
+String _num(Object? n) => n is num ? (n == n.roundToDouble() ? n.toStringAsFixed(0) : '$n') : '$n';
+
+/// The structured signal chips for a section (P3.3b) — read from the section's on-the-wire structured
+/// payload. Sentiment → band / score / confidence; trader → action / entry / stop. Empty for sections
+/// with no structured signals (they render exactly as before, so their goldens are unchanged).
+List<Widget> _signalChips(ReportSection s) {
+  final d = s.structured;
+  if (d == null) return const [];
+  switch (s.section) {
+    case 'sentiment_report':
+      final band = d['overall_band'] as String?;
+      final score = d['overall_score'] as num?;
+      return [
+        if (band != null) _SignalChip(band, _sentimentColor(band)),
+        if (score != null) _SignalChip('${score.toStringAsFixed(1)}/10', QC.textMid),
+        if (d['confidence'] != null) _SignalChip('${_cap(d['confidence'])} confidence', QC.textLo),
+      ];
+    case 'trader_investment_plan':
+      final action = d['action'] as String?;
+      return [
+        if (action != null) _SignalChip(_cap(action), ratingColor(action)),
+        if (d['entry_price'] != null) _SignalChip('Entry ${_num(d['entry_price'])}', QC.textMid),
+        if (d['stop_loss'] != null) _SignalChip('Stop ${_num(d['stop_loss'])}', QC.down),
+      ];
+    default:
+      return const [];
+  }
+}
+
+Color _sentimentColor(String band) {
+  final b = band.toLowerCase();
+  if (b.contains('bull') || b.contains('positive')) return QC.up;
+  if (b.contains('bear') || b.contains('negative')) return QC.down;
+  return QC.textMid;
+}
+
+/// A compact pill for a structured signal: a tinted, outlined label.
+class _SignalChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SignalChip(this.label, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Text(label,
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -696,8 +912,15 @@ class _SectionCard extends StatelessWidget {
             fontSize: emphasis ? 15 : 14,
             fontWeight: emphasis ? FontWeight.w500 : FontWeight.w400));
 
+    final chips = _signalChips(section);
     final content = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       header,
+      // P3.3b: surface the section's already-on-the-wire structured signals as chips (sentiment
+      // band/score/confidence; trader action/entry/stop) so the numbers read at a glance.
+      if (chips.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Wrap(spacing: 6, runSpacing: 6, children: chips),
+      ],
       const SizedBox(height: 8),
       body,
     ]);

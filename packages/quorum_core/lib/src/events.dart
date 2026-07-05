@@ -69,9 +69,7 @@ sealed class QuorumEvent {
       case 'agent_started':
         return AgentStarted(seq: seq, runId: runId, ts: ts, agent: agentFromWire(data['agent'] as String?));
       case 'agent_done':
-        return AgentDone(seq: seq, runId: runId, ts: ts,
-            agent: agentFromWire(data['agent'] as String?),
-            confidence: (data['confidence'] as num?)?.toDouble());
+        return AgentDone(seq: seq, runId: runId, ts: ts, agent: agentFromWire(data['agent'] as String?));
       case 'token':
         return TokenDelta(seq: seq, runId: runId, ts: ts,
             agent: data['agent'] as String? ?? 'system', delta: data['delta'] as String? ?? '');
@@ -81,6 +79,11 @@ sealed class QuorumEvent {
             tool: data['tool'] as String? ?? '',
             argsSummary: data['args_summary'] as String? ?? '',
             status: data['status'] as String? ?? '');
+      case 'debate_turn':
+        return DebateTurn(seq: seq, runId: runId, ts: ts,
+            round: (data['round'] as num?)?.toInt() ?? 1,
+            side: data['side'] as String? ?? '',
+            markdown: data['markdown'] as String? ?? '');
       case 'report_section_done':
         return ReportSectionDone(seq: seq, runId: runId, ts: ts,
             section: data['section'] as String? ?? '',
@@ -137,8 +140,7 @@ final class AgentStarted extends QuorumEvent {
 
 final class AgentDone extends QuorumEvent {
   final AgentId agent;
-  final double? confidence;
-  const AgentDone({required super.seq, required super.runId, required super.ts, required this.agent, this.confidence});
+  const AgentDone({required super.seq, required super.runId, required super.ts, required this.agent});
 }
 
 final class TokenDelta extends QuorumEvent {
@@ -151,6 +153,15 @@ final class ToolCall extends QuorumEvent {
   final String agent, tool, argsSummary, status;
   const ToolCall({required super.seq, required super.runId, required super.ts,
       required this.agent, required this.tool, required this.argsSummary, required this.status});
+}
+
+/// One decomposed debate turn (P3.3a). [side] is `bull`/`bear`; [round] is 1-based (a bull+bear pair
+/// shares a round). Rendered as an alternating thread that grows with `research_depth`.
+final class DebateTurn extends QuorumEvent {
+  final int round;
+  final String side, markdown;
+  const DebateTurn({required super.seq, required super.runId, required super.ts,
+      required this.round, required this.side, required this.markdown});
 }
 
 final class ReportSectionDone extends QuorumEvent {

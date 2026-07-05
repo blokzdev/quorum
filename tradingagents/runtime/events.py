@@ -33,6 +33,7 @@ class EventType(str, Enum):
     AGENT_DONE = "agent_done"
     TOKEN = "token"
     TOOL_CALL = "tool_call"
+    DEBATE_TURN = "debate_turn"
     REPORT_SECTION_DONE = "report_section_done"
     COST = "cost"
     RUN_DONE = "run_done"
@@ -117,11 +118,8 @@ def agent_started(agent: AgentId) -> Event:
     return Event(EventType.AGENT_STARTED, {"agent": agent.value})
 
 
-def agent_done(agent: AgentId, *, confidence: float | None = None) -> Event:
-    data: dict[str, Any] = {"agent": agent.value}
-    if confidence is not None:
-        data["confidence"] = confidence
-    return Event(EventType.AGENT_DONE, data)
+def agent_done(agent: AgentId) -> Event:
+    return Event(EventType.AGENT_DONE, {"agent": agent.value})
 
 
 def token(agent: AgentId | str, delta: str) -> Event:
@@ -134,6 +132,14 @@ def tool_call(agent: AgentId | str, tool: str, args_summary: str, status: str = 
     return Event(EventType.TOOL_CALL, {
         "agent": agent_value, "tool": tool, "args_summary": args_summary, "status": status,
     })
+
+
+def debate_turn(round_: int, side: str, markdown: str) -> Event:
+    """One decomposed debate turn (P3.3a). ``side`` is ``bull``/``bear``; ``round_`` is the 1-based debate
+    round (bull+bear of the same round share it). Emitted in speaking order so the terminal renders an
+    alternating turn thread that grows with ``research_depth``; the accumulated section blobs still ship
+    for the durable report / cached-review path."""
+    return Event(EventType.DEBATE_TURN, {"round": round_, "side": side, "markdown": markdown})
 
 
 def report_section_done(section: str, markdown: str, structured: dict[str, Any] | None = None) -> Event:
