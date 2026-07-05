@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/brand.dart';
+import 'package:quorum/ui/focusable.dart';
 import 'package:quorum/ui/settings_surface.dart';
 import 'package:quorum_core/quorum_core.dart';
 
@@ -248,6 +249,17 @@ void main() {
     await container.read(settingsControllerProvider.notifier).forgetAllKeys();
     await tester.pumpAndSettle();
     expect(find.text('Not stored'), findsOneWidget);
+  });
+
+  // --- Keyboard operability (P3.4a) -----------------------------------------------------------------
+
+  testWidgets('P3.4a: custom controls (depth toggles, analyst chips) are wrapped in Focusable',
+      (tester) async {
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false, provider: 'google')));
+    await tester.pumpAndSettle();
+    // The 5 depth squares + the analyst chips are GestureDetector-based; each is now keyboard-operable
+    // via a Focusable wrapper (activation itself is proven in focusable_test.dart).
+    expect(find.byType(Focusable), findsWidgets);
   });
 
   // --- Data sources (P3.1) --------------------------------------------------------------------------

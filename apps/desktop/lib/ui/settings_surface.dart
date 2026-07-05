@@ -6,6 +6,7 @@ import 'package:quorum_core/quorum_core.dart';
 import '../dream_team_roster.dart';
 import '../provider_meta.dart'; // providerNeedsKey (+ the shared provider->key-env mirror)
 import '../vendor_meta.dart' show macroVendor; // data-vendor key metadata (mirrors VENDOR_API_KEY_ENV)
+import 'focusable.dart';
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
@@ -870,22 +871,26 @@ class _SquareToggle extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 34,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: selected ? brand.accent : brand.border),
+      child: Focusable(
+        onActivate: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 38,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: selected ? brand.accent : brand.border),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    color: selected ? brand.textHi : brand.textMid,
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
           ),
-          child: Text(label,
-              style: TextStyle(
-                  color: selected ? brand.textHi : brand.textMid,
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
         ),
       ),
     );
@@ -942,27 +947,31 @@ class _Chip extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: selected ? brand.accent : brand.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(selected ? Icons.check : Icons.add,
-                  size: 13, color: selected ? brand.accent : brand.textLo),
-              const SizedBox(width: 5),
-              Text(label,
-                  style: TextStyle(
-                      color: selected ? brand.textHi : brand.textMid,
-                      fontSize: 12.5,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500)),
-            ],
+      child: Focusable(
+        onActivate: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: selected ? brand.accent : brand.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? Icons.check : Icons.add,
+                    size: 13, color: selected ? brand.accent : brand.textLo),
+                const SizedBox(width: 5),
+                Text(label,
+                    style: TextStyle(
+                        color: selected ? brand.textHi : brand.textMid,
+                        fontSize: 12.5,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500)),
+              ],
+            ),
           ),
         ),
       ),
@@ -1321,13 +1330,16 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
             button: true,
             expanded: _expanded,
             label: 'Dream Team, $assigned of 12 roles assigned',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
+            child: Focusable(
+              onActivate: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(8),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1349,6 +1361,7 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more,
                       size: 20, color: brand.textMid),
                 ],
+              ),
               ),
             ),
           ),
@@ -1519,10 +1532,14 @@ class _SetStageButton extends StatelessWidget {
         button: true,
         enabled: enabled,
         label: 'Set stage',
-        child: GestureDetector(
-          onTap: enabled ? onTap : null,
-          child: Text('Set stage',
-              style: TextStyle(color: brand.accent, fontSize: 10.5, fontWeight: FontWeight.w700)),
+        child: Focusable(
+          onActivate: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(4),
+          child: GestureDetector(
+            onTap: enabled ? onTap : null,
+            child: Text('Set stage',
+                style: TextStyle(color: brand.accent, fontSize: 10.5, fontWeight: FontWeight.w700)),
+          ),
         ),
       ),
     );
@@ -1568,12 +1585,14 @@ class _RoleRowState extends State<_RoleRow> {
             button: true,
             expanded: _open,
             label: '${dreamTeamRoleLabel(widget.roleKey)} model',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _open = !_open),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
-                child: Row(
+            child: Focusable(
+              onActivate: () => setState(() => _open = !_open),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _open = !_open),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+                  child: Row(
                   children: [
                     Expanded(
                       child: Text(dreamTeamRoleLabel(widget.roleKey),
@@ -1592,6 +1611,7 @@ class _RoleRowState extends State<_RoleRow> {
                         size: 18, color: brand.textLo),
                   ],
                 ),
+              ),
               ),
             ),
           ),
@@ -1921,19 +1941,23 @@ class _SmallButton extends StatelessWidget {
         button: true,
         enabled: enabled,
         label: label,
-        child: GestureDetector(
-          onTap: enabled ? onTap : null,
-          child: Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: filled ? brand.accent : brand.border),
+        child: Focusable(
+          onActivate: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(8),
+          child: GestureDetector(
+            onTap: enabled ? onTap : null,
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: filled ? brand.accent : brand.border),
+              ),
+              child: Text(label,
+                  style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
             ),
-            child: Text(label,
-                style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ),
       ),
