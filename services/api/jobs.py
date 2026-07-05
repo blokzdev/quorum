@@ -115,6 +115,14 @@ def plan_run(req: dict[str, Any]) -> dict[str, Any]:
         if req.get(knob):
             config[knob] = req[knob]
 
+    # P3.1: per-category data-vendor overrides. Build a FRESH dict — `config = dict(DEFAULT_CONFIG)` is a
+    # SHALLOW copy, so `config["data_vendors"]` IS the module-global dict; an in-place mutation would leak
+    # a vendor choice into every subsequent run in this sidecar process. Unspecified/blank categories keep
+    # the engine default.
+    vendor_override = {k: v for k, v in (req.get("data_vendors") or {}).items() if v}
+    if vendor_override:
+        config["data_vendors"] = {**config["data_vendors"], **vendor_override}
+
     # "Dream Team" (P2.5): per-role model overrides the graph resolves per role. When present, also
     # record the RESOLVED per-role map (effective provider/model after quick/deep fallback) as run
     # provenance for the manifest. Absent on a plain quick/deep run → no provenance recorded.

@@ -5,6 +5,7 @@ import 'package:quorum_core/quorum_core.dart';
 
 import '../dream_team_roster.dart';
 import '../provider_meta.dart'; // providerNeedsKey (+ the shared provider->key-env mirror)
+import '../vendor_meta.dart' show macroVendor; // data-vendor key metadata (mirrors VENDOR_API_KEY_ENV)
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
@@ -157,6 +158,11 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
   Widget build(BuildContext context) {
     final brand = context.brand;
     final catalog = ref.watch(catalogProvider);
+    // The vendor catalog is a progressive enhancement: if it hasn't loaded (or failed), the Data
+    // sources section simply stays hidden rather than blocking the whole screen. Resolved to a plain
+    // value here so SettingsBody stays async-free (the golden target).
+    final vendorCatalog =
+        ref.watch(vendorCatalogProvider).maybeWhen(data: (v) => v, orElse: () => null);
     return Container(
       color: brand.bg,
       child: catalog.when(
@@ -165,7 +171,7 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
                 title: 'No providers available',
                 subtitle: 'The engine returned an empty catalog.',
                 onRetry: _retry)
-            : SettingsBody(catalog: c),
+            : SettingsBody(catalog: c, vendorCatalog: vendorCatalog),
         loading: () =>
             const _CenterNotice(title: 'Connecting to the engine…', spinner: true),
         error: (e, _) => _CenterNotice(
@@ -184,7 +190,16 @@ class SettingsBody extends ConsumerWidget {
   /// all-default state is render-to-PNG testable. Production never sets it; a configured roster
   /// (non-null agentModels) auto-expands regardless.
   final bool forceExpandDreamTeam;
-  const SettingsBody({super.key, required this.catalog, this.forceExpandDreamTeam = false});
+
+  /// The per-category data-vendor catalog (`GET /catalog/vendors`, P3.1). Null → the Data sources
+  /// section is hidden (catalog not yet loaded / unavailable); the rest of Settings is unaffected.
+  final VendorCatalog? vendorCatalog;
+  const SettingsBody({
+    super.key,
+    required this.catalog,
+    this.forceExpandDreamTeam = false,
+    this.vendorCatalog,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -219,6 +234,24 @@ class SettingsBody extends ConsumerWidget {
                     _FieldLabel('Ticker', help: 'Moves to the Hub launcher in a later release.'),
                     const SizedBox(height: 6),
                     _TickerField(value: s.ticker, onChanged: ctrl.setTicker),
+                    const SizedBox(height: 16),
+                    _FieldLabel(
+                      'Asset type',
+                      // Honest: asset_type only frames the agents' prompts (crypto vs equity). It does
+                      // NOT switch data vendors — price still flows through the vendors below (yfinance
+                      // serves crypto via `-USD` tickers; fundamentals won't exist). A dedicated crypto
+                      // data pipeline is a future phase.
+                      help: 'Frames the debate. Crypto (e.g. BTC-USD) still uses the data vendors below.',
+                    ),
+                    const SizedBox(height: 6),
+                    _Dropdown<String>(
+                      value: s.assetType,
+                      items: const [
+                        (label: 'Stock / equity', value: 'stock'),
+                        (label: 'Crypto', value: 'crypto'),
+                      ],
+                      onChanged: (v) => ctrl.setAssetType(v ?? 'stock'),
+                    ),
                     const SizedBox(height: 16),
                     _FieldLabel('Research depth', help: 'Debate rounds — higher is deeper but costs more.'),
                     const SizedBox(height: 6),
@@ -320,6 +353,9 @@ class SettingsBody extends ConsumerWidget {
                   catalog: catalog,
                   initiallyExpanded: forceExpandDreamTeam || s.agentModels != null,
                 ),
+
+                // --- Data sources (per-category vendor picker, P3.1) ---------------------------------
+                if (vendorCatalog != null) _DataSourcesSection(vendorCatalog: vendorCatalog!),
 
                 // --- Benches -------------------------------------------------------------------------
                 _Section(
@@ -911,8 +947,14 @@ class _Chip extends StatelessWidget {
 
 // --- API-key field (write-only: never reads or displays a stored key) ------------------------------
 class _ApiKeyField extends ConsumerStatefulWidget {
+  /// The vault key this field reads/writes — a provider id (e.g. `anthropic`) or a data-vendor id
+  /// (e.g. `alpha_vantage`, `fred`). Both live in the same OS keystore under their own name.
   final String provider;
-  const _ApiKeyField({required this.provider});
+
+  /// Display name for the paste hint. Defaults to the provider label; data vendors pass their own
+  /// (e.g. 'Alpha Vantage') since they aren't in the provider-label map.
+  final String? label;
+  const _ApiKeyField({required this.provider, this.label});
   @override
   ConsumerState<_ApiKeyField> createState() => _ApiKeyFieldState();
 }
@@ -996,7 +1038,9 @@ class _ApiKeyFieldState extends ConsumerState<_ApiKeyField> {
                 style: TextStyle(color: brand.textHi, fontSize: 13, fontFamily: brand.fontMono),
                 decoration: _inputDecoration(
                   brand,
-                  hint: _stored ? 'Replace stored key…' : 'Paste ${_providerLabel(widget.provider)} key',
+                  hint: _stored
+                      ? 'Replace stored key…'
+                      : 'Paste ${widget.label ?? _providerLabel(widget.provider)} key',
                 ).copyWith(
                   suffixIcon: IconButton(
                     icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
@@ -1015,6 +1059,99 @@ class _ApiKeyFieldState extends ConsumerState<_ApiKeyField> {
             ],
           ],
         ),
+      ],
+    );
+  }
+}
+
+// --- Data sources (per-category vendor picker) -----------------------------------------------------
+
+/// Display names for data vendors (the catalog carries only the vendor `value`). Falls back to the raw
+/// id for any vendor added engine-side but not yet mirrored here.
+const _vendorLabels = <String, String>{
+  'yfinance': 'Yahoo Finance',
+  'alpha_vantage': 'Alpha Vantage',
+  'fred': 'FRED',
+  'polymarket': 'Polymarket',
+};
+String _vendorLabel(String v) => _vendorLabels[v] ?? v;
+
+/// The per-category data-vendor picker (P3.1). Core (non-optional) categories get a vendor dropdown;
+/// a keyed vendor selected there surfaces a required BYO-key field. The two optional categories are
+/// handled honestly: macro (FRED) is a store-a-key-to-enable field that never blocks a launch, and
+/// prediction markets (Polymarket, keyless) is a default-on note.
+class _DataSourcesSection extends ConsumerWidget {
+  final VendorCatalog vendorCatalog;
+  const _DataSourcesSection({required this.vendorCatalog});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final s = ref.watch(settingsControllerProvider);
+    final ctrl = ref.read(settingsControllerProvider.notifier);
+    final selected = s.dataVendors ?? const <String, String>{};
+
+    final core = vendorCatalog.categories.where((c) => !c.optional).toList(growable: false);
+    final macro = vendorCatalog.categoryFor('macro_data');
+    final predictionMarkets = vendorCatalog.categoryFor('prediction_markets');
+
+    // Keyed vendors currently selected in a core category — these are REQUIRED before a real run
+    // (the engine hard-raises when a core category's vendor can't authenticate). Dedup by vendor id.
+    final requiredKeyed = <String>{};
+    for (final c in core) {
+      final chosen = selected[c.key] ?? c.defaultVendor;
+      final opt = c.vendors.where((v) => v.value == chosen);
+      if (opt.isNotEmpty && opt.first.needsKey) requiredKeyed.add(chosen!);
+    }
+
+    return _Section(
+      title: 'Data sources',
+      subtitle: 'Which vendor feeds each category. Defaults are free (Yahoo Finance); a keyed vendor '
+          'needs its own BYO key stored below.',
+      children: [
+        for (final c in core) ...[
+          _FieldLabel(c.label),
+          const SizedBox(height: 6),
+          _Dropdown<String>(
+            value: selected[c.key] ?? c.defaultVendor,
+            items: [for (final v in c.vendors) (label: _vendorLabel(v.value), value: v.value)],
+            // Collapse a pick that equals the engine default back to "no override", keeping the wire
+            // body minimal (only genuine overrides ride along).
+            onChanged: (v) => ctrl.setDataVendor(c.key, v == c.defaultVendor ? null : v),
+          ),
+          const SizedBox(height: 16),
+        ],
+        // Required key(s) for the keyed vendors chosen above.
+        for (final vendor in requiredKeyed) ...[
+          _ApiKeyField(provider: vendor, label: _vendorLabel(vendor)),
+          const SizedBox(height: 16),
+        ],
+        // Optional macro signals (FRED) — store a free key to enable; never blocks a launch.
+        if (macro != null) ...[
+          _FieldLabel(
+            macro.label,
+            help: 'Optional. Store a free FRED key to add macro-economic signals; runs work without it.',
+          ),
+          const SizedBox(height: 6),
+          _ApiKeyField(provider: macroVendor, label: _vendorLabel(macroVendor)),
+          const SizedBox(height: 16),
+        ],
+        // Prediction markets (Polymarket) — keyless and on by default. Lead with the honest keyless
+        // statement; the engine's (verbose) category description trails as parenthetical context.
+        if (predictionMarkets != null)
+          Row(
+            children: [
+              Icon(Icons.insights_outlined, size: 16, color: brand.textLo),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Polymarket signals are on by default — no key needed. '
+                  '(${predictionMarkets.label})',
+                  style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.4),
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }

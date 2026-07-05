@@ -29,3 +29,11 @@ final catalogProvider = FutureProvider<Catalog>((ref) async {
   final api = ApiClient(conn, client: ref.read(httpClientProvider));
   return Catalog.fromJson(await api.catalog());
 });
+
+/// The data-vendor catalog (`GET /catalog/vendors`, P3.1) — the per-category vendor picker for Model
+/// Studio's Data sources section. Fetched lazily + cached on the same shared connection as [catalogProvider].
+final vendorCatalogProvider = FutureProvider<VendorCatalog>((ref) async {
+  final conn = await ref.watch(engineConnectionProvider.future);
+  final api = ApiClient(conn, client: ref.read(httpClientProvider));
+  return VendorCatalog.fromJson(await api.vendors());
+});

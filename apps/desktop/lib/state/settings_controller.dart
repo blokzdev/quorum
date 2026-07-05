@@ -8,6 +8,7 @@ import 'package:quorum_core/quorum_core.dart';
 import '../dream_team_roster.dart' show dreamTeamRoleKeys;
 import '../provider_meta.dart' show providerRequiresKeyForLaunch;
 import '../services/key_vault.dart';
+import '../vendor_meta.dart' show macroVendor, vendorNeedsKey;
 
 /// The persisted model-config subset of [SettingsState] — a named, reusable "Bench" (preset) the user
 /// can save and re-apply. Deliberately excludes API keys (those live in the OS vault, never on disk),
@@ -28,6 +29,9 @@ class Bench {
   /// Per-role "Dream Team" lineup saved with this preset (role_key -> AgentModel), if any.
   final Map<String, AgentModel>? agentModels;
 
+  /// P3.1: per-category data-vendor selection saved with this preset (`category -> vendor`), if any.
+  final Map<String, String>? dataVendors;
+
   const Bench({
     required this.name,
     this.provider,
@@ -39,6 +43,7 @@ class Bench {
     this.backendUrl,
     this.researchDepth = 1,
     this.agentModels,
+    this.dataVendors,
   });
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +57,7 @@ class Bench {
         if (backendUrl != null) 'backend_url': backendUrl,
         'research_depth': researchDepth,
         'agent_models': ?agentModelsToJson(agentModels),
+        if (dataVendors != null && dataVendors!.isNotEmpty) 'data_vendors': dataVendors,
       };
 
   factory Bench.fromJson(Map<String, dynamic> j) => Bench(
@@ -65,6 +71,7 @@ class Bench {
         backendUrl: j['backend_url'] as String?,
         researchDepth: (j['research_depth'] as num?)?.toInt() ?? 1,
         agentModels: agentModelsFromJson(j['agent_models']),
+        dataVendors: (j['data_vendors'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
       );
 }
 
@@ -96,6 +103,14 @@ class SettingsState {
   /// every role. Independent of the global provider, so [withProvider] does NOT clear it.
   final Map<String, AgentModel>? agentModels;
 
+  /// P3.1: per-category data-vendor overrides (`category -> vendor`), for the 4 core categories. Null/
+  /// omitted → the engine default. Saved in a [Bench]; independent of the global provider.
+  final Map<String, String>? dataVendors;
+
+  /// P3.1: how agents frame the instrument (`stock` | `crypto`). A per-run input (like [ticker]), NOT a
+  /// saved model profile — excluded from a [Bench]. Honest scope: relabels prompts, not a data pipeline.
+  final String assetType;
+
   /// Idempotency latch for the first-launch `.env` → vault import (see [maybeSeedKeysFromEnv]).
   final bool seededFromEnv;
 
@@ -115,6 +130,8 @@ class SettingsState {
     this.benches = const [],
     this.watchlist = const [],
     this.agentModels,
+    this.dataVendors,
+    this.assetType = 'stock',
     this.seededFromEnv = false,
   });
 
@@ -134,6 +151,8 @@ class SettingsState {
     List<Bench>? benches,
     List<String>? watchlist,
     Map<String, AgentModel>? agentModels,
+    Map<String, String>? dataVendors,
+    String? assetType,
     bool? seededFromEnv,
   }) {
     return SettingsState(
@@ -152,6 +171,8 @@ class SettingsState {
       benches: benches ?? this.benches,
       watchlist: watchlist ?? this.watchlist,
       agentModels: agentModels ?? this.agentModels,
+      dataVendors: dataVendors ?? this.dataVendors,
+      assetType: assetType ?? this.assetType,
       seededFromEnv: seededFromEnv ?? this.seededFromEnv,
     );
   }
@@ -175,6 +196,8 @@ class SettingsState {
         benches: benches,
         watchlist: watchlist,
         agentModels: agentModels, // per-role choices are independent of the global provider
+        dataVendors: dataVendors, // data sources are independent of the LLM provider
+        assetType: assetType,
         seededFromEnv: seededFromEnv,
       );
 
@@ -196,6 +219,31 @@ class SettingsState {
         benches: benches,
         watchlist: watchlist,
         agentModels: value,
+        dataVendors: dataVendors,
+        assetType: assetType,
+        seededFromEnv: seededFromEnv,
+      );
+
+  /// copyWith can't null [dataVendors] (the `?? this.x` swallows it) — this explicit setter (used by
+  /// clear / Bench-apply) can clear the vendor selection back to engine defaults.
+  SettingsState withDataVendors(Map<String, String>? value) => SettingsState(
+        demoMode: demoMode,
+        ticker: ticker,
+        provider: provider,
+        deepModel: deepModel,
+        quickModel: quickModel,
+        customDeepModel: customDeepModel,
+        customQuickModel: customQuickModel,
+        effort: effort,
+        backendUrl: backendUrl,
+        researchDepth: researchDepth,
+        analysts: analysts,
+        outputLanguage: outputLanguage,
+        benches: benches,
+        watchlist: watchlist,
+        agentModels: agentModels,
+        dataVendors: value,
+        assetType: assetType,
         seededFromEnv: seededFromEnv,
       );
 
@@ -215,6 +263,8 @@ class SettingsState {
         'benches': benches.map((b) => b.toJson()).toList(growable: false),
         'watchlist': watchlist,
         'agent_models': ?agentModelsToJson(agentModels),
+        if (dataVendors != null && dataVendors!.isNotEmpty) 'data_vendors': dataVendors,
+        'asset_type': assetType,
         'seeded_from_env': seededFromEnv,
       };
 
@@ -237,6 +287,8 @@ class SettingsState {
         watchlist:
             ((j['watchlist'] as List?) ?? const []).map((e) => e as String).toList(growable: false),
         agentModels: agentModelsFromJson(j['agent_models']),
+        dataVendors: (j['data_vendors'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
+        assetType: j['asset_type'] as String? ?? 'stock',
         seededFromEnv: j['seeded_from_env'] as bool? ?? false,
       );
 
@@ -252,6 +304,7 @@ class SettingsState {
         backendUrl: backendUrl,
         researchDepth: researchDepth,
         agentModels: agentModels,
+        dataVendors: dataVendors,
       );
 }
 
@@ -314,14 +367,37 @@ Set<String> referencedProviders(String? provider, Map<String, AgentModel>? agent
       ...?agentModels?.values.map((m) => m.provider),
     };
 
+/// The keyed data vendors whose key should be MERGED into a run: the always-on macro vendor (`fred` —
+/// the `macro_data` default; its key merely *enables* macro signals, absence degrades gracefully) plus
+/// any keyed vendor the user selected for a core category. A stored key for one of these is sent so the
+/// engine can use it; unstored → simply omitted.
+Set<String> referencedVendorKeys(Map<String, String>? dataVendors) => <String>{
+      macroVendor,
+      ...?dataVendors?.values.where(vendorNeedsKey),
+    };
+
+/// The keyed vendors a run REQUIRES (block launch if unstored) — the user's explicit CORE-category
+/// selections. The optional macro vendor is never required (macro degrades without a key), so it is
+/// explicitly excluded even if it somehow appears in [dataVendors] (a stale bench / hand-edited
+/// settings.json) — gating it would false-block a run that just didn't opt into macro signals.
+///
+/// INVARIANT (why reading only explicit overrides is sound): every CORE category's engine DEFAULT is
+/// keyless (`yfinance`), so a keyed core vendor can only reach a run as an explicit override that lands
+/// in [dataVendors]. If a future engine bump makes a core category default to a KEYED vendor, this gate
+/// must instead consult the EFFECTIVE vendor (selected ?? default, via the VendorCatalog) or it would
+/// let an unkeyed run through that then crashes mid-flight (see docs/backlog.md — catalog-driven gate).
+Set<String> requiredVendorKeys(Map<String, String>? dataVendors) => <String>{
+      ...?dataVendors?.values.where((v) => vendorNeedsKey(v) && v != macroVendor),
+    };
+
 /// Referenced providers that REQUIRE a key to launch but have none in the vault — the data behind the
 /// pre-launch "Needs keys for: …" gate. Empty in demo mode (no keys are sent). Recomputes when the
 /// referenced providers change (the settings slice) or any vault key is written/deleted
 /// ([keyVaultRevisionProvider]). openai_compatible / ollama / bedrock never appear (key-optional or
 /// keyless), so a keyless local relay is never false-blocked.
 final missingKeysProvider = FutureProvider<List<String>>((ref) async {
-  final (demoMode, provider, agentModels) = ref.watch(
-      settingsControllerProvider.select((s) => (s.demoMode, s.provider, s.agentModels)));
+  final (demoMode, provider, agentModels, dataVendors) = ref.watch(settingsControllerProvider
+      .select((s) => (s.demoMode, s.provider, s.agentModels, s.dataVendors)));
   ref.watch(keyVaultRevisionProvider);
   if (demoMode) return const [];
   final vault = ref.read(keyVaultProvider);
@@ -330,6 +406,12 @@ final missingKeysProvider = FutureProvider<List<String>>((ref) async {
     if (!providerRequiresKeyForLaunch(p)) continue;
     final key = await vault.read(p);
     if (key == null || key.isEmpty) missing.add(p);
+  }
+  // A CORE-category vendor that needs a key (e.g. Alpha Vantage) would crash the run mid-flight without
+  // one — gate it. Optional macro/prediction vendors are NOT gated (they degrade gracefully).
+  for (final v in requiredVendorKeys(dataVendors)) {
+    final key = await vault.read(v);
+    if (key == null || key.isEmpty) missing.add(v);
   }
   return missing;
 });
@@ -358,6 +440,21 @@ class SettingsController extends Notifier<SettingsState> {
   void setAnalysts(List<String>? v) => _set(state.copyWith(analysts: v));
   void setOutputLanguage(String v) => _set(state.copyWith(outputLanguage: v));
 
+  // --- Data sources (P3.1) -------------------------------------------------------------------------
+  /// Select (or, with null, clear back to the engine default) a category's data vendor. An empty map
+  /// collapses to null so an all-default selection is omitted from settings.json + the wire.
+  void setDataVendor(String category, String? vendor) {
+    final next = {...?state.dataVendors};
+    if (vendor == null || vendor.isEmpty) {
+      next.remove(category);
+    } else {
+      next[category] = vendor;
+    }
+    _set(state.withDataVendors(next.isEmpty ? null : next));
+  }
+
+  void setAssetType(String v) => _set(state.copyWith(assetType: v));
+
   // --- Benches (saved model-config presets) --------------------------------------------------------
   void saveBench(String name) {
     final trimmed = name.trim();
@@ -377,8 +474,9 @@ class SettingsController extends Notifier<SettingsState> {
         backendUrl: b.backendUrl,
         researchDepth: b.researchDepth,
       )
-      // Explicit so a bench with no lineup CLEARS the current one (copyWith can't null it).
-      .withAgentModels(b.agentModels));
+      // Explicit so a bench with no lineup / no vendors CLEARS the current one (copyWith can't null it).
+      .withAgentModels(b.agentModels)
+      .withDataVendors(b.dataVendors));
 
   void deleteBench(String name) =>
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
@@ -509,6 +607,13 @@ class SettingsController extends Notifier<SettingsState> {
       final key = await _vault.read(p);
       if (key != null && key.isNotEmpty) merged[p] = key;
     }
+    // P3.1: also merge keys for the data vendors this run references (fred always, + selected keyed core
+    // vendors). build_api_keys_dict maps vendor names to their env vars just like providers; an unstored
+    // vendor key is simply omitted (yfinance/polymarket are keyless and never appear).
+    for (final v in referencedVendorKeys(s.dataVendors)) {
+      final key = await _vault.read(v);
+      if (key != null && key.isNotEmpty) merged[v] = key;
+    }
     final backendUrl = s.backendUrl?.trim();
 
     return RunConfig(
@@ -527,6 +632,9 @@ class SettingsController extends Notifier<SettingsState> {
       anthropicEffort: provider == 'anthropic' ? s.effort : null,
       apiKeys: merged.isEmpty ? null : merged,
       agentModels: s.agentModels,
+      dataVendors: s.dataVendors,
+      // Explicit asset framing (the user's toggle supersedes the engine's '-USD' auto-detect).
+      assetType: s.assetType,
     );
   }
 }

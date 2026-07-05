@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**Phase 3 planned** — Depth & Refinement; plan-lock PR up for your review)
+**Last AI update:** 2026-07-05 (**P3.1 Data sources shipped** to `phase-3` — BYO-key vendors + asset toggle; §4)
 **Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
 data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
 Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
@@ -85,6 +85,21 @@ test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-05 — **P3.1 Data sources** (merged to `phase-3`)
+- **BYO-key data vendors + asset-type**, the first Phase-3 subphase: a per-category **Data sources**
+  picker in Model Studio (Yahoo Finance default; **Alpha Vantage** as a keyed alternative), a **FRED**
+  macro key (optional; enables macro signals, never blocks a launch), a Polymarket keyless default-on
+  note, and an honest **stock/crypto** toggle. Driven by a new engine-derived `GET /catalog/vendors`.
+- **Your action (optional, non-blocking):** free **FRED** and **Alpha Vantage** keys unlock those
+  vendors — yfinance (keyless) is the default and works without any key. Store them in Model Studio →
+  Data sources like the LLM keys; they inject per-run and never touch disk.
+- **Honest scope (as agreed):** the crypto toggle only *reframes the agents' prompts* — a crypto run
+  still pulls yfinance data (verified live: BTC-USD returned real OHLCV through the default vendor). A
+  **real crypto pipeline stays a dedicated future phase**.
+- Verified: fresh-context pre-merge review (mergeable, no HIGH/MED, all 5 exit criteria falsification-
+  tested), keys-never-on-disk byte scan, write-only keystore golden, real spawned-sidecar `/catalog/
+  vendors`. 112 flutter + 368 pytest + ruff green. 3 LOW findings → 1 fixed, 2 backlogged.
 
 ### 2026-07-05 — **Phase 2 complete → merged to `main`**
 - **P2.5c1/c2** Dream Team roster UI + capability/key gate; **P2.6a** bundled-sidecar spawn path + full-

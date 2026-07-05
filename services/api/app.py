@@ -53,6 +53,9 @@ class RunRequest(BaseModel):
     # effort?}}). Inner type stays permissive so a forward-compat field never 422s the request; the
     # engine reads keys defensively. Unset -> the shared quick/deep split runs every role.
     agent_models: dict[str, dict[str, Any]] | None = None
+    # P3.1: per-category data-vendor selection ({category: vendor}), partial — unspecified categories
+    # keep the engine default. Permissive (like agent_models) so a forward-compat category never 422s.
+    data_vendors: dict[str, str] | None = None
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
     # demo mode only: per-step delay in seconds (0 = instant, for tests).
@@ -96,6 +99,37 @@ async def catalog():
         "providers": providers,
         "analysts": ["market", "social", "news", "fundamentals"],
     }
+
+
+@app.get("/catalog/vendors")
+async def catalog_vendors():
+    # P3.1: the per-category data-vendor catalog for Model Studio's "Data sources" picker. Derived
+    # ENTIRELY from engine constants + the single-source vendor->key map, so `needs_key`/`key_env` can
+    # never drift from what build_api_keys_dict actually injects. Lazy-imported: the vendor taxonomy lives
+    # in the heavy dataflows package — keep it off the app-boot/demo path (ADR 0002).
+    from tradingagents.dataflows.interface import (
+        OPTIONAL_CATEGORIES,
+        TOOLS_CATEGORIES,
+        VENDOR_METHODS,
+    )
+    from tradingagents.default_config import DEFAULT_CONFIG
+    from tradingagents.runtime.isolation import VENDOR_API_KEY_ENV
+
+    defaults = DEFAULT_CONFIG.get("data_vendors", {})
+    categories = []
+    for cat, info in TOOLS_CATEGORIES.items():
+        vendors = sorted({v for tool in info["tools"] for v in VENDOR_METHODS.get(tool, {})})
+        categories.append({
+            "key": cat,
+            "label": info.get("description", cat),
+            "optional": cat in OPTIONAL_CATEGORIES,
+            "default": defaults.get(cat),
+            "vendors": [
+                {"value": v, "needs_key": v in VENDOR_API_KEY_ENV, "key_env": VENDOR_API_KEY_ENV.get(v)}
+                for v in vendors
+            ],
+        })
+    return {"contract_version": CONTRACT_VERSION, "categories": categories}
 
 
 @app.get("/env-keys")

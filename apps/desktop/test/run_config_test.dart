@@ -116,5 +116,49 @@ void main() {
       expect(back.backendUrl, 'https://x');
       expect(back.apiKeys, {'google': 'k'});
     });
+
+    test('data_vendors round-trips (P3.1); empty map is omitted', () {
+      const cfg = RunConfig(
+        mode: 'pro',
+        ticker: 'AAPL',
+        dataVendors: {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'},
+      );
+      final json = cfg.toJson();
+      expect(json['data_vendors'], {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'});
+      expect(RunConfig.fromJson(json).dataVendors,
+          {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'});
+      // Empty/absent → omitted from the wire (keeps the body clean; engine uses defaults).
+      expect(const RunConfig(mode: 'pro').toJson().containsKey('data_vendors'), isFalse);
+      expect(const RunConfig(mode: 'pro', dataVendors: {}).toJson().containsKey('data_vendors'), isFalse);
+    });
+  });
+
+  group('VendorCatalog.fromJson (P3.1 /catalog/vendors)', () {
+    test('parses categories, optional flag, default, and per-vendor key needs', () {
+      final vc = VendorCatalog.fromJson({
+        'contract_version': 1,
+        'categories': [
+          {
+            'key': 'core_stock_apis',
+            'label': 'OHLCV stock price data',
+            'optional': false,
+            'default': 'yfinance',
+            'vendors': [
+              {'value': 'yfinance', 'needs_key': false, 'key_env': null},
+              {'value': 'alpha_vantage', 'needs_key': true, 'key_env': 'ALPHA_VANTAGE_API_KEY'},
+            ],
+          },
+          {'key': 'macro_data', 'label': 'Macro', 'optional': true, 'default': 'fred', 'vendors': []},
+        ],
+      });
+      final core = vc.categoryFor('core_stock_apis')!;
+      expect(core.optional, isFalse);
+      expect(core.defaultVendor, 'yfinance');
+      final av = core.vendors.firstWhere((v) => v.value == 'alpha_vantage');
+      expect(av.needsKey, isTrue);
+      expect(av.keyEnv, 'ALPHA_VANTAGE_API_KEY');
+      expect(vc.categoryFor('macro_data')!.optional, isTrue);
+      expect(vc.categoryFor('nope'), isNull);
+    });
   });
 }

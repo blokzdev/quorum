@@ -42,6 +42,11 @@ class RunConfig {
   /// shared quick/deep split runs every role (additive). The engine resolves each role independently.
   final Map<String, AgentModel>? agentModels;
 
+  /// P3.1: per-category data-vendor overrides (`category -> vendor`), partial. Null/absent or an omitted
+  /// category → the engine default vendor for that category. Keyed vendors (fred/alpha_vantage) supply
+  /// their key via [apiKeys].
+  final Map<String, String>? dataVendors;
+
   const RunConfig({
     this.mode = 'demo',
     this.intent,
@@ -61,6 +66,7 @@ class RunConfig {
     this.apiKeys,
     this.stepDelay,
     this.agentModels,
+    this.dataVendors,
   });
 
   /// Inverse of [toJson] — used to persist/restore a chosen config and saved presets locally.
@@ -85,6 +91,8 @@ class RunConfig {
         apiKeys: (j['api_keys'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
         stepDelay: (j['step_delay'] as num?)?.toDouble(),
         agentModels: agentModelsFromJson(j['agent_models']),
+        dataVendors:
+            (j['data_vendors'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
       );
 
   /// The exact `POST /runs` body. `mode` / `research_depth` / `output_language` are always present
@@ -112,6 +120,7 @@ class RunConfig {
     if (stepDelay != null) json['step_delay'] = stepDelay;
     final am = agentModelsToJson(agentModels);
     if (am != null) json['agent_models'] = am;
+    if (dataVendors != null && dataVendors!.isNotEmpty) json['data_vendors'] = dataVendors;
     return json;
   }
 
@@ -134,6 +143,7 @@ class RunConfig {
     Map<String, String>? apiKeys,
     double? stepDelay,
     Map<String, AgentModel>? agentModels,
+    Map<String, String>? dataVendors,
   }) {
     return RunConfig(
       mode: mode ?? this.mode,
@@ -154,6 +164,7 @@ class RunConfig {
       apiKeys: apiKeys ?? this.apiKeys,
       stepDelay: stepDelay ?? this.stepDelay,
       agentModels: agentModels ?? this.agentModels,
+      dataVendors: dataVendors ?? this.dataVendors,
     );
   }
 }

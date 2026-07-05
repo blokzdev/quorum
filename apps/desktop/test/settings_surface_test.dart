@@ -42,7 +42,20 @@ final _catalog = Catalog(
   },
 );
 
-Widget _wrap(SettingsState initial) => ProviderScope(
+/// A minimal `GET /catalog/vendors` mirror: one core category (yfinance default + keyed alpha_vantage)
+/// and both optional categories (macro=fred keyed, prediction=polymarket keyless).
+const _vendorCatalog = VendorCatalog(contractVersion: 1, categories: [
+  VendorCategory('core_stock_apis', 'OHLCV stock price data', vendors: [
+    VendorOption('alpha_vantage', needsKey: true, keyEnv: 'ALPHA_VANTAGE_API_KEY'),
+    VendorOption('yfinance'),
+  ], defaultVendor: 'yfinance'),
+  VendorCategory('macro_data', 'Macroeconomic indicators', optional: true,
+      vendors: [VendorOption('fred', needsKey: true, keyEnv: 'FRED_API_KEY')], defaultVendor: 'fred'),
+  VendorCategory('prediction_markets', 'Prediction markets', optional: true,
+      vendors: [VendorOption('polymarket')], defaultVendor: 'polymarket'),
+]);
+
+Widget _wrap(SettingsState initial, {VendorCatalog? vendorCatalog}) => ProviderScope(
       overrides: [initialSettingsProvider.overrideWithValue(initial)],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -52,7 +65,7 @@ Widget _wrap(SettingsState initial) => ProviderScope(
           fontFamily: 'Inter',
           extensions: const [QuorumBrand.dark()],
         ),
-        home: Scaffold(body: SettingsBody(catalog: _catalog)),
+        home: Scaffold(body: SettingsBody(catalog: _catalog, vendorCatalog: vendorCatalog)),
       ),
     );
 
@@ -231,6 +244,75 @@ void main() {
     await container.read(settingsControllerProvider.notifier).forgetAllKeys();
     await tester.pumpAndSettle();
     expect(find.text('Not stored'), findsOneWidget);
+  });
+
+  // --- Data sources (P3.1) --------------------------------------------------------------------------
+
+  testWidgets('data sources: hidden when no vendor catalog is available', (tester) async {
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false))); // no vendorCatalog
+    await tester.pumpAndSettle();
+    expect(find.text('DATA SOURCES'), findsNothing);
+    expect(find.text('Asset type'), findsOneWidget); // the Run-section toggle is independent, still shows
+  });
+
+  testWidgets('data sources: shown with a catalog — core dropdown, FRED field, Polymarket note',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false), vendorCatalog: _vendorCatalog));
+    await tester.pumpAndSettle();
+    expect(find.text('DATA SOURCES'), findsOneWidget);
+    expect(find.text('OHLCV stock price data'), findsOneWidget); // the core category label
+    // The optional macro (FRED) key field is always offered; Polymarket is a keyless default-on note.
+    expect(find.text('Macroeconomic indicators'), findsOneWidget);
+    expect(find.textContaining('Polymarket signals are on by default'), findsOneWidget);
+    // No CORE alpha_vantage key field yet (default is keyless yfinance) → exactly one 'API key' (FRED).
+    expect(find.text('API key'), findsOneWidget);
+  });
+
+  testWidgets('data sources: selecting a keyed core vendor reveals its required key field',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false), vendorCatalog: _vendorCatalog));
+    await tester.pumpAndSettle();
+    expect(find.text('API key'), findsOneWidget); // FRED only
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    container.read(settingsControllerProvider.notifier).setDataVendor('core_stock_apis', 'alpha_vantage');
+    await tester.pumpAndSettle();
+
+    // Now Alpha Vantage's required key field appears too → two 'API key' labels (AV + FRED).
+    expect(find.text('API key'), findsNWidgets(2));
+    expect(container.read(settingsControllerProvider).dataVendors, {'core_stock_apis': 'alpha_vantage'});
+  });
+
+  testWidgets('data sources: a stored vendor key value is NEVER painted (write-only)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    store['quorum_apikey_alpha_vantage'] = 'sk-SECRET-av-value';
+    store['quorum_apikey_fred'] = 'sk-SECRET-fred-value';
+    await tester.pumpWidget(_wrap(
+      const SettingsState(demoMode: false, dataVendors: {'core_stock_apis': 'alpha_vantage'}),
+      vendorCatalog: _vendorCatalog,
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('SECRET'), findsNothing);
+    for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
+      expect(field.controller?.text ?? '', isNot(contains('SECRET')));
+    }
+    // Both keyed vendors show a "Stored" badge (AV required + FRED macro).
+    expect(find.text('Stored'), findsNWidgets(2));
+  });
+
+  testWidgets('asset type: the Run toggle wires assetType through the controller', (tester) async {
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false)));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).assetType, 'stock');
+    container.read(settingsControllerProvider.notifier).setAssetType('crypto');
+    await tester.pumpAndSettle();
+    expect(container.read(settingsControllerProvider).assetType, 'crypto');
   });
 
   // --- Dream Team roster picker wiring --------------------------------------------------------------
