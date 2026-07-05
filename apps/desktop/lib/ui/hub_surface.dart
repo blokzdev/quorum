@@ -265,7 +265,9 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
               FilledButton.icon(
                 onPressed: (running || gated) ? null : () => widget.onRun(),
                 style: FilledButton.styleFrom(
-                    backgroundColor: QC.accent, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
+                    backgroundColor: QC.accent,
+                    foregroundColor: QC.onAccent, // P3.4b: AA-normal label contrast (was white 3.77:1)
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
                 icon: const Icon(Icons.play_arrow, size: 18),
                 label: Text(running ? 'Running…' : 'Run analysis'),
               ),

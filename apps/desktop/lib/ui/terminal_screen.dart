@@ -76,7 +76,7 @@ class TerminalBody extends StatelessWidget {
               children: [
                 SizedBox(width: 264, child: _PipelineRail(state)),
                 const VerticalDivider(width: 1, color: QC.border),
-                Expanded(child: _ReasoningPane(state)),
+                Expanded(child: _ReasoningPane(state, onRun: onRun)),
                 const VerticalDivider(width: 1, color: QC.border),
                 SizedBox(width: 340, child: _VerdictRail(state)),
               ],
@@ -165,7 +165,7 @@ class _Header extends StatelessWidget {
           else
             FilledButton.icon(
               onPressed: onRun,
-              style: FilledButton.styleFrom(backgroundColor: QC.accent),
+              style: FilledButton.styleFrom(backgroundColor: QC.accent, foregroundColor: QC.onAccent),
               icon: const Icon(Icons.play_arrow, size: 18),
               label: Text(runLabel),
             ),
@@ -340,7 +340,8 @@ class _AgentRow extends StatelessWidget {
 
 class _ReasoningPane extends StatelessWidget {
   final RunViewState state;
-  const _ReasoningPane(this.state);
+  final VoidCallback? onRun;
+  const _ReasoningPane(this.state, {this.onRun});
 
   static const _decisionKeys = ['final_trade_decision', 'trader_investment_plan'];
   static const _riskKeys = ['aggressive', 'neutral', 'conservative'];
@@ -366,6 +367,11 @@ class _ReasoningPane extends StatelessWidget {
     final ratingAccent = ratingColor(state.verdict?.rating);
 
     final hasLive = active != null && liveText != null && liveText.isNotEmpty;
+    // P3.4b: a failed run surfaces its reason + a Retry CTA — distinct from the idle empty state (the
+    // reducer sets state.error on an ErrorEvent, but the terminal used to drop it silently).
+    if (state.phase == RunPhase.error) {
+      return _ErrorPane(error: state.error, onRetry: onRun);
+    }
     if (decision.isEmpty && !hasDebate && riskViews.isEmpty && analyst.isEmpty && !hasLive) {
       return const Center(
         child: Text('Run an analysis to watch the council deliberate.',
@@ -410,6 +416,47 @@ class _ReasoningPane extends StatelessWidget {
           for (final s in analyst) _Reveal(child: _SectionCard(s)),
         ],
       ],
+    );
+  }
+}
+
+/// The terminal's failure state (P3.4b): the reason the run stopped + a Retry CTA — surfaced instead of
+/// the run silently reverting to the idle "run an analysis" prompt.
+class _ErrorPane extends StatelessWidget {
+  final String? error;
+  final VoidCallback? onRetry;
+  const _ErrorPane({this.error, this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 40, color: QC.down),
+            const SizedBox(height: 14),
+            const Text('The run stopped',
+                style: TextStyle(color: QC.textHi, fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(
+              (error != null && error!.trim().isNotEmpty) ? error! : 'The engine reported an error.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: QC.textMid, fontSize: 13.5, height: 1.5),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: onRetry,
+                style: FilledButton.styleFrom(backgroundColor: QC.accent, foregroundColor: QC.onAccent),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
