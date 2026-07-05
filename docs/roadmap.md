@@ -80,6 +80,21 @@ the original `P#` IDs from the first roadmap draft, for continuity.
   compliance-gated**; keeps the "not financial advice / no early real-money" posture intact.
 - **Advanced AI & extensibility** *(P12)* — custom agents/prompts, add analysts, MCP tools/data
   sources, ensemble debate.
+- **Edge Model Draft Board** *(post-V1; extends Model Studio + Dream Team — signature bet #2)* — a
+  **curated** in-app shortlist of *tool-capable, trading-relevant* local/edge models (Qwen, Gemma,
+  Llama, …): one-click `ollama pull` with streamed `completed/total` progress, a **three-tier
+  device-fit badge** (Fits / Will-be-slow / Won't-fit) from detected RAM + GGUF sizing, and the P3.2
+  **post-pull capability gate** so every listed model is guaranteed tool-capable before it reaches an
+  agent. **Hard scope wall: a curated *draft board*, NOT a generic HuggingFace/Ollama model browser** —
+  the tool-calling requirement (analyst roles need it) forces curation, and Ollama exposes no
+  machine-readable library or pre-install-capability API, so an exhaustive live catalog is out (that's
+  LM Studio / Jan / Msty table-stakes, not our wedge). The differentiator no incumbent has:
+  **roster-aware fit** — *"can this machine run my whole Dream Team?"* — with KV-cache-honest sizing at
+  the configured context length. **Defensibility north star (beyond onboarding polish):** rank edge
+  models by their **realized Track Record** on the trading task (needs P7) — a "which local models
+  actually made good calls" list only Quorum can produce. *(Provenance: the P3.2 local-model discovery
+  fan-out + a 2026-07-05 research pass live-probed against Ollama 0.30.11; productionizes the P3.2
+  backlog seed "in-app `ollama pull`; LM Studio/vLLM discovery".)*
 - **macOS release** *(P13)* · **Mobile remote** *(P14, Android→iOS over LAN/WAN, same SSE API)* ·
   **Auto-update & distribution maturity** *(P15)*.
 
