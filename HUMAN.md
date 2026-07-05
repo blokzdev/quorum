@@ -35,6 +35,14 @@ test key only.)
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-05 — **Edge Model Draft Board → roadmap (post-V1), on your ask** ("browse/find applicable edge
+  models"). A research pass (code recon + a **live Ollama 0.30.11 probe**) killed the literal "HuggingFace
+  browser / live catalog" framing — Ollama exposes no machine-readable library or *pre-install*
+  tool-capability API, and generic device-filtered browse is LM Studio/Jan/Msty table-stakes — and reshaped
+  it into a **curated, tool-capable, device-fit draft board** with the on-brand **roster-fit** differentiator
+  ("can this machine run my *whole* Dream Team?") + a Track-Record-ranked defensibility north star. Scoped in
+  [roadmap.md](docs/roadmap.md) Band C with a hard "**not** a generic browser" wall; **not Phase 4** (that's
+  hardening/GA). Docs-only capture (capture ≠ commit); building it still pays the full four-check wall.
 - 2026-07-05 — **Phase 3 (Depth & Refinement) plan-locked** (your themes + calls): 5 boxed subphases —
   P3.1 BYO-key vendors + asset-type, P3.2 local-model discovery + live capability gate, P3.3 debate depth,
   P3.4 UI/UX + a11y, **P3.5 historical as-of** (split out per your call — it carries a correctness fix).
