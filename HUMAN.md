@@ -7,15 +7,17 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-04 (P2.6a+b DONE — installed app runs real Ollama+Gemini runs end-to-end)
-**Spend this phase:** ~a few cents paid · boundary = **Ollama + demo + the shared Gemini test key only**
-(one minimal Gemini cloud validation run, within boundary; no other paid spend without asking).
+**Last AI update:** 2026-07-05 (**Phase 2 SHIPPED** — merged to `main`; P2.7 close-out done)
+**Spend this phase:** ~cents paid · boundary = **Ollama + demo + the shared Gemini test key only** (a few
+minimal Gemini cloud validations within boundary: the frozen-exe real-run proof + the P2.5 hybrid
+Ollama-analysts/Gemini-judges close-out run; no other paid spend). **Phase 3 will need a fresh cost
+boundary** — production signing, a real cloud key for release testing, etc. (ask before any paid spend).
 
 ---
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- _(none open — the VS C++/CMake toolchain is installed; see Archive)_
+- _(none open — you approved the `phase-2 → main` merge; Phase 2 shipped. Next fork will be Phase 3 kickoff.)_
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -23,6 +25,13 @@
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-05 — **Phase 2 SHIPPED (merged to `main`, you approved).** P2.6c added a windows-latest Flutter
+  CI gate — verified green on the real runner, and it caught a real bug on its first run (`runner.exe.manifest`
+  was untracked via a stray `*.manifest` ignore, which would break any clean clone). P2.7 close-out: the
+  completeness-critic returned *ready-after-small-fixes* (no code regression / security / data-loss); the
+  must-fixes were doc-refresh + substantiating the P2.5 "hybrid mix" exit, which I did with a **real
+  Ollama-analysts + Gemini-judges run** (manifest cast list confirmed the mix; Gemini judge returned an
+  Overweight verdict). Full CLAUDE.md/plan/roadmap refresh landed with the merge.
 - 2026-07-04 — **P2.6b installer shipped** — **Inno Setup** (your pick; MSIX would fight our child-process
   + taskkill model). Self-contained per-user installer (app-local VC++ CRT, no admin, no redist),
   self-signed cert pipeline (production signing stays Phase 3). **Honest note:** the fresh-context review
@@ -68,6 +77,16 @@
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
 
+### 2026-07-05 — **Phase 2 complete → merged to `main`**
+- **P2.5c1/c2** Dream Team roster UI + capability/key gate; **P2.6a** bundled-sidecar spawn path + full-
+  engine freeze + real-parent watchdog; **P2.6b** validated Inno installer (real install→spawn→run→
+  uninstall); **P2.6c** Flutter CI gate (windows-latest, pinned 3.38.6, goldens byte-exact green).
+- P2.7 close-out: completeness-critic audit → doc refresh + a real hybrid Ollama/Gemini run to
+  substantiate the P2.5 exit. ADRs 0002–0005 in place. `phase-2 → main` merged (founder-approved).
+- Verification posture held throughout: golden render-to-PNG, real-path headless runs (the frozen exe +
+  hybrid mix), fresh-context pre-merge review on every PR (it caught the provider-freeze HIGH + the
+  untracked-manifest bug), scope wall + harvest to backlog/roadmap.
+
 ### 2026-06-27 — P2.3 → P2.5b + public/open-core
 - **P2.3** Settings & Model Studio (merged), **P2.4** Hub / run history + cached review (merged),
   **P2.5a** engine per-role routing (merged), **P2.5b** agent_models contract + provenance (merged).
@@ -81,3 +100,5 @@
 - ✅ 2026-06-27 — GitHub Actions billing block → resolved by going public (free CI on public repos).
 - ✅ 2026-07-04 — VS C++/CMake desktop toolchain → **installed** by you; `flutter doctor` green (VS 2022
   17.14, Win10 SDK 10.0.26100). Unblocked the Windows build, live GUI runs, and the P2.6 installer path.
+- ✅ 2026-07-05 — `phase-2 → main` merge → **you approved; Phase 2 shipped.** (Completeness-critic clean;
+  close-out doc refresh + hybrid-mix artifact landed with it.)
