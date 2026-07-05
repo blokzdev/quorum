@@ -86,4 +86,22 @@ void main() {
     expect(find.textContaining('Needs keys for'), findsOneWidget);
     await expectLater(find.byType(HubSurface), matchesGoldenFile('goldens/hub_needs_keys.png'));
   });
+
+  testWidgets('hub — as-of (historical) launch: warning chip + Polymarket live-source caveat',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(960, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    store['quorum_apikey_anthropic'] = 'present';
+
+    await tester.pumpWidget(_hub(
+      initial: const SettingsState(
+        demoMode: false, ticker: 'NVDA', provider: 'anthropic', deepModel: 'claude-opus-4-8',
+        tradeDate: '2024-05-10', // a past as-of -> the launch card flags the historical run
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('As-of 2024-05-10'), findsOneWidget);
+    await expectLater(find.byType(HubSurface), matchesGoldenFile('goldens/hub_as_of.png'));
+  });
 }
