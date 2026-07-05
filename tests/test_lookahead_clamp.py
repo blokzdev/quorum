@@ -15,7 +15,8 @@ import pytest
 import tradingagents.dataflows.config as config_module
 import tradingagents.default_config as default_config
 from services.api.jobs import plan_run
-from tradingagents.agents.utils import core_stock_tools
+from tradingagents.agents.utils import core_stock_tools, news_data_tools
+from tradingagents.agents.utils.as_of_guard import clamp_end_to_as_of
 
 
 @pytest.mark.unit
@@ -59,6 +60,34 @@ class LookAheadClampTests(unittest.TestCase):
         # Never break a live run over a date-format quirk — an unparseable end just isn't clamped.
         config_module._config["as_of_date"] = "2024-06-10"
         assert self._call("2024-06-01", "not-a-date")["end"] == "not-a-date"
+
+    def _call_news(self, start, end):
+        """Invoke get_news with the vendor router stubbed; return the args it dispatched."""
+        captured = {}
+
+        def fake_route(method, ticker, start_date, end_date):
+            captured.update(method=method, ticker=ticker, start=start_date, end=end_date)
+            return "OK"
+
+        with mock.patch.object(news_data_tools, "route_to_vendor", fake_route):
+            news_data_tools.get_news.invoke(
+                {"ticker": "AAPL", "start_date": start, "end_date": end})
+        return captured
+
+    def test_news_tool_shares_the_same_look_ahead_guard(self):
+        # get_news is the sibling (ticker, start_date, end_date) tool — a historical run must not pull
+        # future ARTICLES either. Same guard, so the clamp applies identically.
+        config_module._config["as_of_date"] = "2024-06-10"
+        assert self._call_news("2024-06-01", "2024-12-31")["end"] == "2024-06-10"  # clamped
+        assert self._call_news("2024-06-01", "2024-06-05")["end"] == "2024-06-05"  # within bound
+
+    def test_clamp_helper_reads_config_directly(self):
+        # The shared guard reads config['as_of_date'] itself (no arg) — the single source both tools use.
+        config_module._config["as_of_date"] = "2024-06-10"
+        assert clamp_end_to_as_of("2024-12-31") == "2024-06-10"
+        assert clamp_end_to_as_of("2024-01-01") == "2024-01-01"
+        config_module._config.pop("as_of_date", None)
+        assert clamp_end_to_as_of("2024-12-31") == "2024-12-31"  # no as-of -> untouched
 
     def test_plan_run_records_the_as_of_date_on_config(self):
         # Explicit trade_date is recorded verbatim; an omitted one defaults to today (ISO YYYY-MM-DD).

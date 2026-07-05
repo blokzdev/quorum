@@ -2,6 +2,7 @@ from typing import Annotated
 
 from langchain_core.tools import tool
 
+from tradingagents.agents.utils.as_of_guard import clamp_end_to_as_of
 from tradingagents.dataflows.interface import route_to_vendor
 
 
@@ -21,6 +22,9 @@ def get_news(
     Returns:
         str: A formatted string containing news data
     """
+    # Look-ahead guard (P3.5b): same class as get_stock_data — the LLM's freely-chosen end_date would
+    # otherwise let a historical run pull FUTURE articles into the model's context. Clamp to the as-of.
+    end_date = clamp_end_to_as_of(end_date)
     return route_to_vendor("get_news", ticker, start_date, end_date)
 
 @tool
