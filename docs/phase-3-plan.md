@@ -44,12 +44,12 @@ Surface the engine's existing per-category **data-vendor selection** + an explic
 with **zero new engine capability** (`dataflows/interface.py:route_to_vendor` already routes a vendor chain;
 `isolation.py:_VENDOR_API_KEY_ENV` already injects FRED/Alpha-Vantage keys per job).
 
-- [ ] **P3.1a Contract seam** — add a `data_vendors` field (per-category `dict[str,str]`) to `RunRequest`
+- [x] **P3.1a Contract seam** — add a `data_vendors` field (per-category `dict[str,str]`) to `RunRequest`
   + thread it through `plan_run` into `config["data_vendors"]` (partial-merge via `dataflows/config.py`);
   mirror `dataVendors` on Dart `RunConfig` (toJson/fromJson/copyWith). A new **`GET /catalog/vendors`**
   serves the category→vendors map + per-vendor key requirement (derived from the engine, so the UI can't
   drift). Additive; does not touch the frozen `model_catalog` tuple.
-- [ ] **P3.1b Vendor + asset-type UI + keystore** — a per-category vendor picker in Model Studio (driven by
+- [x] **P3.1b Vendor + asset-type UI + keystore** — a per-category vendor picker in Model Studio (driven by
   `/catalog/vendors`); **FRED + Alpha Vantage BYO-key** entry reusing the P2.5c keystore/import flow (keys
   sent in `RunConfig.apiKeys`, injected per-run, **never persisted server-side**); a stock/crypto toggle
   binding `RunConfig.assetType`.
@@ -59,6 +59,14 @@ with **zero new engine capability** (`dataflows/interface.py:route_to_vendor` al
   prompts reflect it. **Honest scope:** `assetType` today only *relabels agent prompts* — it does **not**
   route crypto-specific data or tools (a crypto run still hits yfinance). The toggle is labelled honestly;
   a **real crypto pipeline is a dedicated future phase** (see roadmap), explicitly **out of P3**.
+
+  > ✅ **P3.1 complete** (2026-07-05, self-merged to `phase-3`). All 5 exit criteria verified by a
+  > fresh-context pre-merge review (mergeable, no HIGH/MED). Routing + partial-merge (no `DEFAULT_CONFIG`
+  > mutation), key-never-on-disk (full-run byte scan), write-only keystore (golden), asset-type honesty
+  > (crypto doesn't reroute; prompt framing does change), and the engine-derived `/catalog/vendors` all
+  > have falsification tests. **Real-path** (doctrine #7): the *spawned* sidecar serves the live 6-category
+  > catalog (bearer-enforced), and a live yfinance BTC-USD pull returned real OHLCV through the default
+  > vendor. 3 LOW review findings triaged (1 fixed, 2 → `docs/backlog.md` catalog-driven-gate).
 
 ### P3.2 — Local & edge model UX
 
