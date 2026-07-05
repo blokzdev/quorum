@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import re
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -110,6 +111,7 @@ class StreamMapper:
         self._stages_done: set[Stage] = set()
         self._seen_message_ids: set[str] = set()
         self._current_agent: AgentId | None = None
+        self._debate_turns_emitted = 0                 # P3.3a: count of per-turn debate events already sent
         self._started = False
 
     # -- status / stage / section transition helpers (each emits only on change) --
@@ -216,6 +218,9 @@ class StreamMapper:
         if bear:
             self._agent(AgentId.BEAR, "in_progress", out)
             self._section("bear", bear, out)
+        # P3.3a: decompose the interleaved `history` into per-turn events (in speaking order), emitting
+        # only the turns not sent yet so the terminal renders an alternating thread that grows with depth.
+        self._emit_new_debate_turns(debate.get("history") or "", out)
         if judge:
             self._section("investment_plan", judge, out)
             self._agent(AgentId.BULL, "done", out)
@@ -224,6 +229,32 @@ class StreamMapper:
             self._stage_finish(Stage.RESEARCH_DEBATE, out)
             self._stage_start(Stage.TRADER, out)
             self._agent(AgentId.TRADER, "in_progress", out)
+
+    #: The per-turn prefix each researcher node prepends to its argument (bull_researcher/bear_researcher),
+    #: so the interleaved ``history`` is cleanly splittable into ordered turns without snapshot-diffing.
+    _DEBATE_TURN_RE = re.compile(r"(Bull Analyst:|Bear Analyst:)\s*")
+
+    @classmethod
+    def _split_debate_turns(cls, history: str) -> list[tuple[str, str]]:
+        """Split accumulated debate ``history`` into ordered ``(side, markdown)`` turns, ``side`` ∈
+        {bull, bear}. Content between two prefixes (may span newlines) is the turn body."""
+        matches = list(cls._DEBATE_TURN_RE.finditer(history or ""))
+        turns: list[tuple[str, str]] = []
+        for i, m in enumerate(matches):
+            side = "bull" if m.group(1).startswith("Bull") else "bear"
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(history)
+            body = history[m.end():end].strip()
+            if body:
+                turns.append((side, body))
+        return turns
+
+    def _emit_new_debate_turns(self, history: str, out: list[Event]) -> None:
+        turns = self._split_debate_turns(history)
+        for idx in range(self._debate_turns_emitted, len(turns)):
+            side, body = turns[idx]
+            # Round groups a bull+bear pair (idx 0,1 → round 1; 2,3 → round 2), regardless of who starts.
+            out.append(ev.debate_turn(idx // 2 + 1, side, body))
+        self._debate_turns_emitted = max(self._debate_turns_emitted, len(turns))
 
     def _handle_trader(self, chunk: dict[str, Any], out: list[Event]) -> None:
         plan = (chunk.get("trader_investment_plan") or "").strip()

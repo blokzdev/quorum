@@ -15,6 +15,15 @@ class ReportSection {
   const ReportSection(this.section, this.markdown, this.structured);
 }
 
+/// One decomposed bull/bear debate turn (P3.3a). Accumulated in speaking order on [RunViewState] so the
+/// terminal renders an alternating thread that grows with `research_depth`.
+class DebateTurnView {
+  final int round;
+  final String side; // 'bull' | 'bear'
+  final String markdown;
+  const DebateTurnView(this.round, this.side, this.markdown);
+}
+
 class CostSnapshot {
   final int llmCalls, toolCalls, tokensIn, tokensOut;
   final double? estUsd;
@@ -74,6 +83,11 @@ class RunViewState {
   /// Finished report sections keyed by wire section name (e.g. "final_trade_decision").
   final Map<String, ReportSection> reports;
 
+  /// P3.3a: the bull/bear debate decomposed into ordered turns (speaking order). Empty until debate
+  /// turns stream; the accumulated `bull`/`bear` report blobs remain in [reports] for the cached-review
+  /// path (which reconstructs state from the persisted report, not the live turn events).
+  final List<DebateTurnView> debateTurns;
+
   final CostSnapshot? cost;
   final Verdict? verdict;
   final String? error;
@@ -92,6 +106,7 @@ class RunViewState {
     this.agents = const {},
     this.reasoningByAgent = const {},
     this.reports = const {},
+    this.debateTurns = const [],
     this.cost,
     this.verdict,
     this.error,
@@ -113,6 +128,7 @@ class RunViewState {
     Map<AgentId, NodeStatus>? agents,
     Map<String, String>? reasoningByAgent,
     Map<String, ReportSection>? reports,
+    List<DebateTurnView>? debateTurns,
     CostSnapshot? cost,
     Verdict? verdict,
     String? error,
@@ -128,6 +144,7 @@ class RunViewState {
       agents: agents ?? this.agents,
       reasoningByAgent: reasoningByAgent ?? this.reasoningByAgent,
       reports: reports ?? this.reports,
+      debateTurns: debateTurns ?? this.debateTurns,
       cost: cost ?? this.cost,
       verdict: verdict ?? this.verdict,
       error: error ?? this.error,

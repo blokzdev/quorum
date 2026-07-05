@@ -80,6 +80,51 @@ def test_agent_lifecycle_started_then_done():
     assert started.index("market") <= done.index("market")
 
 
+def _debate_turns(events):
+    return [e for e in events if e.type == EventType.DEBATE_TURN]
+
+
+def test_debate_history_decomposed_into_ordered_turns():
+    # P3.3a: the interleaved `history` (each turn prefixed 'Bull/Bear Analyst:') splits into per-turn
+    # events in speaking order; a bull+bear pair shares a round (idx 0,1 -> round 1; 2,3 -> round 2).
+    history = ("\nBull Analyst: bull round one"
+               "\nBear Analyst: bear round one"
+               "\nBull Analyst: bull round two"
+               "\nBear Analyst: bear round two")
+    events = _run_mapper([
+        {"investment_debate_state": {"bull_history": "b", "bear_history": "r", "history": history,
+                                     "judge_decision": ""}},
+    ], selected=("market",))
+    turns = _debate_turns(events)
+    assert [t.data["side"] for t in turns] == ["bull", "bear", "bull", "bear"]
+    assert [t.data["round"] for t in turns] == [1, 1, 2, 2]
+    assert turns[0].data["markdown"] == "bull round one"
+    assert turns[-1].data["markdown"] == "bear round two"  # multi-line-safe body extraction
+
+
+def test_debate_turns_emitted_incrementally_across_chunks():
+    # Each streamed chunk carries the FULL accumulated history; only the NEW turns are emitted.
+    mapper = StreamMapper(["market"])
+    e1 = _debate_turns(mapper.process_chunk(
+        {"investment_debate_state": {"bull_history": "x", "history": "\nBull Analyst: one"}}))
+    e2 = _debate_turns(mapper.process_chunk(
+        {"investment_debate_state": {"bull_history": "x",
+                                     "history": "\nBull Analyst: one\nBear Analyst: two"}}))
+    assert len(e1) == 1 and e1[0].data["side"] == "bull"
+    assert len(e2) == 1 and e2[0].data["side"] == "bear"  # only the newly-added turn, no re-emit
+
+
+def test_debate_turn_count_scales_with_debate_rounds():
+    # depth-1 (1 round = 2 turns) vs depth-3 (3 rounds = 6 turns) — count scales with max_debate_rounds.
+    def turns_for(rounds):
+        history = "".join(f"\nBull Analyst: b{r}\nBear Analyst: r{r}" for r in range(rounds))
+        return _debate_turns(_run_mapper(
+            [{"investment_debate_state": {"bull_history": "x", "history": history}}], selected=("market",)))
+
+    assert len(turns_for(1)) == 2
+    assert len(turns_for(3)) == 6
+
+
 def test_unchanged_section_not_re_emitted():
     mapper = StreamMapper(["market"])
     first = mapper.process_chunk({"market_report": "SAME"})

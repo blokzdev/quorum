@@ -96,8 +96,74 @@ final _midRun = RunViewState(
   },
 );
 
+/// P3.3a: a running debate decomposed into ordered turns, with the Research Manager's structured 5-tier
+/// [recommendation] driving the balance bar. [rounds] turns × 2 (bull+bear) prove the decomposition
+/// scales with research_depth.
+RunViewState _debateState({required int rounds, required String recommendation}) => RunViewState(
+      phase: RunPhase.running,
+      ticker: 'NVDA',
+      tradeDate: '2024-05-10',
+      lastSeq: 40,
+      stages: const {Stage.analysts: NodeStatus.done, Stage.researchDebate: NodeStatus.running},
+      agents: const {AgentId.bull: NodeStatus.done, AgentId.bear: NodeStatus.done},
+      debateTurns: [
+        for (var r = 1; r <= rounds; r++) ...[
+          DebateTurnView(r, 'bull',
+              'Round $r bull: the backlog and 71% gross margin compound through the cycle; buyers '
+              'defended the reclaimed 50-day MA on volume.'),
+          DebateTurnView(r, 'bear',
+              'Round $r bear: at ~38x forward there is no margin for error — any data-center '
+              'normalization compresses estimates and the multiple together.'),
+        ],
+      ],
+      reports: {
+        'investment_plan': ReportSection('investment_plan',
+            'On balance the debate resolves $recommendation with sizing discipline.',
+            {'recommendation': recommendation}),
+      },
+    );
+
 void main() {
   setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
+
+  testWidgets('terminal — debate turn thread scales with depth (depth-1 vs depth-2)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1320, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // depth-1 → 1 round: exactly 2 turn blocks (bull + bear, round 1), no round 2.
+    await tester.pumpWidget(_wrap(TerminalBody(
+        state: _debateState(rounds: 1, recommendation: 'Overweight'),
+        elapsedOverride: const Duration(seconds: 30))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('· ROUND 1'), findsNWidgets(2)); // bull + bear headers
+    expect(find.textContaining('· ROUND 2'), findsNothing);
+    await expectLater(
+        find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_debate_depth1.png'));
+
+    // depth-2 → 2 rounds: ≥4 distinct turn blocks in speaking order (proves the decomposition is real).
+    await tester.pumpWidget(_wrap(TerminalBody(
+        state: _debateState(rounds: 2, recommendation: 'Overweight'),
+        elapsedOverride: const Duration(seconds: 30))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('· ROUND 1'), findsNWidgets(2));
+    expect(find.textContaining('· ROUND 2'), findsNWidgets(2)); // 4 turn blocks total
+    await expectLater(
+        find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_debate_depth2.png'));
+  });
+
+  test('structured recommendation drives the balance lean — Buy vs Sell flip it (P3.3a)', () {
+    // Two plans differing ONLY in the structured recommendation flip the lean across the 0.5 midpoint.
+    ReportSection plan(String rec) => ReportSection('investment_plan', 'resolves $rec', {'recommendation': rec});
+    expect(debateLean(plan('Buy')), greaterThan(0.5), reason: 'Buy leans bull');
+    expect(debateLean(plan('Sell')), lessThan(0.5), reason: 'Sell leans bear');
+    expect(debateLean(plan('Overweight')), greaterThan(0.5));
+    expect(debateLean(plan('Underweight')), lessThan(0.5));
+    expect(debateLean(plan('Hold')), 0.5);
+    // No structured recommendation → falls back to keyword-scoring on the prose (unchanged legacy path).
+    expect(debateLean(const ReportSection('investment_plan', 'lean constructive, accumulate', null)),
+        greaterThan(0.5));
+    expect(debateLean(null), 0.5);
+  });
 
   testWidgets('terminal — completed verdict', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1320, 820));
