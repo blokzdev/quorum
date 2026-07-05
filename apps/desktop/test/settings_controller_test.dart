@@ -429,6 +429,50 @@ void main() {
     });
   });
 
+  group('as-of date (P3.5)', () {
+    test('setTradeDate sets a past date; empty/null clears back to a live (today) run', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      expect(c.read(settingsControllerProvider).tradeDate, isNull); // default = live
+      ctrl.setTradeDate('2024-05-10');
+      expect(c.read(settingsControllerProvider).tradeDate, '2024-05-10');
+      ctrl.setTradeDate(null);
+      expect(c.read(settingsControllerProvider).tradeDate, isNull);
+      ctrl.setTradeDate('2024-05-10');
+      ctrl.setTradeDate(''); // empty also clears
+      expect(c.read(settingsControllerProvider).tradeDate, isNull);
+    });
+
+    test('buildLaunchConfig passes a set tradeDate; omits it (sidecar defaults to today) when null',
+        () async {
+      final c = _container(const SettingsState(
+        demoMode: false, provider: 'ollama', deepModel: 'custom', customDeepModel: 'llama3.2:latest',
+        tradeDate: '2024-05-10'));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      expect((await ctrl.buildLaunchConfig()).tradeDate, '2024-05-10');
+      ctrl.setTradeDate(null);
+      final live = await ctrl.buildLaunchConfig();
+      expect(live.tradeDate, isNull);
+      expect(live.toJson().containsKey('trade_date'), isFalse); // omitted -> engine defaults to today
+    });
+
+    test('tradeDate is TRANSIENT — never persisted to settings.json (no stale as-of on restart)', () {
+      const s = SettingsState(tradeDate: '2024-05-10', ticker: 'TSLA');
+      expect(s.toJson().containsKey('trade_date'), isFalse); // not written
+      // A settings.json that somehow carried it is ignored on load; a fresh session is always live.
+      expect(SettingsState.fromJson(s.toJson()).tradeDate, isNull);
+    });
+
+    test('explicit setters preserve tradeDate (provider switch / vendor change keep the as-of date)', () {
+      final c = _container(const SettingsState(tradeDate: '2024-05-10', provider: 'google'));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setProvider('openai');
+      expect(c.read(settingsControllerProvider).tradeDate, '2024-05-10');
+      ctrl.setDataVendor('core_stock_apis', 'alpha_vantage');
+      expect(c.read(settingsControllerProvider).tradeDate, '2024-05-10');
+    });
+  });
+
   group('watchlist', () {
     test('toggleWatch adds (uppercased) then toggles off; removeWatch deletes', () {
       final c = _container(const SettingsState());

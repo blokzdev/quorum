@@ -111,6 +111,13 @@ class SettingsState {
   /// saved model profile — excluded from a [Bench]. Honest scope: relabels prompts, not a data pipeline.
   final String assetType;
 
+  /// P3.5: the as-of ("historical") date for the run (`YYYY-MM-DD`). Null → the sidecar defaults to
+  /// today (a live run). A per-run input; **deliberately NOT persisted** — a stale date surviving a
+  /// restart would silently make the next session's runs historical. Reset to null (today) each launch
+  /// of the app; the terminal shows an "as-of" badge when a past date is set so a historical run is
+  /// never mistaken for a live one.
+  final String? tradeDate;
+
   /// Idempotency latch for the first-launch `.env` → vault import (see [maybeSeedKeysFromEnv]).
   final bool seededFromEnv;
 
@@ -132,6 +139,7 @@ class SettingsState {
     this.agentModels,
     this.dataVendors,
     this.assetType = 'stock',
+    this.tradeDate,
     this.seededFromEnv = false,
   });
 
@@ -153,6 +161,7 @@ class SettingsState {
     Map<String, AgentModel>? agentModels,
     Map<String, String>? dataVendors,
     String? assetType,
+    String? tradeDate,
     bool? seededFromEnv,
   }) {
     return SettingsState(
@@ -173,6 +182,7 @@ class SettingsState {
       agentModels: agentModels ?? this.agentModels,
       dataVendors: dataVendors ?? this.dataVendors,
       assetType: assetType ?? this.assetType,
+      tradeDate: tradeDate ?? this.tradeDate,
       seededFromEnv: seededFromEnv ?? this.seededFromEnv,
     );
   }
@@ -198,6 +208,7 @@ class SettingsState {
         agentModels: agentModels, // per-role choices are independent of the global provider
         dataVendors: dataVendors, // data sources are independent of the LLM provider
         assetType: assetType,
+        tradeDate: tradeDate,
         seededFromEnv: seededFromEnv,
       );
 
@@ -221,6 +232,7 @@ class SettingsState {
         agentModels: value,
         dataVendors: dataVendors,
         assetType: assetType,
+        tradeDate: tradeDate,
         seededFromEnv: seededFromEnv,
       );
 
@@ -244,6 +256,31 @@ class SettingsState {
         agentModels: agentModels,
         dataVendors: value,
         assetType: assetType,
+        tradeDate: tradeDate,
+        seededFromEnv: seededFromEnv,
+      );
+
+  /// copyWith can't null [tradeDate] (the `?? this.x` swallows it) — this explicit setter clears the
+  /// as-of date back to null (a live "today" run).
+  SettingsState withTradeDate(String? value) => SettingsState(
+        demoMode: demoMode,
+        ticker: ticker,
+        provider: provider,
+        deepModel: deepModel,
+        quickModel: quickModel,
+        customDeepModel: customDeepModel,
+        customQuickModel: customQuickModel,
+        effort: effort,
+        backendUrl: backendUrl,
+        researchDepth: researchDepth,
+        analysts: analysts,
+        outputLanguage: outputLanguage,
+        benches: benches,
+        watchlist: watchlist,
+        agentModels: agentModels,
+        dataVendors: dataVendors,
+        assetType: assetType,
+        tradeDate: value,
         seededFromEnv: seededFromEnv,
       );
 
@@ -455,6 +492,11 @@ class SettingsController extends Notifier<SettingsState> {
 
   void setAssetType(String v) => _set(state.copyWith(assetType: v));
 
+  /// Set the as-of (historical) date, `YYYY-MM-DD`. Null/empty clears it back to a live "today" run
+  /// (the sidecar defaults an omitted trade_date to today).
+  void setTradeDate(String? date) =>
+      _set(state.withTradeDate((date == null || date.isEmpty) ? null : date));
+
   // --- Benches (saved model-config presets) --------------------------------------------------------
   void saveBench(String name) {
     final trimmed = name.trim();
@@ -635,6 +677,9 @@ class SettingsController extends Notifier<SettingsState> {
       dataVendors: s.dataVendors,
       // Explicit asset framing (the user's toggle supersedes the engine's '-USD' auto-detect).
       assetType: s.assetType,
+      // P3.5: as-of date. Null → omitted → the sidecar defaults to today (a live run). A past date
+      // makes the run historical (and the engine clamps the raw OHLCV tool to it — no look-ahead).
+      tradeDate: s.tradeDate,
     );
   }
 }

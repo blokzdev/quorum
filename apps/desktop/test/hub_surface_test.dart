@@ -290,4 +290,28 @@ void main() {
     expect(find.textContaining('Needs keys for'), findsNothing);
     expect(runButton(tester).onPressed, isNotNull);
   });
+
+  // --- As-of date (P3.5) ----------------------------------------------------------------------------
+
+  testWidgets('launch card: as-of chip reads "Today" by default, with no historical caveat',
+      (tester) async {
+    await _pump(tester, _wrap(const SettingsState(ticker: 'SPY', demoMode: true), const []));
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.textContaining('Historical as-of run'), findsNothing);
+  });
+
+  testWidgets('launch card: a past as-of date flips the chip + surfaces the Polymarket live caveat',
+      (tester) async {
+    await _pump(tester, _wrap(const SettingsState(ticker: 'SPY', demoMode: true), const []));
+    ProviderScope.containerOf(tester.element(find.byType(HubSurface)))
+        .read(settingsControllerProvider.notifier)
+        .setTradeDate('2024-05-10');
+    await tester.pumpAndSettle();
+    expect(find.text('As-of 2024-05-10'), findsOneWidget);
+    expect(find.text('Today'), findsNothing);
+    // The caveat names Polymarket + the chosen date so a historical run is unmistakable.
+    final caveat = find.textContaining('Prediction-market (Polymarket)');
+    expect(caveat, findsOneWidget);
+    expect(find.textContaining('2024-05-10'), findsWidgets);
+  });
 }

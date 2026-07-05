@@ -145,7 +145,7 @@ class _Header extends StatelessWidget {
             ),
             if (state.tradeDate != null) ...[
               const SizedBox(width: 10),
-              Text(state.tradeDate!, style: const TextStyle(color: QC.textMid, fontSize: 13)),
+              _AsOfBadge(state.tradeDate!),
             ],
           ],
           const SizedBox(width: 14),
@@ -172,6 +172,25 @@ class _Header extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The run's data date beside the ticker, always labelled "as-of DATE" so a historical run's date is
+/// unmistakable (a live run reads "as-of &lt;today&gt;", which is accurate). Deliberately does NOT recompute
+/// "is this historical?" from `DateTime.now()` — that would be non-deterministic (drifting with the wall
+/// clock, and retroactively re-flagging fixed-date goldens). The live-vs-historical *distinction* with
+/// warning emphasis lives on the Hub launch card, where "today" is unambiguous at pick time.
+class _AsOfBadge extends StatelessWidget {
+  final String tradeDate;
+  const _AsOfBadge(this.tradeDate);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.event_outlined, size: 13, color: QC.textLo),
+      const SizedBox(width: 5),
+      Text('as-of $tradeDate', style: const TextStyle(color: QC.textMid, fontSize: 13)),
+    ]);
   }
 }
 

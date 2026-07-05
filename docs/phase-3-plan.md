@@ -136,16 +136,26 @@ Zero new surface — all golden / widget / Semantics-testable.
 The date picker **and** its correctness fix — split from P3.1 because it carries a real look-ahead concern
 and seeds the future backtesting phase.
 
-- [ ] **P3.5a As-of date picker** — a `tradeDate` picker in the launch surface (binds the existing
-  `RunConfig.tradeDate`; no contract change) + a clear **"as-of <DATE>"** indicator in the terminal/verdict
+- [x] **P3.5a As-of date picker** — a `tradeDate` picker in the launch surface (binds the existing
+  `RunConfig.tradeDate`; no contract change) + a clear **"as-of DATE"** indicator in the terminal/verdict
   so a historical run is never mistaken for a live one.
-- [ ] **P3.5b Look-ahead clamp** *(correctness)* — the deterministic data path already clamps to the as-of
+- [x] **P3.5b Look-ahead clamp** *(correctness)* — the deterministic data path already clamps to the as-of
   date, but the raw OHLCV **tool** (`get_YFin_data_online` / `get_stock_data`) does **not** clamp `end_date`
   to `trade_date`, so a past-date run can leak future rows into the model's tool calls. Clamp it.
   *Exit:* a past-date run's raw OHLCV tool cannot return rows after `trade_date` (a test feeds a past
   `trade_date` and asserts no future rows in the tool result); the terminal shows the as-of indicator; the
   **Polymarket** live-source caveat (it always reflects `now`) is surfaced as a note when a past date is set.
   *(Full backtest/replay — scrubbing a timeline, performance attribution — remains a future phase.)*
+
+  > ✅ **P3.5 complete** (2026-07-05, self-merged to `phase-3`). Fresh-context review: **ship**, all 5 exit
+  > criteria MET (it even falsified the clamp test — neutering the helper turned it red). Clamp is
+  > engine-side via the config `as_of_date` channel (LLM-independent), vendor-agnostic (yfinance + Alpha
+  > Vantage), verified end-to-end through the real `plan_run → JobIsolationContext → get_stock_data` path
+  > (a live yfinance BTC-USD/AAPL pull returned zero rows after the as-of). The review surfaced a **sibling
+  > look-ahead leak in `get_news`** (same `(start_date, end_date)` class) — closed in-session via a shared
+  > `as_of_guard` (the only sibling; all other date-bounded tools take `curr_date` and are as-of-aware).
+  > The terminal "as-of" indicator is deterministic (no `DateTime.now()` at render); `tradeDate` is a
+  > deliberately-unpersisted per-run input.
 
 **Exit (phase):** a user can (1) select data vendors + asset type and run against them with BYO vendor keys
 that never persist; (2) pick a **discovered** local Ollama model with the capability gate **live** (non-tool
