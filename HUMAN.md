@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**P3.1 + P3.5 + P3.2 + P3.3 shipped** to `phase-3` — vendors, as-of, local models, debate depth; §4)
+**Last AI update:** 2026-07-05 (**Phase 3 implementation COMPLETE** — P3.1–P3.5 all on `phase-3`; `phase-3 → main` is a fork for you; §1/§4)
 **Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
 data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
 Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
@@ -17,7 +17,14 @@ test key only.)
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- _(none open — you approved the `phase-2 → main` merge; Phase 2 shipped. Next fork will be Phase 3 kickoff.)_
+- **`phase-3 → main` merge — your call.** The **entire Phase 3 implementation is done** on the `phase-3`
+  integration branch: P3.1 (BYO-key vendors + asset toggle), P3.2 (local-model discovery + capability
+  gate), P3.3 (debate-terminal depth), P3.4 (UX/a11y), P3.5 (as-of + look-ahead fix). Every subphase:
+  parallel recon → my adversarial validation → real-path verification → **fresh-context review** (each
+  returned mergeable) → self-merged to `phase-3`. Cost stayed within boundary (Ollama + the shared Gemini
+  test key only — a couple of depth-2/real-path runs). **Merges to `main` are founder-gated** (doctrine):
+  the `phase-3 → main` PR is yours to review (recommend in slices, not one mega-diff) + approve. Backlog is
+  ready to drain at phase-end. Say the word and I'll open the `phase-3 → main` PR for your review.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -85,6 +92,17 @@ test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-05 — **P3.4 UI/UX + a11y** (merged to `phase-3`) — *Phase 3 implementation COMPLETE*
+- **Keyboard operability**: every custom control (nav tabs, depth toggles, analyst chips, disclosures,
+  buttons…) is now Tab-focusable + activates on Enter/Space, via a reusable `Focusable` wrapper whose
+  focus ring paints only on focus — so **not a single golden changed** from the wrapping.
+- **Contrast (WCAG AA)**: the "Run analysis" (and every filled-accent) button label was white-on-blue at
+  3.77:1 (an AA-normal fail); a new `onAccent` ink lifts it to 4.97:1 — proved by a pure-Dart contrast test.
+- **Error surfacing**: a failed run now shows its reason + a **Retry** button in the terminal (it used to
+  silently revert to the idle prompt).
+- Fresh-context review: all criteria met; it caught that the hand-rolled filled buttons still failed
+  contrast — fixed. 146 flutter tests + contrast math green.
 
 ### 2026-07-05 — **P3.3 Debate-terminal depth** (merged to `phase-3`) — *signature bet #2*
 - The debate now **reads as a debate**: an alternating **Bull R1 → Bear R1 → Bull R2 → …** turn thread

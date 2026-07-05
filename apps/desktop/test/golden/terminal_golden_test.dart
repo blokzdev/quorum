@@ -125,8 +125,30 @@ RunViewState _debateState({required int rounds, required String recommendation})
       },
     );
 
+final _errored = RunViewState(
+  phase: RunPhase.error,
+  ticker: 'NVDA',
+  tradeDate: '2024-05-10',
+  error: 'Provider request failed: 401 Unauthorized — check the Anthropic key in Settings.',
+);
+
 void main() {
   setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
+
+  testWidgets('terminal — error state shows the failure reason + a Retry CTA', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1320, 820));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var retried = false;
+    await tester.pumpWidget(_wrap(TerminalBody(state: _errored, onRun: () => retried = true)));
+    await tester.pumpAndSettle();
+    expect(find.text('The run stopped'), findsOneWidget);
+    expect(find.textContaining('401 Unauthorized'), findsOneWidget); // the reason, not the idle prompt
+    expect(find.text('Run an analysis to watch the council deliberate.'), findsNothing);
+    expect(find.text('Retry'), findsOneWidget);
+    await expectLater(find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_error.png'));
+    await tester.tap(find.text('Retry'));
+    expect(retried, isTrue); // Retry re-invokes the run
+  });
 
   testWidgets('terminal — debate turn thread scales with depth (depth-1 vs depth-2)', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1320, 900));

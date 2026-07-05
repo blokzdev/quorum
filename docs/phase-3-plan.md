@@ -139,12 +139,12 @@ Make the debate **read as a debate**. No new vendor/endpoint/hosted signal — p
 
 Zero new surface — all golden / widget / Semantics-testable.
 
-- [ ] **P3.4a Keyboard operability** — wrap the custom `GestureDetector` controls (nav tabs, caption
+- [x] **P3.4a Keyboard operability** — wrap the custom `GestureDetector` controls (nav tabs, caption
   buttons, depth toggles, analyst chips, Set-stage, Dream Team / role-row disclosures) in
   `FocusableActionDetector` so each is Tab-focusable with a visible focus ring and activates on Enter/Space
   (keep the existing `Semantics` labels). The focus ring must paint **only on focus** so the 8 existing
   goldens stay byte-stable.
-- [ ] **P3.4b Contrast + error surface** — add an **`onAccent`** brand token so the "Run analysis" FilledButton
+- [x] **P3.4b Contrast + error surface** — add an **`onAccent`** brand token so the "Run analysis" FilledButton
   label reaches **≥4.5:1** (fixes the 3.77:1 AA-normal failure); **read `RunViewState.error`** in the
   terminal (today it's dropped) → render the failure reason + a Retry CTA on `RunPhase.error`, distinct from
   the empty state.
@@ -152,6 +152,15 @@ Zero new surface — all golden / widget / Semantics-testable.
   contrast-math test asserts the Run-button label ≥4.5:1 (fails today at 3.77:1); a new `terminal_error.png`
   golden shows the failure reason + Retry; the Run-button goldens are re-baselined with a written visual-diff
   note (only the fill/label pixels changed).
+
+  > ✅ **P3.4 complete** (2026-07-05, self-merged to `phase-3`). Fresh-context review: all 4 criteria MET.
+  > A reusable `Focusable` (FocusableActionDetector + Enter/Space + focus-ring-on-focus via
+  > `foregroundDecoration`) made the custom GestureDetector controls keyboard-operable with **zero golden
+  > churn** (the InkWell controls were already focusable). `QC.onAccent` (#0B1220, 4.97:1) fixed every
+  > filled-accent label (both Run buttons + the hand-rolled `_SmallButton`s — the review caught the latter),
+  > proved by a pure-Dart `wcagContrast` test that also locks the old white 3.77:1 failure. The terminal now
+  > surfaces `state.error` + a Retry (`terminal_error` golden). This closes the **Phase 3 implementation**
+  > (P3.1–P3.5 all shipped to `phase-3`).
 
 ### P3.5 — Historical as-of analysis
 
