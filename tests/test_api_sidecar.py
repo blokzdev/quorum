@@ -428,6 +428,70 @@ def test_catalog_vendors_endpoint(monkeypatch):
             assert v["key_env"] == VENDOR_API_KEY_ENV.get(v["value"])
 
 
+# --- Local-model discovery (P3.2a) ---
+
+def test_parse_ollama_models_tool_capability_and_ordering():
+    # tool_capable is "tools" in capabilities; a MISSING capabilities field is None (unknown), NOT False,
+    # so the gate warns (never blocks) on a stale-Ollama user. Ordering: tool-capable first, unknown last.
+    from services.api.app import _parse_ollama_models
+    rows = _parse_ollama_models({"models": [
+        {"name": "dolphin:latest", "capabilities": ["completion"], "size": 4, "details": {"family": "llama"}},
+        {"name": "llama3.2:latest", "capabilities": ["completion", "tools"], "size": 2,
+         "details": {"family": "llama"}},
+        {"name": "mystery:latest", "size": 1, "details": {"family": "x"}},  # no capabilities -> None
+        {"model": "only-model-field", "capabilities": ["tools"]},  # 'model' is the name fallback
+        {"capabilities": ["tools"]},  # no name at all -> dropped
+    ]})
+    by = {r["name"]: r for r in rows}
+    assert by["llama3.2:latest"]["tool_capable"] is True
+    assert by["dolphin:latest"]["tool_capable"] is False
+    assert by["mystery:latest"]["tool_capable"] is None  # missing field = unknown, not False
+    assert by["llama3.2:latest"]["family"] == "llama" and by["llama3.2:latest"]["size"] == 2
+    assert "only-model-field" in by  # name resolved from the 'model' field
+    assert len(rows) == 4  # the nameless entry dropped
+    assert rows[0]["name"] == "llama3.2:latest"  # tool-capable surfaces first
+    assert rows[-1]["name"] == "mystery:latest"  # unknown sinks last
+
+
+def test_resolve_ollama_native_base_strips_v1(monkeypatch):
+    from services.api.app import _resolve_ollama_native_base
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    assert _resolve_ollama_native_base() == "http://localhost:11434"  # default, /v1 stripped
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://10.0.0.5:11434/v1/")
+    assert _resolve_ollama_native_base() == "http://10.0.0.5:11434"  # trailing slash + /v1 stripped
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host:1234")
+    assert _resolve_ollama_native_base() == "http://host:1234"  # no /v1 -> host preserved
+
+
+def test_local_models_endpoint_maps_discovered_models(monkeypatch):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+
+    async def fake_tags(_base):
+        return {"models": [
+            {"name": "llama3.2:latest", "capabilities": ["completion", "tools"], "size": 2,
+             "details": {"family": "llama"}},
+            {"name": "dolphin:latest", "capabilities": ["completion"], "size": 4,
+             "details": {"family": "llama"}},
+        ]}
+
+    monkeypatch.setattr(app_module, "_fetch_ollama_tags", fake_tags)
+    body = TestClient(app_module.app).get("/catalog/local-models").json()
+    assert body["contract_version"]
+    assert {m["name"]: m["tool_capable"] for m in body["local_models"]} == \
+        {"llama3.2:latest": True, "dolphin:latest": False}
+
+
+def test_local_models_endpoint_degrades_to_empty_when_ollama_down(monkeypatch):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+
+    async def boom(_base):
+        raise ConnectionError("ollama unreachable")
+
+    monkeypatch.setattr(app_module, "_fetch_ollama_tags", boom)
+    body = TestClient(app_module.app).get("/catalog/local-models").json()
+    assert body["local_models"] == []  # no 500, no hang -> clean empty; desktop keeps its static list
+
+
 def test_bearer_auth_enforced(monkeypatch):
     monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
     client = TestClient(app_module.app)
