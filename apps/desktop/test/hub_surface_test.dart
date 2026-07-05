@@ -324,7 +324,7 @@ void main() {
 
   // --- Capability backstop (P3.2b) ------------------------------------------------------------------
 
-  final _ollamaCatalog = Catalog(contractVersion: 1, providers: {
+  final ollamaCatalog = Catalog(contractVersion: 1, providers: {
     'ollama': const ProviderCatalog('ollama', {'quick': [], 'deep': []}),
   });
 
@@ -337,7 +337,7 @@ void main() {
         // non-tool model — the picker never gated this, but the launch backstop must.
         const SettingsState(demoMode: false, provider: 'ollama', quickModel: 'dolphin-llama3:latest'),
         const [],
-        catalog: _ollamaCatalog,
+        catalog: ollamaCatalog,
         localModels: const [LocalModel('dolphin-llama3:latest', toolCapable: false)],
       ),
     );
@@ -353,7 +353,7 @@ void main() {
       _wrap(
         const SettingsState(demoMode: false, provider: 'ollama', quickModel: 'llama3.2:latest'),
         const [],
-        catalog: _ollamaCatalog,
+        catalog: ollamaCatalog,
         localModels: const [LocalModel('llama3.2:latest', toolCapable: true)],
       ),
     );
