@@ -12,10 +12,13 @@ here. Keep it current; it is loaded into context each session.
 > decisions e.g. BYO key storage [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md),
 > sidecar bundling [0002](docs/decisions/0002-sidecar-bundling.md), per-agent routing
 > [0004](docs/decisions/0004-per-agent-model-routing.md), installer format
-> [0005](docs/decisions/0005-installer-format.md)). Next is **Phase 3 (V1 Release & Hardening)** —
-> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + macOS are
-> post-V1. Product vision + the 3 signature bets (Track Record, Dream Team, debate terminal +
-> FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
+> [0005](docs/decisions/0005-installer-format.md)). Next is **Phase 3 (Depth & Refinement)** — surface the
+> untapped engine (BYO-key data vendors, local-model discovery, debate depth), UI/UX + a11y, historical
+> as-of; planned in **[docs/phase-3-plan.md](docs/phase-3-plan.md)** with the open-core raw-vs-curated line
+> in [0006](docs/decisions/0006-open-core-signal-boundary.md). **Phase 4 (V1 Release & Hardening)** —
+> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + a real crypto
+> pipeline + macOS are post-V1/future phases. Product vision + the 3 signature bets (Track Record, Dream
+> Team, debate terminal + FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
 > The engine package stays named `tradingagents` to preserve merge-ability with upstream
 > `TauricResearch/TradingAgents`.
 
