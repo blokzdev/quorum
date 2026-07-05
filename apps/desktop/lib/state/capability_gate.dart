@@ -52,9 +52,11 @@ final capabilityGateProvider = FutureProvider<List<String>>((ref) async {
     ),
   );
   if (demoMode) return const [];
-  // A `custom` quick selection resolves to the typed id (mirrors buildLaunchConfig); anything else is
-  // the option value itself.
-  final resolvedQuick = quickModel == 'custom' ? (customQuickModel ?? '') : quickModel;
+  // Resolve the global quick model exactly as buildLaunchConfig's _resolved does: a `custom` selection
+  // becomes the TRIMMED typed id (null if blank); anything else is the option value itself. (In practice
+  // a custom id is unknown to the catalog → classifies null → never gated regardless — but keep it
+  // byte-consistent with what actually launches so the two can't drift.)
+  final resolvedQuick = quickModel == 'custom' ? (customQuickModel?.trim()) : quickModel;
 
   final catalog = ref.watch(catalogProvider).value;
   if (catalog == null) return const []; // catalog not ready → can't classify → don't gate
