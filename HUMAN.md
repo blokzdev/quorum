@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**P3.1 + P3.5 shipped** to `phase-3` — vendors/asset toggle + as-of date & look-ahead fix; §4)
+**Last AI update:** 2026-07-05 (**P3.1 + P3.5 + P3.2 shipped** to `phase-3` — vendors, as-of/look-ahead, local-model discovery; §4)
 **Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
 data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
 Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
@@ -85,6 +85,20 @@ test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-05 — **P3.2 Local & edge model UX** (merged to `phase-3`)
+- **The direct answer to your question** (Gemma/Qwen/GLM/… local models): the app now **discovers the
+  device's actually-installed Ollama models** with real per-model tool-capability and folds them into the
+  picker — no more hand-typing an id or guessing from a static list. Verified on *your* machine: it found
+  `llama3.2:latest` (tool-capable) + `dolphin-llama3`/`lexi-llama-3` (no tools).
+- The **capability gate is now live**: a non-tool local model is a disabled "· no tools" item on the
+  analyst roles, and a **launch backstop** refuses a run whose effective analyst model can't call tools
+  (even the global quick model) — so a local model that would produce empty reports can't silently run.
+- **Real-path proof:** a live `llama3.2:latest` analyst run fired `tool_calls` end-to-end (a real report
+  with live OHLCV) — confirming tool-capable local models genuinely work, so blocking non-tool ones is right.
+- Recon wins: Ollama's `/api/tags` carries capabilities inline (one round-trip) and `httpx` was already a
+  dep (zero bundle cost). Fresh-context review = mergeable; 136 flutter + 381 pytest + ruff green; new
+  `hub_capability_gate` golden. **No paid spend** (Ollama-only).
 
 ### 2026-07-05 — **P3.5 Historical as-of analysis** (merged to `phase-3`)
 - **As-of date picker** on the Hub launch card ("Today" ↔ a warning "As-of DATE" for a historical run;
