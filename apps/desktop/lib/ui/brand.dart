@@ -21,6 +21,7 @@ class QuorumBrand extends ThemeExtension<QuorumBrand> {
   final Color textMid;
   final Color textLo;
   final Color accent;
+  final Color onAccent;
   final Color up;
   final Color down;
   final Color warning;
@@ -36,6 +37,7 @@ class QuorumBrand extends ThemeExtension<QuorumBrand> {
     required this.textMid,
     required this.textLo,
     required this.accent,
+    required this.onAccent,
     required this.up,
     required this.down,
     required this.warning,
@@ -53,6 +55,7 @@ class QuorumBrand extends ThemeExtension<QuorumBrand> {
         textMid = QC.textMid,
         textLo = QC.textLo,
         accent = QC.accent,
+        onAccent = QC.onAccent,
         up = QC.up,
         down = QC.down,
         warning = QC.warning,
@@ -69,6 +72,7 @@ class QuorumBrand extends ThemeExtension<QuorumBrand> {
     Color? textMid,
     Color? textLo,
     Color? accent,
+    Color? onAccent,
     Color? up,
     Color? down,
     Color? warning,
@@ -84,6 +88,7 @@ class QuorumBrand extends ThemeExtension<QuorumBrand> {
       textMid: textMid ?? this.textMid,
       textLo: textLo ?? this.textLo,
       accent: accent ?? this.accent,
+      onAccent: onAccent ?? this.onAccent,
       up: up ?? this.up,
       down: down ?? this.down,
       warning: warning ?? this.warning,

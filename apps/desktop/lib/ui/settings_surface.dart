@@ -1933,7 +1933,8 @@ class _SmallButton extends StatelessWidget {
       this.enabled = true});
   @override
   Widget build(BuildContext context) {
-    final fg = danger ? brand.down : (filled ? Colors.white : brand.textHi);
+    // P3.4b: a filled button's label uses onAccent (AA-normal 4.97:1) — white was 3.77:1 on the accent fill.
+    final fg = danger ? brand.down : (filled ? brand.onAccent : brand.textHi);
     final bg = filled ? brand.accent : Colors.transparent;
     return Opacity(
       opacity: enabled ? 1 : 0.4,

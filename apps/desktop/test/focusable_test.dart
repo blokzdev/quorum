@@ -30,21 +30,32 @@ void main() {
     expect(count, 2, reason: 'Space activates');
   });
 
-  testWidgets('a disabled Focusable (onActivate == null) is not keyboard-focusable', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
+  testWidgets('a disabled Focusable (onActivate == null) is neither focusable nor activatable',
+      (tester) async {
+    var count = 0;
+    // A disabled instance next to an ENABLED sibling: Tab must skip the disabled one, and even if keys
+    // were sent, the disabled instance has no callback to fire.
+    await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: Center(
-          child: Focusable(
+        body: Column(children: [
+          const Focusable(
             onActivate: null,
             child: SizedBox(width: 120, height: 40, child: Text('disabled')),
           ),
-        ),
+          Focusable(
+            onActivate: () => count++,
+            child: const SizedBox(width: 120, height: 40, child: Text('enabled')),
+          ),
+        ]),
       ),
     ));
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
-    // Nothing focusable → focus stays null (or off the control); no activation possible.
-    final focused = tester.binding.focusManager.primaryFocus;
-    expect(focused?.context?.widget is Focusable, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    // Tab landed on the ENABLED sibling (the disabled one is excluded from traversal), so activation
+    // fired on it — proving the disabled instance was skipped, not merely the only candidate.
+    expect(count, 2);
   });
 }
