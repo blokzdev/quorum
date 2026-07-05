@@ -217,6 +217,37 @@ def test_manifest_written_with_track_record_fields(monkeypatch, tmp_path):
     assert list(tmp_path.glob("*/run.json"))  # the manifest is on disk, beside the report tree
 
 
+def test_vendor_and_provider_keys_never_touch_disk(monkeypatch, tmp_path):
+    # P3.1c security: BYO keys (LLM + data-vendor) are request-scoped and injected per run — they must
+    # NEVER be written to the manifest, the persisted reports, or the report tree. Falsify by driving a
+    # full run whose request carries sentinel keys, then scanning EVERY persisted byte for them.
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    registry = JobRegistry(results_dir=tmp_path)
+
+    secret_av = "SECRET-alpha-vantage-3f9a"
+    secret_fred = "SECRET-fred-7c1d"
+    secret_anth = "SECRET-anthropic-a2b8"
+    job = registry.create({
+        "mode": "pro", "ticker": "BTC-USD", "asset_type": "crypto",
+        "provider": "anthropic", "deep_model": "claude-opus-4-8",
+        "data_vendors": {"core_stock_apis": "alpha_vantage"},
+        "api_keys": {"alpha_vantage": secret_av, "fred": secret_fred, "anthropic": secret_anth},
+    })
+    _wait_done(job)
+    assert job.status == "done"
+
+    # The manifest records the honest asset_type + vendor-agnostic summary fields.
+    m = registry.list_runs()[0]
+    assert m["asset_type"] == "crypto"
+
+    # No persisted file anywhere under the results dir may contain any secret substring.
+    blob = "\n".join(p.read_text(encoding="utf-8", errors="ignore")
+                     for p in tmp_path.rglob("*") if p.is_file())
+    for secret in (secret_av, secret_fred, secret_anth):
+        assert secret not in blob
+
+
 def test_history_survives_restart(monkeypatch, tmp_path):
     monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)

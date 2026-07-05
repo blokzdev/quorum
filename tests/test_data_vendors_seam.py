@@ -58,3 +58,59 @@ class DataVendorSeamTests(unittest.TestCase):
             result = interface.route_to_vendor(method, "AAPL")
         assert result == "AV-DATA"
         sentinel.assert_called_once()
+
+    # --- P3.1c: request -> env_keys (vendor keys) ---------------------------------------------------
+
+    def test_vendor_api_keys_reach_env_keys_via_plan_run(self):
+        # The desktop sends vendor keys in the SAME api_keys map as provider keys; plan_run must map each
+        # to its engine env var (build_api_keys_dict), so JobIsolationContext can inject them at run time.
+        plan = plan_run({
+            "ticker": "AAPL",
+            "data_vendors": {"core_stock_apis": "alpha_vantage"},
+            "api_keys": {"anthropic": "sk-anth", "alpha_vantage": "av-key", "fred": "fred-key"},
+        })
+        env = plan["env_keys"]
+        assert env["ALPHA_VANTAGE_API_KEY"] == "av-key"
+        assert env["FRED_API_KEY"] == "fred-key"
+        assert env["ANTHROPIC_API_KEY"] == "sk-anth"  # provider keys still map alongside vendor keys
+
+    # --- P3.1c: asset-type honesty (frames prompts, does NOT reroute data) --------------------------
+
+    def test_explicit_asset_type_overrides_ticker_autodetect(self):
+        # An explicit request asset_type wins over the '-USD' heuristic (and vice-versa for a plain ticker).
+        assert plan_run({"ticker": "AAPL", "asset_type": "crypto"})["asset_type"] == "crypto"
+        assert plan_run({"ticker": "BTC-USD"})["asset_type"] == "crypto"  # auto-detect still works
+        assert plan_run({"ticker": "AAPL"})["asset_type"] == "stock"
+
+    def test_asset_type_crypto_does_not_reroute_data_vendors(self):
+        # The honest-scope contract: choosing crypto must NOT silently switch data vendors — a crypto run
+        # still hits the same (default) vendors. Only the agent PROMPTS change (asserted below).
+        default_dv = copy.deepcopy(default_config.DEFAULT_CONFIG["data_vendors"])
+        plan = plan_run({"ticker": "BTC-USD", "asset_type": "crypto"})
+        assert plan["config"]["data_vendors"] == default_dv  # unchanged — no crypto-specific routing
+
+    def test_asset_type_crypto_reflected_in_agent_prompt_framing(self):
+        # "the run's prompts reflect it" (exit criterion): the instrument context an agent sees is crypto-
+        # framed and explicitly drops the company-fundamentals assumption.
+        from tradingagents.agents.utils.agent_utils import build_instrument_context
+        crypto_ctx = build_instrument_context("BTC-USD", "crypto")
+        stock_ctx = build_instrument_context("AAPL", "stock")
+        assert "crypto asset" in crypto_ctx and "company fundamentals" in crypto_ctx
+        assert "crypto asset" not in stock_ctx  # a stock run is NOT crypto-framed
+
+    # --- P3.1c: optional KEYLESS vendor (Polymarket) routes with no key -----------------------------
+
+    def test_keyless_prediction_market_vendor_routes_without_a_key(self):
+        # prediction_markets (polymarket) is optional AND keyless — it must dispatch with no key in env,
+        # so the UI is right to keep it default-on and never gate a launch on it.
+        import os
+        method = "get_prediction_markets"
+        assert interface.get_category_for_method(method) == "prediction_markets"
+        config_module.set_config(copy.deepcopy(default_config.DEFAULT_CONFIG))  # polymarket is the default
+        os.environ.pop("POLYMARKET_API_KEY", None)  # prove no key is consulted
+
+        sentinel = mock.Mock(return_value="PM-DATA")
+        with mock.patch.dict(interface.VENDOR_METHODS[method], {"polymarket": sentinel}):
+            result = interface.route_to_vendor(method, "AAPL")
+        assert result == "PM-DATA"
+        sentinel.assert_called_once()
