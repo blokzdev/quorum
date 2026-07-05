@@ -7,11 +7,11 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**Phase 2 SHIPPED** — merged to `main`; P2.7 close-out done)
-**Spend this phase:** ~cents paid · boundary = **Ollama + demo + the shared Gemini test key only** (a few
-minimal Gemini cloud validations within boundary: the frozen-exe real-run proof + the P2.5 hybrid
-Ollama-analysts/Gemini-judges close-out run; no other paid spend). **Phase 3 will need a fresh cost
-boundary** — production signing, a real cloud key for release testing, etc. (ask before any paid spend).
+**Last AI update:** 2026-07-05 (**Phase 3 planned** — Depth & Refinement; plan-lock PR up for your review)
+**Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
+data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
+Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
+test key only.)
 
 ---
 
@@ -25,6 +25,15 @@ boundary** — production signing, a real cloud key for release testing, etc. (a
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-05 — **Phase 3 (Depth & Refinement) plan-locked** (your themes + calls): 5 boxed subphases —
+  P3.1 BYO-key vendors + asset-type, P3.2 local-model discovery + live capability gate, P3.3 debate depth,
+  P3.4 UI/UX + a11y, **P3.5 historical as-of** (split out per your call — it carries a correctness fix).
+  Open-core line locked → [ADR 0006](docs/decisions/0006-open-core-signal-boundary.md) (BYO-key raw = free,
+  hosted-curated = paid). **Real crypto pipeline** → a dedicated future phase (roadmap), NOT P3 — today
+  `asset_type` only relabels prompts. **Correctness item (noted, scheduled P3.5b):** the raw OHLCV *tool*
+  (`get_YFin_data_online`) doesn't clamp `end_date` to `trade_date`, so a past-date run could leak future
+  rows into the model's tool calls (the deterministic snapshot path is already honest). No live impact yet
+  (no date picker ships until P3.5); the clamp is a P3.5b exit criterion.
 - 2026-07-05 — **Phase 2 SHIPPED (merged to `main`, you approved).** P2.6c added a windows-latest Flutter
   CI gate — verified green on the real runner, and it caught a real bug on its first run (`runner.exe.manifest`
   was untracked via a stray `*.manifest` ignore, which would break any clean clone). P2.7 close-out: the
