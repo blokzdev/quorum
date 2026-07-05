@@ -22,11 +22,14 @@ import tradingagents.dataflows.config as _config_module
 import tradingagents.default_config as _default_config
 from tradingagents.llm_clients.api_key_env import PROVIDER_API_KEY_ENV
 
-# Data-vendor keys that aren't LLM providers (read at tool-call time from os.environ).
-_VENDOR_API_KEY_ENV: dict[str, str] = {
+# Data-vendor keys that aren't LLM providers (read at tool-call time from os.environ). Public + the
+# single source of truth for "which vendors need a key" — the sidecar's /catalog/vendors imports this so
+# the UI's needs_key flag can never drift from what build_api_keys_dict actually injects (P3.1).
+VENDOR_API_KEY_ENV: dict[str, str] = {
     "fred": "FRED_API_KEY",
     "alpha_vantage": "ALPHA_VANTAGE_API_KEY",
 }
+_VENDOR_API_KEY_ENV = VENDOR_API_KEY_ENV  # backward-compat alias
 
 
 def build_api_keys_dict(provider_keys: dict[str, str]) -> dict[str, str]:

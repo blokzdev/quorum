@@ -374,6 +374,29 @@ def test_catalog_exposes_tool_capable_flag(monkeypatch):
     assert custom["tool_capable"] is None  # unknown user/local model -> UI warns, not blocks
 
 
+def test_catalog_vendors_endpoint(monkeypatch):
+    # P3.1: /catalog/vendors serves the per-category vendor picker; needs_key/key_env are single-sourced
+    # from VENDOR_API_KEY_ENV so the UI can never disagree with what actually gets injected.
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    from tradingagents.runtime.isolation import VENDOR_API_KEY_ENV
+
+    body = TestClient(app_module.app).get("/catalog/vendors").json()
+    cats = {c["key"]: c for c in body["categories"]}
+    # The 6 engine categories, with the 2 optional ones flagged.
+    assert {"core_stock_apis", "technical_indicators", "fundamental_data", "news_data",
+            "macro_data", "prediction_markets"} <= set(cats)
+    assert cats["macro_data"]["optional"] and cats["prediction_markets"]["optional"]
+    assert not cats["core_stock_apis"]["optional"]
+    assert cats["core_stock_apis"]["default"] == "yfinance"
+    # core_stock_apis offers alpha_vantage (needs a key) + yfinance (keyless), agreeing with the map.
+    core = {v["value"]: v for v in cats["core_stock_apis"]["vendors"]}
+    assert core["yfinance"]["needs_key"] is False and core["yfinance"]["key_env"] is None
+    for c in body["categories"]:
+        for v in c["vendors"]:
+            assert v["needs_key"] == (v["value"] in VENDOR_API_KEY_ENV)
+            assert v["key_env"] == VENDOR_API_KEY_ENV.get(v["value"])
+
+
 def test_bearer_auth_enforced(monkeypatch):
     monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
     client = TestClient(app_module.app)
