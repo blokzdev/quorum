@@ -194,4 +194,41 @@ void main() {
       expect(LocalModel.listFromJson({}), isEmpty);
     });
   });
+
+  group('toolCapabilityOf (P3.2 — shared picker-gate + launch-backstop lookup)', () {
+    final catalog = Catalog(contractVersion: 1, providers: {
+      'ollama': const ProviderCatalog('ollama', {
+        'quick': [ModelOption('Qwen3', 'qwen3:latest')], // a static catalog id, no tool_capable
+        'deep': [ModelOption('Qwen3', 'qwen3:latest')],
+      }),
+      'anthropic': const ProviderCatalog('anthropic', {
+        'quick': [ModelOption('Sonnet', 'claude-sonnet-4-6', toolCapable: true)],
+        'deep': [ModelOption('Opus', 'claude-opus-4-8', toolCapable: true)],
+      }),
+    });
+    const discovered = [
+      LocalModel('llama3.2:latest', toolCapable: true),
+      LocalModel('dolphin-llama3:latest', toolCapable: false),
+    ];
+
+    test('ollama reads the DISCOVERED model capability first', () {
+      expect(toolCapabilityOf(catalog, 'ollama', 'llama3.2:latest', discovered), isTrue);
+      expect(toolCapabilityOf(catalog, 'ollama', 'dolphin-llama3:latest', discovered), isFalse);
+    });
+
+    test('a non-discovered ollama id (custom/undiscovered) → null (unknown → warn, never block)', () {
+      expect(toolCapabilityOf(catalog, 'ollama', 'some-custom:latest', discovered), isNull);
+      expect(toolCapabilityOf(catalog, 'ollama', 'llama3.2:latest', const []), isNull); // no discovery
+    });
+
+    test('non-ollama providers read the catalog option flag', () {
+      expect(toolCapabilityOf(catalog, 'anthropic', 'claude-opus-4-8', discovered), isTrue);
+      expect(toolCapabilityOf(catalog, 'anthropic', 'nope', discovered), isNull);
+    });
+
+    test('null/blank provider or model → null', () {
+      expect(toolCapabilityOf(catalog, null, 'x', discovered), isNull);
+      expect(toolCapabilityOf(catalog, 'ollama', '  ', discovered), isNull);
+    });
+  });
 }

@@ -67,17 +67,34 @@ String _providerLabel(String p) => _providerLabels[p] ?? p;
 List<String> _rosterProviders(Catalog c) =>
     c.providerNames.where((p) => p != 'openai_compatible').toList(growable: false);
 
+/// P3.2: the Ollama picker replaces its static curated guesses with the DEVICE's DISCOVERED models
+/// (real `toolCapable`) once discovery succeeds — those are ground truth for what's installed. A `custom`
+/// sentinel always trails so a hand-typed id stays possible. Non-Ollama providers (and Ollama before
+/// discovery loads / when Ollama is down) keep [base] unchanged, so the picker never regresses.
+List<ModelOption> _foldLocalModels(
+    String? provider, List<ModelOption> base, List<LocalModel> localModels) {
+  if (provider != 'ollama' || localModels.isEmpty) return base;
+  final seen = <String>{};
+  final out = <ModelOption>[];
+  for (final m in localModels) {
+    if (seen.add(m.name)) out.add(m.toOption());
+  }
+  if (seen.add('custom')) out.add(const ModelOption('Custom model id…', 'custom'));
+  return out;
+}
+
 /// A role's full model set = the dedup-by-value union of the provider's quick + deep options, plus
 /// exactly one trailing `custom` sentinel (deduped, so a catalog that already lists `custom` doesn't
-/// double it). Prevents DropdownButton duplicate-value asserts when a model appears in both tiers.
-List<ModelOption> _unionModels(Catalog c, String provider) {
+/// double it). Prevents DropdownButton duplicate-value asserts when a model appears in both tiers. For
+/// Ollama, discovered local models (P3.2) replace the static list — so the gate sees their real capability.
+List<ModelOption> _unionModels(Catalog c, String provider, List<LocalModel> localModels) {
   final seen = <String>{};
   final out = <ModelOption>[];
   for (final o in [...c.optionsFor(provider, 'quick'), ...c.optionsFor(provider, 'deep')]) {
     if (seen.add(o.value)) out.add(o);
   }
   if (seen.add('custom')) out.add(const ModelOption('Custom model id…', 'custom'));
-  return out;
+  return _foldLocalModels(provider, out, localModels);
 }
 
 /// A role is *assigned* iff it carries a provider AND a non-blank model. The single predicate the wire
@@ -85,15 +102,12 @@ List<ModelOption> _unionModels(Catalog c, String provider) {
 /// (which drops a blank-model spec) runs the fallback.
 bool _roleAssigned(AgentModel? m) => m != null && m.model.trim().isNotEmpty;
 
-/// The catalog's `tool_capable` flag for a (provider, model), or null when the model isn't a catalog
-/// option — a custom/retired id we can't classify. null = UNKNOWN, which WARNS (never blocks).
-bool? _toolCapableOf(Catalog catalog, String? provider, String? model) {
-  if (provider == null || model == null || model.trim().isEmpty) return null;
-  for (final o in _unionModels(catalog, provider)) {
-    if (o.value == model) return o.toolCapable;
-  }
-  return null;
-}
+/// The gate's capability lookup — delegates to the shared [toolCapabilityOf] (quorum_core) so the picker
+/// gate and the launch-time backstop can never disagree. null = UNKNOWN → WARNS, never blocks. For
+/// Ollama this reads the DISCOVERED model's real capability, so a device's non-tool model (e.g. a plain
+/// llama3 8B) is correctly blocked on tool roles.
+bool? _toolCapableOf(Catalog catalog, String? provider, String? model, List<LocalModel> localModels) =>
+    toolCapabilityOf(catalog, provider, model, localModels);
 
 enum _GateOutcome { ok, warn, block }
 
@@ -163,6 +177,10 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
     // value here so SettingsBody stays async-free (the golden target).
     final vendorCatalog =
         ref.watch(vendorCatalogProvider).maybeWhen(data: (v) => v, orElse: () => null);
+    // Discovered local models — likewise a progressive enhancement; empty until loaded / if Ollama is
+    // down, so the picker keeps its static Ollama option.
+    final localModels =
+        ref.watch(localModelsProvider).maybeWhen(data: (m) => m, orElse: () => const <LocalModel>[]);
     return Container(
       color: brand.bg,
       child: catalog.when(
@@ -171,7 +189,7 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
                 title: 'No providers available',
                 subtitle: 'The engine returned an empty catalog.',
                 onRetry: _retry)
-            : SettingsBody(catalog: c, vendorCatalog: vendorCatalog),
+            : SettingsBody(catalog: c, vendorCatalog: vendorCatalog, localModels: localModels),
         loading: () =>
             const _CenterNotice(title: 'Connecting to the engine…', spinner: true),
         error: (e, _) => _CenterNotice(
@@ -194,11 +212,17 @@ class SettingsBody extends ConsumerWidget {
   /// The per-category data-vendor catalog (`GET /catalog/vendors`, P3.1). Null → the Data sources
   /// section is hidden (catalog not yet loaded / unavailable); the rest of Settings is unaffected.
   final VendorCatalog? vendorCatalog;
+
+  /// The device's discovered Ollama models (`GET /catalog/local-models`, P3.2). Empty → the Ollama
+  /// picker keeps its static list + custom-id path (discovery not loaded / Ollama down); non-empty →
+  /// real installed models replace the static guesses, each carrying its true tool-capability.
+  final List<LocalModel> localModels;
   const SettingsBody({
     super.key,
     required this.catalog,
     this.forceExpandDreamTeam = false,
     this.vendorCatalog,
+    this.localModels = const [],
   });
 
   @override
@@ -296,7 +320,7 @@ class SettingsBody extends ConsumerWidget {
                       _ModelPicker(
                         label: 'Deep model',
                         help: 'The heavy reasoning model (managers, debate).',
-                        options: catalog.optionsFor(provider, 'deep'),
+                        options: _foldLocalModels(provider, catalog.optionsFor(provider, 'deep'), localModels),
                         value: s.deepModel,
                         customValue: s.customDeepModel,
                         onSelected: ctrl.setDeepModel,
@@ -306,7 +330,7 @@ class SettingsBody extends ConsumerWidget {
                       _ModelPicker(
                         label: 'Quick model',
                         help: 'The fast model (analysts, tool calls).',
-                        options: catalog.optionsFor(provider, 'quick'),
+                        options: _foldLocalModels(provider, catalog.optionsFor(provider, 'quick'), localModels),
                         value: s.quickModel,
                         customValue: s.customQuickModel,
                         onSelected: ctrl.setQuickModel,
@@ -351,6 +375,7 @@ class SettingsBody extends ConsumerWidget {
                 // --- Dream Team (per-role overrides) -------------------------------------------------
                 _DreamTeamRoster(
                   catalog: catalog,
+                  localModels: localModels,
                   initiallyExpanded: forceExpandDreamTeam || s.agentModels != null,
                 ),
 
@@ -1258,8 +1283,10 @@ class _BenchManagerState extends ConsumerState<_BenchManager> {
 /// pick (shown as a muted chip). Binds [settingsControllerProvider] for the live lineup.
 class _DreamTeamRoster extends ConsumerStatefulWidget {
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final bool initiallyExpanded;
-  const _DreamTeamRoster({required this.catalog, this.initiallyExpanded = false});
+  const _DreamTeamRoster(
+      {required this.catalog, this.localModels = const [], this.initiallyExpanded = false});
   @override
   ConsumerState<_DreamTeamRoster> createState() => _DreamTeamRosterState();
 }
@@ -1343,6 +1370,7 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                   const SizedBox(height: 8),
                   _ModelAssignmentPicker(
                     catalog: widget.catalog,
+                    localModels: widget.localModels,
                     initial: null,
                     onChanged: (m) => setState(() => _applyTarget = m),
                     // Apply-to-all can land on the tool roles, so use the strict block gate.
@@ -1376,6 +1404,7 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                 stageLabel: stageLabel,
                 roleKeys: keys,
                 catalog: widget.catalog,
+                localModels: widget.localModels,
                 models: models,
                 applyTarget: _applyTarget,
                 onAssign: ctrl.setAgentModel,
@@ -1421,6 +1450,7 @@ class _RosterStage extends StatelessWidget {
   final String stageLabel;
   final List<String> roleKeys;
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final Map<String, AgentModel>? models;
   final AgentModel? applyTarget;
   final void Function(String role, AgentModel? model) onAssign;
@@ -1429,6 +1459,7 @@ class _RosterStage extends StatelessWidget {
     required this.stageLabel,
     required this.roleKeys,
     required this.catalog,
+    required this.localModels,
     required this.models,
     required this.applyTarget,
     required this.onAssign,
@@ -1465,6 +1496,7 @@ class _RosterStage extends StatelessWidget {
           _RoleRow(
             roleKey: role,
             catalog: catalog,
+            localModels: localModels,
             current: models?[role],
             onAssign: (m) => onAssign(role, m),
           ),
@@ -1503,11 +1535,13 @@ class _SetStageButton extends StatelessWidget {
 class _RoleRow extends StatefulWidget {
   final String roleKey;
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final AgentModel? current;
   final ValueChanged<AgentModel?> onAssign;
   const _RoleRow(
       {required this.roleKey,
       required this.catalog,
+      required this.localModels,
       required this.current,
       required this.onAssign});
   @override
@@ -1551,7 +1585,8 @@ class _RoleRowState extends State<_RoleRow> {
                         child: _RoleChip(
                             roleKey: widget.roleKey,
                             model: widget.current,
-                            catalog: widget.catalog)),
+                            catalog: widget.catalog,
+                            localModels: widget.localModels)),
                     const SizedBox(width: 6),
                     Icon(_open ? Icons.expand_less : Icons.expand_more,
                         size: 18, color: brand.textLo),
@@ -1565,6 +1600,7 @@ class _RoleRowState extends State<_RoleRow> {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: _ModelAssignmentPicker(
                 catalog: widget.catalog,
+                localModels: widget.localModels,
                 initial: widget.current,
                 onChanged: widget.onAssign,
                 gate: roleGateClass(widget.roleKey),
@@ -1585,14 +1621,20 @@ class _RoleChip extends StatelessWidget {
   final String roleKey;
   final AgentModel? model;
   final Catalog catalog;
-  const _RoleChip({required this.roleKey, required this.model, required this.catalog});
+  final List<LocalModel> localModels;
+  const _RoleChip(
+      {required this.roleKey,
+      required this.model,
+      required this.catalog,
+      this.localModels = const []});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final assigned = _roleAssigned(model);
     final outcome = assigned
-        ? _gateOutcome(roleGateClass(roleKey), _toolCapableOf(catalog, model!.provider, model!.model))
+        ? _gateOutcome(
+            roleGateClass(roleKey), _toolCapableOf(catalog, model!.provider, model!.model, localModels))
         : _GateOutcome.ok;
     final label = assigned
         ? '${_providerLabel(model!.provider)} · ${model!.model}'
@@ -1642,6 +1684,7 @@ class _RoleChip extends StatelessWidget {
 /// the wire (where the engine and the manifest both silently drop it, making the roster lie).
 class _ModelAssignmentPicker extends StatefulWidget {
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final AgentModel? initial;
   final ValueChanged<AgentModel?> onChanged;
 
@@ -1649,7 +1692,11 @@ class _ModelAssignmentPicker extends StatefulWidget {
   /// warn (structured roles), or none. The apply-to-all picker uses the strict [RoleGate.block].
   final RoleGate gate;
   const _ModelAssignmentPicker(
-      {required this.catalog, required this.initial, required this.onChanged, required this.gate});
+      {required this.catalog,
+      this.localModels = const [],
+      required this.initial,
+      required this.onChanged,
+      required this.gate});
   @override
   State<_ModelAssignmentPicker> createState() => _ModelAssignmentPickerState();
 }
@@ -1671,7 +1718,7 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
     _provider = m?.provider;
     final model = m?.model;
     if (_provider != null && model != null && model.isNotEmpty) {
-      final known = _unionModels(widget.catalog, _provider!)
+      final known = _unionModels(widget.catalog, _provider!, widget.localModels)
           .any((o) => o.value == model && o.value != 'custom');
       if (known) {
         _modelSelection = model;
@@ -1724,13 +1771,15 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
     final provider = _provider;
     // Block gate: a known-non-tool model is disabled (un-pickable) on a tool role; its label gets a
     // "· no tools" tag. Unknown (null) stays enabled — it warns, never blocks.
-    final models = provider == null ? const <ModelOption>[] : _unionModels(widget.catalog, provider);
+    final models =
+        provider == null ? const <ModelOption>[] : _unionModels(widget.catalog, provider, widget.localModels);
     final blocked = <String>{
       if (widget.gate == RoleGate.block)
         for (final o in models)
           if (o.toolCapable == false) o.value,
     };
-    final outcome = _gateOutcome(widget.gate, _toolCapableOf(widget.catalog, provider, _effectiveModel()));
+    final outcome = _gateOutcome(
+        widget.gate, _toolCapableOf(widget.catalog, provider, _effectiveModel(), widget.localModels));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

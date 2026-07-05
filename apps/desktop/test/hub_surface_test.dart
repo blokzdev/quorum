@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quorum/dream_team_roster.dart';
+import 'package:quorum/state/catalog_provider.dart';
 import 'package:quorum/state/hub_provider.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/hub_surface.dart';
@@ -36,7 +37,9 @@ Map<String, AgentModel> _resolvedLineup({Map<String, AgentModel> overrides = con
     };
 
 Widget _wrap(SettingsState initial, List<RunSummary> history,
-        {Map<String, Map<String, String>>? reports}) =>
+        {Map<String, Map<String, String>>? reports,
+        Catalog? catalog,
+        List<LocalModel>? localModels}) =>
     ProviderScope(
       overrides: [
         initialSettingsProvider.overrideWithValue(initial),
@@ -44,6 +47,10 @@ Widget _wrap(SettingsState initial, List<RunSummary> history,
         if (reports != null)
           for (final e in reports.entries)
             runReportsProvider(e.key).overrideWith((ref) => Future.value(e.value)),
+        // P3.2b: fixture the capability-backstop inputs (catalog + discovered local models).
+        if (catalog != null) catalogProvider.overrideWith((ref) => Future.value(catalog)),
+        if (localModels != null)
+          localModelsProvider.overrideWith((ref) => Future.value(localModels)),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -313,5 +320,44 @@ void main() {
     final caveat = find.textContaining('Prediction-market (Polymarket)');
     expect(caveat, findsOneWidget);
     expect(find.textContaining('2024-05-10'), findsWidgets);
+  });
+
+  // --- Capability backstop (P3.2b) ------------------------------------------------------------------
+
+  final _ollamaCatalog = Catalog(contractVersion: 1, providers: {
+    'ollama': const ProviderCatalog('ollama', {'quick': [], 'deep': []}),
+  });
+
+  testWidgets('capability backstop: a non-tool global quick model gates Run + shows the notice',
+      (tester) async {
+    await _pump(
+      tester,
+      _wrap(
+        // The global quick model (which runs every unassigned tool-analyst role) is a discovered
+        // non-tool model — the picker never gated this, but the launch backstop must.
+        const SettingsState(demoMode: false, provider: 'ollama', quickModel: 'dolphin-llama3:latest'),
+        const [],
+        catalog: _ollamaCatalog,
+        localModels: const [LocalModel('dolphin-llama3:latest', toolCapable: false)],
+      ),
+    );
+    expect(find.textContaining('No tool support'), findsOneWidget);
+    expect(find.textContaining('Market Analyst'), findsWidgets); // names the offending role(s)
+    expect(runButton(tester).onPressed, isNull); // Run refused before POST /runs
+  });
+
+  testWidgets('capability backstop: a tool-capable global quick model does NOT gate Run',
+      (tester) async {
+    await _pump(
+      tester,
+      _wrap(
+        const SettingsState(demoMode: false, provider: 'ollama', quickModel: 'llama3.2:latest'),
+        const [],
+        catalog: _ollamaCatalog,
+        localModels: const [LocalModel('llama3.2:latest', toolCapable: true)],
+      ),
+    );
+    expect(find.textContaining('No tool support'), findsNothing);
+    expect(runButton(tester).onPressed, isNotNull); // launchable
   });
 }

@@ -5,6 +5,7 @@ import 'package:quorum_core/quorum_core.dart';
 
 import '../dream_team_roster.dart';
 import '../state/app_surface.dart';
+import '../state/capability_gate.dart';
 import '../state/hub_provider.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
@@ -206,7 +207,16 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
     final missingAsync = ref.watch(missingKeysProvider);
     final missing = missingAsync.value ?? const <String>[];
     final missingKeys = !s.demoMode && missing.isNotEmpty;
-    final gated = needsProvider || (!s.demoMode && (missingAsync.isLoading || missing.isNotEmpty));
+    // P3.2b capability backstop: tool-analyst roles whose EFFECTIVE model is known-non-tool (a discovered
+    // local model with no tools, or a bench/global combo the picker never gated) — such a run silently
+    // produces empty analyst reports, so refuse it before POST /runs.
+    final capViolations = !s.demoMode
+        ? (ref.watch(capabilityGateProvider).value ?? const <String>[])
+        : const <String>[];
+    final capBlocked = capViolations.isNotEmpty;
+    final gated = needsProvider ||
+        (!s.demoMode && (missingAsync.isLoading || missing.isNotEmpty)) ||
+        capBlocked;
     final config = s.demoMode
         ? 'Demo mode · cost-free synthetic run'
         : [
@@ -294,6 +304,28 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
                               color: QC.warning, fontSize: 12, fontWeight: FontWeight.w600)),
                       const TextSpan(
                           text: 'Set them in Settings to launch.',
+                          style: TextStyle(color: QC.textLo, fontSize: 12)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (capBlocked) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.build_circle_outlined, size: 15, color: QC.warning),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: "No tool support: ${capViolations.join(', ')}. ",
+                          style: const TextStyle(
+                              color: QC.warning, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const TextSpan(
+                          text: 'Pick a tool-capable model for these roles in Settings to launch.',
                           style: TextStyle(color: QC.textLo, fontSize: 12)),
                     ]),
                   ),

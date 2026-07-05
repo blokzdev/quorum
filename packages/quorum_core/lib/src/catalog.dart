@@ -153,3 +153,23 @@ class LocalModel {
           .map((m) => LocalModel.fromJson((m as Map).cast<String, dynamic>()))
           .toList(growable: false);
 }
+
+/// The tool-capability of a (provider, model): from the catalog's options, or — for `ollama` — the
+/// DISCOVERED local model (P3.2). Returns `null` when the model is a custom/undiscovered id we can't
+/// classify — callers WARN on `null`, never block. The **single source** shared by the picker gate and
+/// the launch-time backstop, so the two can never disagree about what a run actually uses.
+bool? toolCapabilityOf(
+    Catalog catalog, String? provider, String? model, List<LocalModel> localModels) {
+  if (provider == null || model == null || model.trim().isEmpty) return null;
+  if (provider == 'ollama') {
+    for (final m in localModels) {
+      if (m.name == model) return m.toolCapable;
+    }
+  }
+  for (final mode in const ['quick', 'deep']) {
+    for (final o in catalog.optionsFor(provider, mode)) {
+      if (o.value == model) return o.toolCapable;
+    }
+  }
+  return null;
+}

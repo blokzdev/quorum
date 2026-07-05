@@ -55,7 +55,9 @@ const _vendorCatalog = VendorCatalog(contractVersion: 1, categories: [
       vendors: [VendorOption('polymarket')], defaultVendor: 'polymarket'),
 ]);
 
-Widget _wrap(SettingsState initial, {VendorCatalog? vendorCatalog}) => ProviderScope(
+Widget _wrap(SettingsState initial,
+        {VendorCatalog? vendorCatalog, List<LocalModel> localModels = const []}) =>
+    ProviderScope(
       overrides: [initialSettingsProvider.overrideWithValue(initial)],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -65,7 +67,9 @@ Widget _wrap(SettingsState initial, {VendorCatalog? vendorCatalog}) => ProviderS
           fontFamily: 'Inter',
           extensions: const [QuorumBrand.dark()],
         ),
-        home: Scaffold(body: SettingsBody(catalog: _catalog, vendorCatalog: vendorCatalog)),
+        home: Scaffold(
+            body: SettingsBody(
+                catalog: _catalog, vendorCatalog: vendorCatalog, localModels: localModels)),
       ),
     );
 
@@ -503,6 +507,43 @@ void main() {
     final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
     expect(container.read(settingsControllerProvider).agentModels!['portfolio_manager'],
         const AgentModel(provider: 'legacy', model: 'old-x'));
+  });
+
+  testWidgets('P3.2: discovered Ollama models fold into the roster picker; a non-tool one is DISABLED',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // The device's real models replace the static Ollama guesses, each with its real tool-capability.
+    await tester.pumpWidget(_wrap(const SettingsState(demoMode: false), localModels: const [
+      LocalModel('llama3.2:latest', toolCapable: true),
+      LocalModel('dolphin-llama3:latest', toolCapable: false), // a plain llama3 8B — no tools
+    ]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DREAM TEAM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Market Analyst')); // a TOOL role (RoleGate.block)
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('— Default').last); // role provider dropdown
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ollama (local)').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Model'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // The discovered non-tool model renders with a "no tools" tag on a DISABLED item.
+    final noTool = find.textContaining('no tools');
+    expect(noTool, findsWidgets);
+    final item = tester.widget<DropdownMenuItem<String?>>(find
+        .ancestor(of: noTool.first, matching: find.byType(DropdownMenuItem<String?>))
+        .first);
+    expect(item.enabled, isFalse); // dolphin is structurally un-pickable on a tool role
+    // The tool-capable discovered model IS pickable and commits.
+    await tester.tap(find.text('llama3.2:latest').last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
+    expect(container.read(settingsControllerProvider).agentModels!['market_analyst'],
+        const AgentModel(provider: 'ollama', model: 'llama3.2:latest'));
   });
 
   testWidgets('gate: a stale non-tool assignment on a tool role surfaces as a red error chip',
