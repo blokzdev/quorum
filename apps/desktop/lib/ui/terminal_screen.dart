@@ -399,6 +399,11 @@ class _ReasoningPane extends StatelessWidget {
         if (riskViews.isNotEmpty) ...[
           const _Reveal(child: _GroupLabel('Risk Debate')),
           for (final s in riskViews) _Reveal(child: _SectionCard(s)),
+          // P3.3b: the risk debate concludes with its own verdict ribbon (the Portfolio Manager's call
+          // on the 3-way aggressive/conservative/neutral synthesis), rather than being silently folded
+          // into the final-decision card at the top.
+          if (state.verdict != null || rep('final_trade_decision') != null)
+            _Reveal(child: _RiskVerdictRibbon(verdict: state.verdict, decision: rep('final_trade_decision'))),
         ],
         if (analyst.isNotEmpty) ...[
           const _Reveal(child: _GroupLabel('Analyst Evidence')),
@@ -730,6 +735,48 @@ class _GroupLabel extends StatelessWidget {
       );
 }
 
+/// The risk debate's conclusion (P3.3b): a compact ribbon showing the Portfolio Manager's verdict on
+/// the 3-way aggressive/conservative/neutral synthesis. Sourced from the run verdict (rating) + the
+/// decision's one-liner — the full decision detail stays in the answer card up top; this just gives the
+/// risk section a visible resolution instead of trailing off into three uncommented stances.
+class _RiskVerdictRibbon extends StatelessWidget {
+  final Verdict? verdict;
+  final ReportSection? decision;
+  const _RiskVerdictRibbon({this.verdict, this.decision});
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = verdict?.rating;
+    final c = ratingColor(rating);
+    final oneLine = (decision?.markdown ?? verdict?.finalDecision ?? '').trim().split('\n').first;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withValues(alpha: 0.40)),
+      ),
+      child: Row(children: [
+        Icon(Icons.gavel_outlined, size: 15, color: c),
+        const SizedBox(width: 8),
+        Text('RISK VERDICT',
+            style: TextStyle(color: c, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+        if (rating != null) ...[const SizedBox(width: 8), _SignalChip(rating, c)],
+        if (oneLine.isNotEmpty) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(oneLine,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: QC.textMid, fontSize: 12.5)),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 class _LiveReasoningCard extends StatelessWidget {
   final AgentId agent;
   final String text;
@@ -757,6 +804,67 @@ class _LiveReasoningCard extends StatelessWidget {
           SelectableText(text, style: const TextStyle(color: QC.textHi, height: 1.5, fontSize: 14)),
         ],
       ),
+    );
+  }
+}
+
+String _cap(Object? s) {
+  final v = '$s';
+  return v.isEmpty ? v : v[0].toUpperCase() + v.substring(1);
+}
+
+String _num(Object? n) => n is num ? (n == n.roundToDouble() ? n.toStringAsFixed(0) : '$n') : '$n';
+
+/// The structured signal chips for a section (P3.3b) — read from the section's on-the-wire structured
+/// payload. Sentiment → band / score / confidence; trader → action / entry / stop. Empty for sections
+/// with no structured signals (they render exactly as before, so their goldens are unchanged).
+List<Widget> _signalChips(ReportSection s) {
+  final d = s.structured;
+  if (d == null) return const [];
+  switch (s.section) {
+    case 'sentiment_report':
+      final band = d['overall_band'] as String?;
+      final score = d['overall_score'] as num?;
+      return [
+        if (band != null) _SignalChip(band, _sentimentColor(band)),
+        if (score != null) _SignalChip('${score.toStringAsFixed(1)}/10', QC.textMid),
+        if (d['confidence'] != null) _SignalChip('${_cap(d['confidence'])} confidence', QC.textLo),
+      ];
+    case 'trader_investment_plan':
+      final action = d['action'] as String?;
+      return [
+        if (action != null) _SignalChip(_cap(action), ratingColor(action)),
+        if (d['entry_price'] != null) _SignalChip('Entry ${_num(d['entry_price'])}', QC.textMid),
+        if (d['stop_loss'] != null) _SignalChip('Stop ${_num(d['stop_loss'])}', QC.down),
+      ];
+    default:
+      return const [];
+  }
+}
+
+Color _sentimentColor(String band) {
+  final b = band.toLowerCase();
+  if (b.contains('bull') || b.contains('positive')) return QC.up;
+  if (b.contains('bear') || b.contains('negative')) return QC.down;
+  return QC.textMid;
+}
+
+/// A compact pill for a structured signal: a tinted, outlined label.
+class _SignalChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SignalChip(this.label, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Text(label,
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -804,8 +912,15 @@ class _SectionCard extends StatelessWidget {
             fontSize: emphasis ? 15 : 14,
             fontWeight: emphasis ? FontWeight.w500 : FontWeight.w400));
 
+    final chips = _signalChips(section);
     final content = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       header,
+      // P3.3b: surface the section's already-on-the-wire structured signals as chips (sentiment
+      // band/score/confidence; trader action/entry/stop) so the numbers read at a glance.
+      if (chips.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Wrap(spacing: 6, runSpacing: 6, children: chips),
+      ],
       const SizedBox(height: 8),
       body,
     ]);

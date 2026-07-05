@@ -16,7 +16,8 @@ const _analystReports = {
       'fresh MACD bullish crossover. Key support 118, resistance 135.', null),
   'sentiment_report': ReportSection('sentiment_report',
       'Social sentiment skews bullish (7.4/10). StockTwits mentions +22% w/w and constructive '
-      'Reddit threads on the product cycle.', null),
+      'Reddit threads on the product cycle.',
+      {'overall_band': 'Bullish', 'overall_score': 7.4, 'confidence': 'high'}), // P3.3b chips
   'news_report': ReportSection('news_report',
       'Macro backdrop supportive: soft-landing narrative intact, sector tailwinds from new orders.', null),
   'fundamentals_report': ReportSection('fundamentals_report',
@@ -48,7 +49,8 @@ final _completed = RunViewState(
         'On balance the bull thesis on NVDA is better supported this quarter; lean constructive '
         'with sizing discipline.', null),
     'trader_investment_plan': const ReportSection('trader_investment_plan',
-        'Buy a starter position in NVDA: entry ~124, stop 113, target 152, size 5% of book.', null),
+        'Buy a starter position in NVDA: entry ~124, stop 113, target 152, size 5% of book.',
+        {'action': 'Buy', 'entry_price': 124.0, 'stop_loss': 113.0}), // P3.3b chips
     'aggressive': const ReportSection('aggressive',
         'Press the long on confirmation above 135 — momentum and rising estimates favor continuation.', null),
     'neutral': const ReportSection('neutral',
@@ -169,7 +171,24 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1320, 820));
     await tester.pumpWidget(_wrap(TerminalBody(state: _completed)));
     await tester.pumpAndSettle();
+    // P3.3b trader chips render on the (visible) trade-plan card.
+    expect(find.text('Buy'), findsWidgets); // trader action chip (verdict rail is uppercase 'BUY')
+    expect(find.text('Entry 124'), findsOneWidget);
+    expect(find.text('Stop 113'), findsOneWidget);
     await expectLater(find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_completed.png'));
+  });
+
+  testWidgets('terminal — P3.3b sentiment chips + risk-judge ribbon render (below the golden fold)',
+      (tester) async {
+    // A tall surface builds the whole ListView so the lower sections' chips/ribbon are in the tree.
+    await tester.binding.setSurfaceSize(const Size(1320, 1700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(TerminalBody(state: _completed)));
+    await tester.pumpAndSettle();
+    expect(find.text('Bullish'), findsOneWidget); // sentiment band chip
+    expect(find.text('7.4/10'), findsOneWidget); // sentiment score chip
+    expect(find.text('High confidence'), findsOneWidget); // sentiment confidence chip
+    expect(find.text('RISK VERDICT'), findsOneWidget); // the risk debate's own conclusion ribbon
   });
 
   testWidgets('terminal — mid-run streaming', (tester) async {
