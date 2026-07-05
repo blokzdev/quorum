@@ -275,14 +275,22 @@ V1 drives effort from the existing per-provider knobs); exposing `reflector`/`si
 
 ### P2.6 — Installer packaging & Flutter CI *(depends on P2.0; build the distributable)*
 
-- [ ] **P2.6a** Bundle the frozen sidecar exe into the desktop package; rewrite
-  `desktop_sidecar_endpoint.dart`'s spawn path to launch it (keep the `.venv` fallback for local dev).
-  Lead tasks from the P2.0 spike: productionize the **full-engine** freeze (the spike proved demo;
-  the engine freeze is the punch-list) and **re-verify the parent-PID watchdog fix against a real
-  Flutter parent**.
-- [ ] **P2.6b** Installer packaging (MSIX vs Inno/WiX per P2.0); include the C++ ATL build deps
-  required by `flutter_secure_storage_windows`. Validate the full install/launch flow with a
-  **debug / self-signed cert** — production keystore signing is deferred to **Phase 3**.
+- [x] **P2.6a** *(done — `SidecarLauncher.resolve()` spawn path: bundled exe → `.venv` dev fallback,
+  6 hermetic tests; full-engine freeze productionized in `packaging/` and proven with a real Ollama
+  pro run through the frozen exe; watchdog re-verified against the **real Flutter parent** (built app,
+  orphaned sidecar self-exited in 3s). PR #17.)* Bundle the frozen sidecar exe into the desktop package;
+  rewrite `desktop_sidecar_endpoint.dart`'s spawn path to launch it (keep the `.venv` fallback for local
+  dev). Lead tasks from the P2.0 spike: productionize the **full-engine** freeze and **re-verify the
+  parent-PID watchdog fix against a real Flutter parent**.
+- [x] **P2.6b** *(done — **Inno Setup** (not MSIX/WiX: our child-process + taskkill/tasklist model would
+  fight MSIX's container); per-user install, self-signed cert pipeline. App-local VC++ CRT (dumpbin:
+  MSVCP140/VCRUNTIME140/_1; ATL statically linked) so it runs redist-free. Fresh-context review caught a
+  HIGH — the freeze bundled no provider LLM packages (lazy imports) so real runs would crash; fixed via
+  `collect_all` of the provider stack and re-verified on the real path: installed sidecar ran real
+  Ollama + Gemini analyses. Full install→launch→bundled-spawn→watchdog→uninstall validated. `packaging/`.)*
+  Installer packaging (MSIX vs Inno/WiX per P2.0); include the C++ ATL build deps required by
+  `flutter_secure_storage_windows`. Validate the full install/launch flow with a **debug / self-signed
+  cert** — production keystore signing is deferred to **Phase 3**.
 - [ ] **P2.6c** CI — add a Flutter build + `flutter test` (incl. goldens) job and a packaging job to
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 

@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-04 (toolchain in ✓ — P2.6a build/spawn/watchdog spine proven on the real app)
+**Last AI update:** 2026-07-04 (P2.6a+b DONE — installed app runs real Ollama+Gemini runs end-to-end)
 **Spend this phase:** ~a few cents paid · boundary = **Ollama + demo + the shared Gemini test key only**
 (one minimal Gemini cloud validation run, within boundary; no other paid spend without asking).
 
@@ -23,6 +23,14 @@
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-04 — **P2.6b installer shipped** — **Inno Setup** (your pick; MSIX would fight our child-process
+  + taskkill model). Self-contained per-user installer (app-local VC++ CRT, no admin, no redist),
+  self-signed cert pipeline (production signing stays Phase 3). **Honest note:** the fresh-context review
+  caught a HIGH my *own* verification missed — the freeze bundled no provider LLM packages (they're lazily
+  imported), so real runs would have crashed; my earlier "real run PASS" was a false positive (accepted an
+  empty run). Fixed (collect_all the provider stack) and re-verified rigorously on report *content*: the
+  installed sidecar now runs real Ollama **and** Gemini analyses. This is the fresh-context-review keystone
+  working exactly as designed. → [ADR 0005](docs/decisions/0005-installer-format.md).
 - 2026-07-04 — **P2.6a spine de-risked on the REAL app** (you installed the toolchain). Proven end-to-end,
   not headless: (1) `flutter build windows --debug` → `quorum.exe`, exit 0; (2) the full-engine
   **PyInstaller freeze** builds (125 MB) and a **real pro run** ran through the *frozen* sidecar against
