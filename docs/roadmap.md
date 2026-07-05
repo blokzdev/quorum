@@ -45,7 +45,7 @@ the original `P#` IDs from the first roadmap draft, for continuity.
 - **Phase 2** ✅ *(complete, merged to `main` 2026-07-05)* — Hub & navigation, Settings/Model Studio,
   the **Dream Team** per-agent roster + capability/key gates, applied brand, a validated debug-signed
   Windows installer, and a Flutter CI gate. Detail: [phase-2-plan.md](phase-2-plan.md).
-- **Phase 3 — Depth & Refinement** *(next; planned 2026-07-05)* — surface the untapped TradingAgents
+- **Phase 3 — Depth & Refinement** ✅ *(implementation complete on `phase-3` 2026-07-05; `phase-3 → main` founder-gated)* — surfaced the untapped TradingAgents
   engine + deepen the product: **P3.1** BYO-key data-vendor selection + asset-type toggle, **P3.2**
   local/edge model discovery (Ollama `/api/tags`) + a live capability gate, **P3.3** debate-terminal depth
   (turn-structured debate + risk synthesis — bet #2), **P3.4** UI/UX + a11y (keyboard, AA contrast, error
@@ -63,7 +63,9 @@ the original `P#` IDs from the first roadmap draft, for continuity.
 
 ### Band C — Post-V1 platform *(the maximality)*
 - **Track Record & intelligence** *(P7)* — decision log + reflection/memory surfaced; realized alpha;
-  cost/usage analytics. (Signature bet #1; P2.4 seeds the data.)
+  cost/usage analytics. (Signature bet #1; P2.4 seeds the manifest, **P3.1 seeds vendor provenance** —
+  record which data source served each category so the scorecard can attribute a verdict to its inputs
+  [drained from `docs/backlog.md`].)
 - **Hosted signal layer** — the **curated/aggregated/synced** FRED + Polymarket signal intelligence
   (no-key hosted, cross-run history) — the **paid** half of signature bet #3, per
   [ADR 0006](decisions/0006-open-core-signal-boundary.md). (The *raw BYO-key* half ships free in Phase 3.)

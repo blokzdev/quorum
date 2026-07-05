@@ -1,6 +1,10 @@
 # Phase 3 — Depth & Refinement
 
-> Status: **planned** (plan-lock 2026-07-05; Phase 2 shipped to `main` 2026-07-05). Phase 2 delivered the
+> Status: **implementation complete** — P3.1–P3.5 all self-merged to the `phase-3` integration branch
+> (2026-07-05); the **`phase-3 → main` merge is founder-gated and pending**. End-of-phase audit passed:
+> completeness verified (every exit criterion falsification-tested), **zero scope creep** (every shipped
+> capability maps to a plan checkbox), CI green (385 pytest + 146 flutter + ruff), backlog drained.
+> (Plan-lock 2026-07-05; Phase 2 shipped to `main` 2026-07-05.) Phase 2 delivered the
 > *shell* — Hub, Model Studio, Dream Team, installer, CI. Phase 3 surfaces the **untapped power of the
 > TradingAgents engine** and deepens the product toward a shippable V1, **before** the V1 Release &
 > Hardening phase (now **Phase 4**). Recon-grounded (a 4-theme engine-surface fan-out); each subphase is
