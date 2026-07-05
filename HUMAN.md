@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**P3.1 + P3.5 + P3.2 shipped** to `phase-3` — vendors, as-of/look-ahead, local-model discovery; §4)
+**Last AI update:** 2026-07-05 (**P3.1 + P3.5 + P3.2 + P3.3 shipped** to `phase-3` — vendors, as-of, local models, debate depth; §4)
 **Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
 data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
 Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
@@ -85,6 +85,20 @@ test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-05 — **P3.3 Debate-terminal depth** (merged to `phase-3`) — *signature bet #2*
+- The debate now **reads as a debate**: an alternating **Bull R1 → Bear R1 → Bull R2 → …** turn thread
+  that grows with research depth (instead of two static blobs), a balance bar driven by the Research
+  Manager's real 5-tier rating (not prose keyword-guessing), and **structured signal chips** on the cards
+  (sentiment Bullish/7.4/High-confidence; trader Buy/Entry/Stop). The risk debate gets its own RISK VERDICT
+  ribbon.
+- **Zero new backend** — the structured signals were already on the wire; P3.3 is a runtime-event +
+  reducer + UI job. One genuine runtime addition (per-turn events); the dead `agent_done.confidence` seam
+  removed.
+- The one rabbit-hole risk (are per-turn boundaries recoverable?) was de-risked cleanly + confirmed on a
+  **real Gemini depth-2 debate** (4 clean turns, no false splits). Fresh-context review: all criteria MET.
+  139 flutter + 384 pytest + ruff green; depth-1/depth-2 golden pair. **No paid spend beyond the shared
+  Gemini test key** (one depth-2 de-risk run).
 
 ### 2026-07-05 — **P3.2 Local & edge model UX** (merged to `phase-3`)
 - **The direct answer to your question** (Gemma/Qwen/GLM/… local models): the app now **discovers the
