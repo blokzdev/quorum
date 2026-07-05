@@ -41,13 +41,17 @@ the original `P#` IDs from the first roadmap draft, for continuity.
 - **Phase 1** *(≈ old P0 engine seam + P1 vertical slice + P2 research terminal)* — the sidecar +
   runtime + event contract, and the frameless 3-pane streaming terminal. De-forked 2026-06-26.
 
-### Band B — Core V1 *(in progress)*
-- **Phase 2** *(≈ old P3 Hub + P4 Settings/Model Studio + P5 UI/brand + installer mechanics)* —
-  Hub & navigation, Settings/Model Studio (quick/deep), **Dream Team** (per-agent), applied brand,
-  debug-signed installer. Detail: [phase-2-plan.md](phase-2-plan.md).
-- **Phase 3 — V1 Release & Hardening** *(≈ old P6)* — security sweep, secret/key rotation, production
-  keystore code-signing, release CI, GA. May coordinate with the macOS port for a multi-platform
-  signed launch.
+### Band B — Core V1
+- **Phase 2** ✅ *(complete, merged to `main` 2026-07-05)* — Hub & navigation, Settings/Model Studio,
+  the **Dream Team** per-agent roster + capability/key gates, applied brand, a validated debug-signed
+  Windows installer, and a Flutter CI gate. Detail: [phase-2-plan.md](phase-2-plan.md).
+- **Phase 3 — V1 Release & Hardening** *(next; ≈ old P6)* — security sweep, secret/key rotation
+  (incl. the shared Gemini test key), production keystore code-signing, release CI (+ end-to-end
+  `packaging.yml` verification, a clean-VM install smoke, a per-provider freeze regression test), GA.
+  May coordinate with the macOS port for a multi-platform signed launch.
+
+> **Business model:** open-core (local client free + open; paid value server-side) —
+> [monetization.md](monetization.md), [ADR 0003](decisions/0003-open-source-and-open-core-monetization.md).
 
 ### Band C — Post-V1 platform *(the maximality)*
 - **Track Record & intelligence** *(P7)* — decision log + reflection/memory surfaced; realized alpha;

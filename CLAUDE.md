@@ -5,14 +5,17 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 2 in progress** (Phase 1 vertical slice complete, de-forked 2026-06-26). The Python
-> engine is mature; the Flutter desktop app + FastAPI sidecar are a proven vertical slice. Phase 2
-> (Hub, Settings/Model Studio, **Dream Team** per-agent models, applied brand, installer) is planned
-> and locked in **[docs/phase-2-plan.md](docs/phase-2-plan.md)** — subphases P2.0–P2.7, exit criteria,
-> and decisions (e.g. BYO key storage, [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md)).
-> Production keystore signing + GA are **Phase 3 (V1 Release & Hardening)**; mobile remote +
-> paper-trading + macOS are post-V1. Product vision + the 3 signature bets (Track Record, Dream Team,
-> debate terminal + FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
+> Status: **Phase 2 complete** (merged to `main` 2026-07-05; Phase 1 vertical slice + de-fork 2026-06-26).
+> Phase 2 shipped the Hub + navigation, Settings/**Model Studio**, the **Dream Team** per-agent model
+> roster + capability/key gates, applied brand, and a validated Windows installer + Flutter CI gate —
+> all locked in **[docs/phase-2-plan.md](docs/phase-2-plan.md)** (subphases P2.0–P2.7, exit criteria,
+> decisions e.g. BYO key storage [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md),
+> sidecar bundling [0002](docs/decisions/0002-sidecar-bundling.md), per-agent routing
+> [0004](docs/decisions/0004-per-agent-model-routing.md), installer format
+> [0005](docs/decisions/0005-installer-format.md)). Next is **Phase 3 (V1 Release & Hardening)** —
+> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + macOS are
+> post-V1. Product vision + the 3 signature bets (Track Record, Dream Team, debate terminal +
+> FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
 > The engine package stays named `tradingagents` to preserve merge-ability with upstream
 > `TauricResearch/TradingAgents`.
 
@@ -147,12 +150,25 @@ real engine. `demo.py` is the synthetic streamer.
 - `packages/quorum_core/` — portable domain layer: sealed `QuorumEvent` union (mirrors
   `runtime/events.py`), immutable `RunViewState`, pure `reduce(state,event)`, `ApiClient`,
   hand-rolled `SseTransport` (bearer + Last-Event-ID), `EngineEndpoint` abstraction.
-- `apps/desktop/` — Flutter (org dev.quorum), Riverpod 3 (one `runControllerProvider`),
-  `DesktopSidecarEndpoint` spawns `.venv\Scripts\python.exe -m services.api` (taskkill teardown).
-  `lib/ui/terminal_screen.dart` = the frameless 3-pane terminal (pipeline rail / reasoning feed with
-  the bull-vs-bear tug-of-war / verdict rail); `quorum_colors.dart` = design tokens; bundled brand
-  fonts Inter + JetBrains Mono under `fonts/`. Window chrome via `window_manager` (frameless,
-  `onWindowClose` owns sidecar teardown → `destroy()`).
+- `apps/desktop/` — Flutter (org dev.quorum), Riverpod 3 (`runControllerProvider`,
+  `settingsControllerProvider`, `appSurfaceProvider` nav). A frameless shell (`quorum_shell.dart`)
+  switches between the surfaces Phase 2 shipped:
+  - **Hub** (`hub_surface.dart`) — launch card, watchlist, run history + filters, click-through to a
+    cached review (re-renders a finished run through `TerminalBody`), and the post-run Dream Team
+    **cast list**.
+  - **Settings / Model Studio** (`settings_surface.dart`) — provider/quick+deep pickers off
+    `catalogProvider`, write-only OS-vault API keys, saved **Benches**, and the **Dream Team roster**
+    (`dream_team_roster.dart`): a stage-grouped 12-role provider+model picker with the capability gate
+    (block non-tool models on the tool-analyst roles) + the pre-launch multi-provider key gate.
+  - **Terminal** (`terminal_screen.dart`) — the frameless 3-pane run view (pipeline rail / reasoning
+    feed with the bull-vs-bear tug-of-war / verdict rail).
+  `SidecarLauncher.resolve()` (`engine/`) spawns the **bundled frozen sidecar** (`<appDir>/sidecar/
+  quorum_sidecar.exe`) when packaged, else `.venv\Scripts\python.exe -m services.api` in dev; teardown
+  is `/shutdown` → `taskkill /T`, backstopped by the `QUORUM_PARENT_PID` watchdog. `quorum_colors.dart`
+  = design tokens; bundled brand fonts Inter + JetBrains Mono under `fonts/`; window chrome via
+  `window_manager` (`onWindowClose` owns teardown → `destroy()`). Packaged by `packaging/` (PyInstaller
+  freeze + Inno Setup, [ADR 0005](docs/decisions/0005-installer-format.md)); CI gates it on
+  windows-latest (`.github/workflows/ci.yml` `flutter` job).
 - **Verify UI via golden render-to-PNG** (`flutter test --update-goldens` → Read the PNG): the test
   harness loads the bundled fonts so committed goldens are deterministic. Live Flutter-GPU windows
   can't be screen-captured here (PrintWindow/CopyFromScreen blank/occluded; dev-exe gets no

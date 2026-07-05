@@ -263,10 +263,17 @@ split (roster UI vs capability/key gate) per the scope critic.
   catalog flag); a run referencing an uncredentialed provider is gated before `POST /runs` (golden:
   the warning state).
 
-**Exit (phase):** a user assigns distinct models per role and launches a run that honors them
-(validated with a hybrid local-Ollama + cloud-judge mix); unset roles fall back to quick/deep; the
-engine change is **additive** (quick/deep runs byte-identical); the capability gate blocks a non-tool
-model on the 3 tool-analyst roles; multi-provider keys are validated pre-launch; Dream Team goldens land.
+**Exit (phase):** ✅ a user assigns distinct models per role and launches a run that honors them —
+**validated end-to-end with a real hybrid lineup** (2026-07-05: Ollama analysts + Gemini judges; the
+resolved manifest cast list showed `research_manager`/`portfolio_manager` on `google·gemini-3.5-flash`
+and the other 10 roles on `ollama·llama3.2:latest`, final verdict **Overweight** from the cloud judge).
+Unset roles fall back to quick/deep; the engine change is **additive** (quick/deep runs byte-identical —
+additivity test + unchanged golden); multi-provider keys are merged + validated pre-launch (the hybrid
+run injected the Gemini key alongside keyless Ollama). The **capability gate** blocks a non-tool model on
+the 3 tool-analyst roles at the picker (`toolCapable == false`), verified against an **injected** catalog
+flag — the live catalog's `_NON_TOOL_MODELS` is empty today, so no production model is blockable yet, and
+a launch-time backstop for bench/apply combos is backlogged. Dream Team goldens (all-default / partial /
+capability) landed.
 
 **Not in V1 (deferred):** a per-role *effort* UI control (plumbing ships dormant via `spec.effort`;
 V1 drives effort from the existing per-provider knobs); exposing `reflector`/`signal_processor`
@@ -282,8 +289,9 @@ V1 drives effort from the existing per-provider knobs); exposing `reflector`/`si
   rewrite `desktop_sidecar_endpoint.dart`'s spawn path to launch it (keep the `.venv` fallback for local
   dev). Lead tasks from the P2.0 spike: productionize the **full-engine** freeze and **re-verify the
   parent-PID watchdog fix against a real Flutter parent**.
-- [x] **P2.6b** *(done — **Inno Setup** (not MSIX/WiX: our child-process + taskkill/tasklist model would
-  fight MSIX's container); per-user install, self-signed cert pipeline. App-local VC++ CRT (dumpbin:
+- [x] **P2.6b** *(done — **Inno Setup** ([ADR 0005](decisions/0005-installer-format.md); not MSIX/WiX:
+  our child-process + taskkill/tasklist model would fight MSIX's container); per-user install,
+  self-signed cert pipeline. App-local VC++ CRT (dumpbin:
   MSVCP140/VCRUNTIME140/_1; ATL statically linked) so it runs redist-free. Fresh-context review caught a
   HIGH — the freeze bundled no provider LLM packages (lazy imports) so real runs would crash; fixed via
   `collect_all` of the provider stack and re-verified on the real path: installed sidecar ran real
@@ -304,10 +312,16 @@ V1 drives effort from the existing per-provider knobs); exposing `reflector`/`si
 
 ### P2.7 — Phase 2 close-out *(closing milestone)*
 
-- [ ] **P2.7a Completeness-critic pass** — what's missing / regressed / deferred across P2.0–P2.6
-  (modality not covered, claim unverified, golden stale, exit criterion quietly skipped).
-- [ ] **P2.7b Close-out** — update `phase-2-plan.md` (tick boxes, record outcomes + new ADRs), then
-  open the `phase-2 → main` PR + the Phase 2 close-out docs PR for final review.
+- [x] **P2.7a Completeness-critic pass** *(done 2026-07-05 — a 3-critic fan-out (scope-creep /
+  exit-criteria coverage / verification-regression) + synthesis returned **ready-after-small-fixes**:
+  no code regression, no security/correctness/data-loss defect. Must-fixes were all close-out doc work
+  (this CLAUDE.md/plan refresh) + substantiating the hybrid-mix claim, all folded into P2.7b. Backlog
+  items captured; accepted gaps noted — e.g. `packaging.yml` end-to-end verification waits until it's on
+  `main`.)* — what's missing / regressed / deferred across P2.0–P2.6.
+- [x] **P2.7b Close-out** *(done 2026-07-05 — refreshed CLAUDE.md (status → Phase 2 complete; desktop
+  section now covers Hub/Model Studio/Dream Team/nav shell), ticked the plan, cross-linked ADRs 0003/0005,
+  substantiated the P2.5 hybrid-mix exit with a real Ollama-analysts + Gemini-judges run. Merged
+  `phase-2 → main` (founder-approved).)* — open the `phase-2 → main` PR + the close-out docs.
 
 **Exit:** Phase 2 is feature-complete (Hub, Model Studio, Dream Team, brand, **debug-signed**
 installer), verified against every subphase's exit criteria, and merged to `main`; the close-out docs
