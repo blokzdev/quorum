@@ -291,7 +291,12 @@ V1 drives effort from the existing per-provider knobs); exposing `reflector`/`si
   Installer packaging (MSIX vs Inno/WiX per P2.0); include the C++ ATL build deps required by
   `flutter_secure_storage_windows`. Validate the full install/launch flow with a **debug / self-signed
   cert** — production keystore signing is deferred to **Phase 3**.
-- [ ] **P2.6c** CI — add a Flutter build + `flutter test` (incl. goldens) job and a packaging job to
+- [x] **P2.6c** *(done — a `flutter` job (windows-latest, pinned 3.38.6) in ci.yml gates PRs on
+  quorum_core `dart test` + desktop analyze/test (8 goldens + unit/widget) + `flutter build windows`;
+  **verified green on the real CI runner** — goldens passed byte-exact, and the gate immediately caught
+  an untracked `runner.exe.manifest` that would break any clean clone. The full installer is a separate
+  `packaging.yml` (workflow_dispatch + tag `v*`), off the PR path. Fresh-context review = MERGE.)* CI —
+  add a Flutter build + `flutter test` (incl. goldens) job and a packaging job to
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 **Exit:** a packaged Quorum installs + launches on a clean machine, spawns the bundled sidecar
