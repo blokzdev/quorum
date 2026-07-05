@@ -1,11 +1,6 @@
-import 'dart:ui' show AppExitResponse;
-
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quorum_core/quorum_core.dart';
-import 'package:window_manager/window_manager.dart';
 
-import '../state/run_controller.dart';
 import 'quorum_colors.dart';
 
 /// Motion budget (calm-luxury): fast 120 / normal 180 / slow 240ms, ease-out. All animations are
@@ -15,173 +10,24 @@ const _motionSlow = Duration(milliseconds: 240);
 Duration _motion(BuildContext ctx, Duration d) =>
     (MediaQuery.maybeOf(ctx)?.disableAnimations ?? false) ? Duration.zero : d;
 
-/// The live screen: owns the frameless window's custom title bar, watches the run, wires Run/Cancel,
-/// and tears the sidecar down exactly once on close.
-class TerminalScreen extends ConsumerStatefulWidget {
-  const TerminalScreen({super.key});
-  @override
-  ConsumerState<TerminalScreen> createState() => _TerminalScreenState();
-}
-
-class _TerminalScreenState extends ConsumerState<TerminalScreen> with WidgetsBindingObserver, WindowListener {
-  bool _closing = false;
-  bool _isMaximized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    windowManager.addListener(this);
-    windowManager.isMaximized().then((m) {
-      if (mounted && m != _isMaximized) setState(() => _isMaximized = m);
-    });
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  // --- Teardown reconciliation -----------------------------------------------------------------
-  // onWindowClose is the SOLE owner of sidecar teardown. With setPreventClose(true) the OS WM_CLOSE
-  // is routed here and the framework's didRequestAppExit may not fire, so we shut the sidecar down
-  // here, then destroy() (which force-closes, bypassing preventClose WITHOUT re-emitting onWindowClose
-  // — close() would loop forever). shutdown() is idempotent; the detached handler is a last-resort backstop.
-  @override
-  void onWindowClose() async {
-    if (_closing) return;
-    _closing = true;
-    if (await windowManager.isPreventClose()) {
-      await ref.read(runControllerProvider.notifier).shutdown();
-      await windowManager.destroy();
-    }
-  }
-
-  @override
-  void onWindowMaximize() => setState(() => _isMaximized = true);
-  @override
-  void onWindowUnmaximize() => setState(() => _isMaximized = false);
-
-  @override
-  Future<AppExitResponse> didRequestAppExit() async => AppExitResponse.exit; // onWindowClose owns teardown
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.detached) {
-      ref.read(runControllerProvider.notifier).shutdown(); // backstop (idempotent)
-    }
-  }
-
-  Future<void> _toggleMaximize() async {
-    if (await windowManager.isMaximized()) {
-      await windowManager.unmaximize();
-    } else {
-      await windowManager.maximize();
-    }
-  }
+/// A one-shot finite entrance — fade + a few-px rise — played once when a child first mounts. Built on
+/// TweenAnimationBuilder (no controller, no Timer), so it settles in a single pass: golden
+/// pumpAndSettle reaches the end frame, where Opacity(1)/translate(0) is pixel-identical to the bare
+/// child (goldens don't move), and reduce-motion collapses it to an instant end-frame via [_motion].
+class _Reveal extends StatelessWidget {
+  final Widget child;
+  const _Reveal({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(runControllerProvider);
-    final ctrl = ref.read(runControllerProvider.notifier);
-    return Column(
-      children: [
-        _TitleBar(
-          isMaximized: _isMaximized,
-          onMinimize: () => windowManager.minimize(),
-          onToggleMaximize: _toggleMaximize,
-          onClose: () => windowManager.close(),
-        ),
-        Expanded(child: TerminalBody(state: state, onRun: () => ctrl.start(), onCancel: ctrl.cancel)),
-      ],
-    );
-  }
-}
-
-/// A slim frameless title bar: a draggable strip (double-tap to maximize) + Windows-style caption
-/// buttons. Shares the header's surface so it reads as headroom, not a separate bar.
-class _TitleBar extends StatelessWidget {
-  final bool isMaximized;
-  final VoidCallback onMinimize;
-  final VoidCallback onToggleMaximize;
-  final VoidCallback onClose;
-  const _TitleBar({
-    required this.isMaximized,
-    required this.onMinimize,
-    required this.onToggleMaximize,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      color: QC.surface1,
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onDoubleTap: onToggleMaximize,
-              child: const DragToMoveArea(child: SizedBox.expand()),
-            ),
-          ),
-          _CaptionButton(icon: Icons.remove, tooltip: 'Minimize', onTap: onMinimize),
-          _CaptionButton(
-            icon: isMaximized ? Icons.filter_none : Icons.crop_square,
-            iconSize: isMaximized ? 12 : 14,
-            tooltip: isMaximized ? 'Restore' : 'Maximize',
-            onTap: onToggleMaximize,
-          ),
-          _CaptionButton(icon: Icons.close, tooltip: 'Close', onTap: onClose, danger: true),
-        ],
-      ),
-    );
-  }
-}
-
-class _CaptionButton extends StatefulWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  final double iconSize;
-  final bool danger;
-  const _CaptionButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-    this.iconSize = 14,
-    this.danger = false,
-  });
-  @override
-  State<_CaptionButton> createState() => _CaptionButtonState();
-}
-
-class _CaptionButtonState extends State<_CaptionButton> {
-  bool _hover = false;
-  @override
-  Widget build(BuildContext context) {
-    final bg = _hover ? (widget.danger ? QC.down : QC.surface2) : Colors.transparent;
-    final fg = _hover && widget.danger ? Colors.white : QC.textMid;
-    return Semantics(
-      button: true,
-      label: widget.tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Container(
-            width: 46,
-            height: 36,
-            alignment: Alignment.center,
-            color: bg,
-            child: Icon(widget.icon, size: widget.iconSize, color: fg),
-          ),
-        ),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: _motion(context, _motionNormal),
+      curve: Curves.easeOut,
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.translate(offset: Offset(0, (1 - t) * 6), child: child),
       ),
     );
   }
@@ -192,7 +38,24 @@ class TerminalBody extends StatelessWidget {
   final RunViewState state;
   final VoidCallback? onRun;
   final VoidCallback? onCancel;
-  const TerminalBody({super.key, required this.state, this.onRun, this.onCancel});
+
+  /// Test seam for golden determinism: a fixed elapsed value for the header timer. Null in production
+  /// (the header derives elapsed from [RunViewState.startedAtTs] against the wall clock, ticked by
+  /// the shell's [TerminalSurface]); the golden harness always passes a fixed value, so no
+  /// `DateTime.now()` is ever reached in a golden.
+  final Duration? elapsedOverride;
+
+  /// Label for the primary action button (when not running). Defaults to "Run analysis"; the Hub's
+  /// cached review passes "Re-run …" so a read-only past run doesn't present the same fresh-run CTA.
+  final String runLabel;
+  const TerminalBody({
+    super.key,
+    required this.state,
+    this.onRun,
+    this.onCancel,
+    this.elapsedOverride,
+    this.runLabel = 'Run analysis',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +63,12 @@ class TerminalBody extends StatelessWidget {
       color: QC.bg,
       child: Column(
         children: [
-          _Header(state: state, onRun: onRun, onCancel: onCancel),
+          _Header(
+              state: state,
+              onRun: onRun,
+              onCancel: onCancel,
+              elapsedOverride: elapsedOverride,
+              runLabel: runLabel),
           const Divider(height: 1, color: QC.border),
           Expanded(
             child: Row(
@@ -220,15 +88,36 @@ class TerminalBody extends StatelessWidget {
   }
 }
 
+/// Formats an elapsed [Duration] as mm:ss (zero-padded).
+String _fmtElapsed(Duration d) {
+  final m = d.inMinutes;
+  final s = d.inSeconds % 60;
+  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
+
 class _Header extends StatelessWidget {
   final RunViewState state;
   final VoidCallback? onRun;
   final VoidCallback? onCancel;
-  const _Header({required this.state, this.onRun, this.onCancel});
+  final Duration? elapsedOverride;
+  final String runLabel;
+  const _Header(
+      {required this.state, this.onRun, this.onCancel, this.elapsedOverride, this.runLabel = 'Run analysis'});
+
+  /// Elapsed since the run started: the fixed [elapsedOverride] if given (goldens), else derived live
+  /// from [RunViewState.startedAtTs]. Null when there is no valid start (e.g. demo before the seed).
+  Duration? _elapsed() {
+    if (elapsedOverride != null) return elapsedOverride;
+    final ts = state.startedAtTs;
+    if (ts == null || ts <= 0) return null;
+    final secs = (DateTime.now().millisecondsSinceEpoch / 1000.0 - ts).round();
+    return secs >= 0 ? Duration(seconds: secs) : null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final running = state.phase == RunPhase.running;
+    final elapsed = _elapsed();
     return Container(
       height: 56,
       color: QC.surface1,
@@ -261,6 +150,11 @@ class _Header extends StatelessWidget {
           ],
           const SizedBox(width: 14),
           _PhaseChip(state.phase),
+          if (running && elapsed != null) ...[
+            const SizedBox(width: 12),
+            Text(_fmtElapsed(elapsed),
+                style: const TextStyle(color: QC.textMid, fontFamily: QC.fontMono, fontSize: 13)),
+          ],
           const Spacer(),
           if (running)
             TextButton.icon(
@@ -273,7 +167,7 @@ class _Header extends StatelessWidget {
               onPressed: onRun,
               style: FilledButton.styleFrom(backgroundColor: QC.accent),
               icon: const Icon(Icons.play_arrow, size: 18),
-              label: const Text('Run analysis'),
+              label: Text(runLabel),
             ),
         ],
       ),
@@ -464,26 +358,30 @@ class _ReasoningPane extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        if (hasLive) _LiveReasoningCard(agent: active, text: liveText),
+        if (hasLive) _Reveal(child: _LiveReasoningCard(agent: active, text: liveText)),
         for (final s in decision)
-          _SectionCard(s, emphasis: s.section == 'final_trade_decision', accent: ratingAccent),
+          _Reveal(
+            child: _SectionCard(s, emphasis: s.section == 'final_trade_decision', accent: ratingAccent),
+          ),
         if (hasDebate) ...[
-          const _GroupLabel('Research Debate'),
-          _TugOfWar(
-            bull: bull,
-            bear: bear,
-            managerPlan: rmPlan,
-            bullLive: active == AgentId.bull,
-            bearLive: active == AgentId.bear,
+          const _Reveal(child: _GroupLabel('Research Debate')),
+          _Reveal(
+            child: _TugOfWar(
+              bull: bull,
+              bear: bear,
+              managerPlan: rmPlan,
+              bullLive: active == AgentId.bull,
+              bearLive: active == AgentId.bear,
+            ),
           ),
         ],
         if (riskViews.isNotEmpty) ...[
-          const _GroupLabel('Risk Debate'),
-          for (final s in riskViews) _SectionCard(s),
+          const _Reveal(child: _GroupLabel('Risk Debate')),
+          for (final s in riskViews) _Reveal(child: _SectionCard(s)),
         ],
         if (analyst.isNotEmpty) ...[
-          const _GroupLabel('Analyst Evidence'),
-          for (final s in analyst) _SectionCard(s),
+          const _Reveal(child: _GroupLabel('Analyst Evidence')),
+          for (final s in analyst) _Reveal(child: _SectionCard(s)),
         ],
       ],
     );
@@ -842,23 +740,27 @@ class _VerdictRail extends StatelessWidget {
             _RatingPill(v.rating),
             if (v.confidence != null) ...[
               const SizedBox(height: 16),
-              _Confidence(v.confidence!),
+              _Reveal(child: _Confidence(v.confidence!)),
             ],
             if (v.thesis != null) ...[
               const SizedBox(height: 16),
-              SelectableText(v.thesis!,
-                  style: const TextStyle(
-                      color: QC.textHi, fontSize: 15, height: 1.5, fontStyle: FontStyle.italic)),
+              _Reveal(
+                child: SelectableText(v.thesis!,
+                    style: const TextStyle(
+                        color: QC.textHi, fontSize: 15, height: 1.5, fontStyle: FontStyle.italic)),
+              ),
             ],
             const SizedBox(height: 20),
-            _KvCard('Key Levels', [
-              if (v.entryPrice != null) ('Entry', v.entryPrice!.toStringAsFixed(0)),
-              if (v.priceTarget != null) ('Target', v.priceTarget!.toStringAsFixed(0)),
-              if (v.stopLoss != null) ('Stop', v.stopLoss!.toStringAsFixed(0)),
-              if (v.timeHorizon != null) ('Horizon', v.timeHorizon!),
-            ]),
+            _Reveal(
+              child: _KvCard('Key Levels', [
+                if (v.entryPrice != null) ('Entry', v.entryPrice!.toStringAsFixed(0)),
+                if (v.priceTarget != null) ('Target', v.priceTarget!.toStringAsFixed(0)),
+                if (v.stopLoss != null) ('Stop', v.stopLoss!.toStringAsFixed(0)),
+                if (v.timeHorizon != null) ('Horizon', v.timeHorizon!),
+              ]),
+            ),
           ],
-          if (state.cost != null) _KvCard('Run Cost', _costRows(state.cost!)),
+          if (state.cost != null) _Reveal(child: _KvCard('Run Cost', _costRows(state.cost!))),
         ],
       ),
     );

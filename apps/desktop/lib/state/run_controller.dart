@@ -54,20 +54,28 @@ class RunController extends Notifier<RunViewState> {
 
   bool get _busy => _connecting || state.phase == RunPhase.running;
 
-  /// Start a run. No-op if one is already in flight (single in-flight guard).
-  Future<void> start({String mode = 'demo', String ticker = 'NVDA', double stepDelay = 0.2}) async {
+  /// Start a run from a [RunConfig]. No-op if one is already in flight (single in-flight guard).
+  /// Defaults to the cost-free demo run (NVDA) so the existing launch button keeps working.
+  Future<void> start({RunConfig? config}) async {
     if (_busy) return;
+    final cfg = config ?? const RunConfig(mode: 'demo', ticker: 'NVDA', stepDelay: 0.2);
     _connecting = true;
     _runId = null;
     await _sub?.cancel();
     _sub = null;
-    state = RunViewState.initial().copyWith(phase: RunPhase.running, ticker: ticker);
+    state = RunViewState.initial().copyWith(
+      phase: RunPhase.running,
+      ticker: cfg.ticker,
+      // Optimistic start (epoch seconds) so the header timer ticks immediately; the reducer
+      // overwrites it with the authoritative RunStarted.ts (except in demo, where ts is 0).
+      startedAtTs: DateTime.now().millisecondsSinceEpoch / 1000.0,
+    );
     try {
       final conn = await ref.read(engineEndpointProvider).connect();
       if (_disposed) return;
       final client = ref.read(httpClientProvider);
       _api = ApiClient(conn, client: client);
-      final runId = await _api!.createRun({'mode': mode, 'ticker': ticker, 'step_delay': stepDelay});
+      final runId = await _api!.createRun(cfg.toJson());
       _runId = runId;
       if (_disposed) {
         await _api!.cancel(runId); // don't leave a headless run on the server

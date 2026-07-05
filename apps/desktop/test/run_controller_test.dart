@@ -60,7 +60,8 @@ void main() {
 
   test('start() drives a run to a Buy verdict with stages reduced', () async {
     final c = container(demoClient(), _FakeEndpoint());
-    await c.read(runControllerProvider.notifier).start(mode: 'demo', ticker: 'NVDA');
+    await c.read(runControllerProvider.notifier)
+        .start(config: const RunConfig(mode: 'demo', ticker: 'NVDA', stepDelay: 0.2));
     await waitTerminal(c);
 
     final s = c.read(runControllerProvider);

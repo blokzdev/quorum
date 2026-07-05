@@ -5,10 +5,91 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 1 complete** (de-forked 2026-06-26). The Python engine is mature; the Flutter
-> desktop app + FastAPI sidecar are a proven vertical slice. Next is Phase 2 (Hub, Settings/Model
-> Studio, applied brand, signed installer). The engine package stays named `tradingagents` to
-> preserve merge-ability with upstream `TauricResearch/TradingAgents`.
+> Status: **Phase 2 complete** (merged to `main` 2026-07-05; Phase 1 vertical slice + de-fork 2026-06-26).
+> Phase 2 shipped the Hub + navigation, Settings/**Model Studio**, the **Dream Team** per-agent model
+> roster + capability/key gates, applied brand, and a validated Windows installer + Flutter CI gate —
+> all locked in **[docs/phase-2-plan.md](docs/phase-2-plan.md)** (subphases P2.0–P2.7, exit criteria,
+> decisions e.g. BYO key storage [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md),
+> sidecar bundling [0002](docs/decisions/0002-sidecar-bundling.md), per-agent routing
+> [0004](docs/decisions/0004-per-agent-model-routing.md), installer format
+> [0005](docs/decisions/0005-installer-format.md)). Next is **Phase 3 (V1 Release & Hardening)** —
+> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + macOS are
+> post-V1. Product vision + the 3 signature bets (Track Record, Dream Team, debate terminal +
+> FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
+> The engine package stays named `tradingagents` to preserve merge-ability with upstream
+> `TauricResearch/TradingAgents`.
+
+## Operating doctrine (Ultracode MO — read first)
+
+The autonomous loop: workflows fan out the heavy research/design/review; **I (Opus 4.8) own the final
+adversarial pass, the executive refinement (keep the real findings, reject the false ones), and the
+decision to ship.** Every safeguard below is self-administered, and self-administered checks decay into
+no-ops — so **prefer artifacts over assertions, and a fresh context over my own for any final
+judgment.** When a guardrail feels like ceremony, that feeling is the drift, not a reason to skip it.
+
+**Orchestrate, don't rubber-stamp.**
+1. **Match machinery to the change.** Workflows are for genuine research, design, or multi-file risk —
+   NOT trivial/single-file/mechanical edits (do those directly). If you can't name what a fan-out would
+   find that you couldn't, don't spawn it.
+2. **Workflows fan out execution, never the decision.** Before accepting a workflow's converged output,
+   restate the one assumption that, if false, makes it worthless, and check it yourself against code —
+   not the prose. Confidence ≠ evidence; length ≠ rigor; N agents sharing a prompt = one opinion.
+3. **The adversarial pass produces an artifact, not a feeling.** Triage every fan-out finding: KEEP
+   (with the file:line/test that proves it real) / REJECT (why it's a false positive) / DEFER→backlog.
+   A pass that keeps all or rejects all is presumed not to have happened. Put the triage in the PR.
+4. **The pre-merge review runs in FRESH context** — a subagent/workflow given only the diff + exit
+   criteria, never the implementation rationale. The implementer's context is the worst judge of its
+   own work. (Keystone — this is what breaks the self-grading loop.)
+
+**Verify against falsification.**
+5. Map each exit criterion to the evidence that would FALSIFY it, and run that. "Tests pass" ≠ "feature
+   correct" — name the test that fails if the feature is broken; write it if it's missing.
+6. **A re-baselined golden needs a written visual-diff justification** (what pixels changed + why each
+   is intended; Read the PNG). An unexplained `--update-goldens` is a *failed* verification.
+7. **Distrust the synthetic path.** Demo is cost-free synthetic; it can't prove key injection, provider
+   wiring, frozen-exe spawn, or SSE resume. Verify those on the real (Ollama/Gemini) path and state
+   which path each claim was checked on.
+
+**Scope wall — deepen, don't widen.**
+8. "Maximize / world-class" = **depth + rigor on in-scope work, not new surface.** Work is in-scope iff
+   it's necessary to make a *currently-listed* exit criterion verifiably pass. Four checks before adding
+   anything mid-subphase: **exit-criterion** (maps to a checkbox in the plan doc?), **counterfactual**
+   (skip it → a criterion fails / a test goes red?), **new-surface** (adds a new capability / endpoint /
+   config key / contract field? → out), **reversibility** (required now AND no cheaper later?). Go deep
+   inside the box; the wall is the exit-criteria list.
+9. **Done is falsifiable.** The adversarial pass runs once; it fixes real defects but does NOT reopen
+   scope or re-plan unless a criterion is *actually failing*. "Could be stronger" is a backlog line, not
+   a reopen. A subphase is done when every listed criterion verifiably passes.
+10. **Harvest the upside the deep work surfaces** (the constructive flip side of the wall). A thorough
+    fan-out generates vision-aligned adjacencies beyond the current scope; the maximize-within-scope rule
+    discards them *to a tracked destination, never to /dev/null*. Discipline so this strengthens the wall
+    instead of dissolving it: **capture ≠ commit** (logging an idea schedules nothing — acting on it still
+    pays the full four checks, drained at phase-end); **vision-aligned bar** (it must advance a stated bet
+    — Track Record / Dream Team / debate-terminal + FRED·Polymarket signals — or a named future phase,
+    else drop it for real; this is what stops backlog-rot); **route by home** — a coherent future-phase
+    *feature/capability* → [`docs/roadmap.md`](docs/roadmap.md) or the phase plan, tagged to its phase; a
+    smaller homeless *enhancement* → `docs/backlog.md`; both carry a provenance tag (which subphase's
+    fan-out surfaced it). Capture is an explicit output of the adversarial-validation step, not a reflex.
+11. **Backlog** ([`docs/backlog.md`](docs/backlog.md), append-only, one line): the instant work fails the
+    four checks, append a line and move on (capture must be cheaper than doing the work). Drain at
+    phase-end, never mid-phase. **Exception:** a `security` / `correctness` / `data-loss` item is
+    surfaced to `HUMAN.md` the same session — it does not wait in the backlog.
+
+**Keep the human in the loop (decision surfacing, not approval gating).**
+12. Maintain **[`HUMAN.md`](HUMAN.md)** — the co-founder log (Blocked-on-you / Want-your-input /
+    Decided-FYI / What-shipped / Archive + a header tracking spend vs the agreed cost boundary). It's a
+    **router + queue, never canonical**: a pointer + the human-action delta; ADR-worthy → write the ADR
+    and link it. Blockers (§1) and forks (§2) are **pushed in the chat turn** the moment they arise,
+    never buried; FYI/shipped are pull-only. Don't start work that depends on an open blocker. When
+    unsure FYI-vs-fork, it's a fork. "Reversible" is judged at *phase-end* cost (rip out one commit, or
+    ten?) — a contract/schema/token-name decision is a fork even if cheap to change now.
+13. **Still surface (never self-approve through):** merges to `main`, key rotation, cert/signing, paid
+    spend beyond the agreed boundary, publishing, genuine product forks, contract/security/scope changes.
+
+**Persistence.** This doctrine is the contract; **memory is a backstop — on any conflict, CLAUDE.md
+wins and memory is corrected.** Open each substantive subphase by restating the loop in one line + the
+tripwires that apply (fan-out? goldens touched? real-path needed? sensitive op ahead? open HUMAN.md
+blockers?) — if you can't state them, you haven't reloaded the MO.
 
 ## What this project is
 
@@ -20,6 +101,13 @@ sidecar (provider keys stay on the user's machine; mobile-as-remote reuses the s
 
 It is a **research / educational** tool, **not financial advice**. Keep that posture in the product
 (disclaimers, no real-money execution in early versions; paper-trading sandbox is a post-V1 phase).
+
+The repo is **public and Apache-2.0**, built on the open TradingAgents engine (attribution in
+[`NOTICE`](NOTICE); the README is Quorum's, not upstream's). The planned business model is
+**open-core** — the local client stays open and free; paid value (Track Record sync, hosted runs, the
+signal layer) lives server-side behind entitlement. See [`docs/monetization.md`](docs/monetization.md)
+and [ADR 0003](docs/decisions/0003-open-source-and-open-core-monetization.md). Price the *tooling*,
+never *advice* (regulatory posture).
 
 ## The engine (Python, `tradingagents/`)
 
@@ -62,12 +150,25 @@ real engine. `demo.py` is the synthetic streamer.
 - `packages/quorum_core/` — portable domain layer: sealed `QuorumEvent` union (mirrors
   `runtime/events.py`), immutable `RunViewState`, pure `reduce(state,event)`, `ApiClient`,
   hand-rolled `SseTransport` (bearer + Last-Event-ID), `EngineEndpoint` abstraction.
-- `apps/desktop/` — Flutter (org dev.quorum), Riverpod 3 (one `runControllerProvider`),
-  `DesktopSidecarEndpoint` spawns `.venv\Scripts\python.exe -m services.api` (taskkill teardown).
-  `lib/ui/terminal_screen.dart` = the frameless 3-pane terminal (pipeline rail / reasoning feed with
-  the bull-vs-bear tug-of-war / verdict rail); `quorum_colors.dart` = design tokens; bundled brand
-  fonts Inter + JetBrains Mono under `fonts/`. Window chrome via `window_manager` (frameless,
-  `onWindowClose` owns sidecar teardown → `destroy()`).
+- `apps/desktop/` — Flutter (org dev.quorum), Riverpod 3 (`runControllerProvider`,
+  `settingsControllerProvider`, `appSurfaceProvider` nav). A frameless shell (`quorum_shell.dart`)
+  switches between the surfaces Phase 2 shipped:
+  - **Hub** (`hub_surface.dart`) — launch card, watchlist, run history + filters, click-through to a
+    cached review (re-renders a finished run through `TerminalBody`), and the post-run Dream Team
+    **cast list**.
+  - **Settings / Model Studio** (`settings_surface.dart`) — provider/quick+deep pickers off
+    `catalogProvider`, write-only OS-vault API keys, saved **Benches**, and the **Dream Team roster**
+    (`dream_team_roster.dart`): a stage-grouped 12-role provider+model picker with the capability gate
+    (block non-tool models on the tool-analyst roles) + the pre-launch multi-provider key gate.
+  - **Terminal** (`terminal_screen.dart`) — the frameless 3-pane run view (pipeline rail / reasoning
+    feed with the bull-vs-bear tug-of-war / verdict rail).
+  `SidecarLauncher.resolve()` (`engine/`) spawns the **bundled frozen sidecar** (`<appDir>/sidecar/
+  quorum_sidecar.exe`) when packaged, else `.venv\Scripts\python.exe -m services.api` in dev; teardown
+  is `/shutdown` → `taskkill /T`, backstopped by the `QUORUM_PARENT_PID` watchdog. `quorum_colors.dart`
+  = design tokens; bundled brand fonts Inter + JetBrains Mono under `fonts/`; window chrome via
+  `window_manager` (`onWindowClose` owns teardown → `destroy()`). Packaged by `packaging/` (PyInstaller
+  freeze + Inno Setup, [ADR 0005](docs/decisions/0005-installer-format.md)); CI gates it on
+  windows-latest (`.github/workflows/ci.yml` `flutter` job).
 - **Verify UI via golden render-to-PNG** (`flutter test --update-goldens` → Read the PNG): the test
   harness loads the bundled fonts so committed goldens are deterministic. Live Flutter-GPU windows
   can't be screen-captured here (PrintWindow/CopyFromScreen blank/occluded; dev-exe gets no
@@ -103,13 +204,32 @@ CI (`.github/workflows/ci.yml`) gates on **ruff + pytest** — keep new packages
 - **Secret hygiene**: provider keys live only in the gitignored `.env` (never committed — verified
   clean of history). A shared Gemini test key is pending rotation (release-hygiene task).
 
-## Working loop
+## Working loop (phase cadence)
 
-Research → Plan subphases → execute → test (golden + sidecar + headless real runs) → refine.
-Operate in **Ultracode** mode: author Workflows for substantive research/review fan-out and
-adversarially verify before committing. Ship small, reviewable commits with clear exit criteria.
+The autonomous **phase-execution loop** — the *mechanics*; the behavioral contract (orchestration,
+verification-as-artifact, the scope wall, fresh-context review, what to surface, HUMAN.md) is the
+**Operating doctrine** near the top of this file.
+
+1. **Start of phase** — lock the plan in a small docs PR (roadmap, subphases, **falsifiable** exit
+   criteria, decisions/ADRs). Current: [`docs/phase-2-plan.md`](docs/phase-2-plan.md).
+2. **Per subphase** — research/design via Workflow → **personally adversarially validate** the plan
+   (restate + check its load-bearing assumption against code) → self-approve (no human gate) →
+   implement in small reviewable commits → **verify against falsification** (golden render-to-PNG +
+   sidecar + headless demo/**real** runs + `ruff`/`pytest` + `flutter test`) → **fresh-context
+   pre-merge review** → refine until exit criteria pass → subphase PR self-merged into the integration
+   branch. Tick the plan checkboxes; ADR for any consequential decision; log out-of-scope work to
+   [`docs/backlog.md`](docs/backlog.md).
+3. **End of phase** — completeness-critic pass (incl. a **scope audit**: any shipped capability with no
+   exit criterion is unsanctioned creep) → review the `→ main` PR **in slices**, not one mega-diff →
+   close-out docs PR.
+
+**Verification is the gate** — never mark a subphase done unverified; report failures faithfully. The
+per-phase cadence (merge model, cost boundary, sensitive-op handling) is set once at phase start — see
+the plan doc's "Phase cadence" — and the live HITL queue is [`HUMAN.md`](HUMAN.md).
 
 ## Git
 
-`origin` = `blokzdev/quorum` (private), `upstream` = `TauricResearch/TradingAgents` (pull engine
-fixes manually). `main` is the product line. Branch for changes; commit/push only when asked.
+`origin` = `blokzdev/quorum` (**public, Apache-2.0**), `upstream` = `TauricResearch/TradingAgents`
+(pull engine fixes manually). `main` is the product line. Branch for changes; commit/push only when
+asked. Note: GitHub treats `origin` as a standalone repo (not a fork), so `gh pr create` needs
+`--repo blokzdev/quorum` or it defaults the base to the upstream parent.

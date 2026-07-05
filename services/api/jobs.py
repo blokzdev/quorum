@@ -8,6 +8,7 @@ second request simply queues behind the first.
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import re
@@ -20,7 +21,6 @@ from typing import Any
 
 from services.api.event_log import EventLog
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.reporting import write_report_tree
 from tradingagents.runtime import events as ev
 from tradingagents.runtime.isolation import JobIsolationContext, build_api_keys_dict
@@ -35,6 +35,31 @@ _CANONICAL_SECTIONS = (
     "market_report", "sentiment_report", "news_report", "fundamentals_report",
     "investment_plan", "trader_investment_plan", "final_trade_decision",
 )
+
+# The bull/bear tug-of-war + the three risk views the UI renders live nested in the engine's
+# investment_debate_state / risk_debate_state on a pro/vibe final_state (flat top-level on a demo
+# one). Decompose them by their wire-section name so a cached review reconstructs the FULL debate —
+# the product's signature surface — not just the analyst reports + verdict.
+_DEBATE_SECTIONS = {
+    "bull": ("investment_debate_state", "bull_history"),
+    "bear": ("investment_debate_state", "bear_history"),
+    "aggressive": ("risk_debate_state", "aggressive_history"),
+    "conservative": ("risk_debate_state", "conservative_history"),
+    "neutral": ("risk_debate_state", "neutral_history"),
+}
+_ALL_SECTIONS = frozenset(_CANONICAL_SECTIONS) | frozenset(_DEBATE_SECTIONS)
+
+
+def _sections_from_state(fs: dict[str, Any]) -> dict[str, str]:
+    """Renderable report sections from a completed final_state: the top-level canonical keys plus the
+    bull/bear/risk debate sections (flat on a demo state; nested under the *_debate_state dicts on a
+    pro/vibe one — mirrors the live decomposition in runtime/runner.py)."""
+    out = {k: fs[k] for k in _CANONICAL_SECTIONS if fs.get(k)}
+    for wire, (parent, child) in _DEBATE_SECTIONS.items():
+        val = fs.get(wire) or (fs.get(parent) or {}).get(child)
+        if val:
+            out[wire] = val
+    return out
 
 
 @dataclass
@@ -84,11 +109,29 @@ def plan_run(req: dict[str, Any]) -> dict[str, Any]:
         config["output_language"] = req["output_language"]
     if req.get("backend_url"):
         config["backend_url"] = req["backend_url"]
+    # Per-provider effort/thinking knobs: the graph reads these from config in _get_provider_kwargs;
+    # the UI sends only the one matching the chosen provider, and clients ignore unsupported efforts.
+    for knob in ("google_thinking_level", "openai_reasoning_effort", "anthropic_effort"):
+        if req.get(knob):
+            config[knob] = req[knob]
+
+    # "Dream Team" (P2.5): per-role model overrides the graph resolves per role. When present, also
+    # record the RESOLVED per-role map (effective provider/model after quick/deep fallback) as run
+    # provenance for the manifest. Absent on a plain quick/deep run → no provenance recorded.
+    agent_models = req.get("agent_models") or None
+    resolved_agent_models = None
+    if agent_models:
+        config["agent_models"] = agent_models
+        # Lazy import: agent_roles lives under the (heavy) graph package, and plan_run only runs on the
+        # pro/vibe path — the demo path must not pull the engine (ADR 0002).
+        from tradingagents.graph.agent_roles import resolve_agent_models
+        resolved_agent_models = resolve_agent_models(agent_models, config)
 
     params = {
         "mode": req.get("mode", "vibe"), "research_depth": depth,
         "provider": config["llm_provider"], "deep_model": config["deep_think_llm"],
         "quick_model": config["quick_think_llm"],
+        "agent_models": resolved_agent_models,
     }
     return {
         "config": config, "selected": selected, "ticker": ticker, "trade_date": trade_date,
@@ -109,6 +152,7 @@ class JobRegistry:
             target=self._worker_loop, name="quorum-job-worker", daemon=True
         )
         self._worker.start()
+        self._load_prior_runs()  # restore prior run history from disk so it survives a restart
 
     def create(self, request: dict[str, Any]) -> Job:
         run_id = uuid.uuid4().hex[:16]
@@ -144,6 +188,10 @@ class JobRegistry:
         if job.request.get("mode") == "demo":
             self._execute_demo(job)
             return
+        # Lazy import: keeps the engine (LangChain/LangGraph + data vendors) off the demo path and out
+        # of ``services.api.app``'s import graph, so a demo-capable bundle needn't ship the full ML
+        # stack. The engine still loads once per pro/vibe run (cached in sys.modules thereafter).
+        from tradingagents.graph.trading_graph import TradingAgentsGraph
         plan = plan_run(job.request)
         job.status = "running"
         self._results_dir.mkdir(parents=True, exist_ok=True)
@@ -161,8 +209,12 @@ class JobRegistry:
                 trade_date=plan["trade_date"], asset_type=plan["asset_type"],
                 params=plan["params"], should_cancel=lambda: job.cancel_flag,
             )
-            self._write_reports(job, plan["ticker"])
-        job.status = "cancelled" if job.cancel_flag else "done"
+        # Persist BEFORE exposing the terminal status, so "done" implies the manifest is on disk (a
+        # client that lists runs the moment it sees done will find this one).
+        terminal = "cancelled" if job.cancel_flag else "done"
+        self._persist(job, status=terminal, ticker=plan["ticker"], trade_date=plan["trade_date"],
+                      asset_type=plan["asset_type"], params=plan["params"])
+        job.status = terminal
 
     def _execute_demo(self, job: Job) -> None:
         """Cost-free synthetic run (no engine, no keys) for building/demoing the UI."""
@@ -174,18 +226,128 @@ class JobRegistry:
             job.event_log, ticker, lambda: job.cancel_flag,
             step_delay=0.25 if delay is None else float(delay),
         )
-        job.status = "cancelled" if job.cancel_flag else "done"
+        terminal = "cancelled" if job.cancel_flag else "done"
+        self._persist(
+            job, status=terminal, ticker=ticker,
+            trade_date=job.request.get("trade_date") or datetime.now().strftime("%Y-%m-%d"),
+            asset_type=_detect_asset_type(ticker), params={"mode": "demo"},
+        )
+        job.status = terminal
 
-    def _write_reports(self, job: Job, ticker: str) -> None:
+    # --- Persistence -------------------------------------------------------------------------------
+    def _persist(self, job: Job, *, status: str, ticker: str, trade_date: str, asset_type: str,
+                 params: dict[str, Any]) -> None:
+        """Write the report tree and a ``run.json`` summary manifest for a finished run. Both are
+        best-effort (a write failure must never fail a run), and they are independent: the manifest —
+        the durable record the Hub lists and the future Track Record scorecard reads — is written even
+        if the pretty report tree fails."""
+        from tradingagents.dataflows.utils import safe_ticker_component
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = self._results_dir / f"{safe_ticker_component(ticker)}_{job.run_id}_{stamp}"
         try:
-            from tradingagents.dataflows.utils import safe_ticker_component
-            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = self._results_dir / f"{safe_ticker_component(ticker)}_{job.run_id}_{stamp}"
-            job.report_path = str(write_report_tree(job.final_state, ticker, path))
-        except Exception:  # reports are a convenience; a write failure must not fail the run
+            run_dir.mkdir(parents=True, exist_ok=True)
+            job.report_path = str(write_report_tree(job.final_state, ticker, run_dir))
+        except Exception:
             logger.debug("report write failed for %s", job.run_id, exc_info=True)
+        try:
+            run_dir.mkdir(parents=True, exist_ok=True)
+            # Point report_path at the run dir if the pretty tree write above failed, so the manifest
+            # and the persisted sections are still locatable for a cached review after a restart.
+            job.report_path = job.report_path or str(run_dir)
+            # Persist the canonical sections separately (run.json stays a lean summary): a cached review
+            # of a run whose in-memory final_state is gone (post-restart) reads these back from disk.
+            (run_dir / "reports.json").write_text(
+                json.dumps(self.report_sections(job), indent=2), encoding="utf-8")
+            manifest = self._manifest_dict(job, status=status, ticker=ticker, trade_date=trade_date,
+                                           asset_type=asset_type, params=params)
+            (run_dir / "run.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        except Exception:
+            logger.debug("manifest write failed for %s", job.run_id, exc_info=True)
+
+    def _manifest_dict(self, job: Job, *, status: str, ticker: str, trade_date: str, asset_type: str,
+                       params: dict[str, Any]) -> dict[str, Any]:
+        """The durable per-run summary. Carries the Track Record seed fields (verdict/rating,
+        trade_date, the entry/price context in ``verdict.structured``, model/provider, timestamps) so
+        a realized hit-rate / alpha scorecard can be computed later with no backfill. Deliberately a
+        SUMMARY — the full reports live in the report tree on disk, not in this file."""
+        verdict = cost = None
+        for e in job.event_log.replay_from(0):
+            if e.type == ev.EventType.RUN_DONE:
+                verdict = {k: e.data.get(k)
+                           for k in ("final_decision", "rating", "confidence", "thesis", "structured")}
+            elif e.type == ev.EventType.COST:
+                cost = {k: e.data.get(k)
+                        for k in ("llm_calls", "tool_calls", "tokens_in", "tokens_out", "est_usd")}
+        p = params or {}
+        return {
+            "run_id": job.run_id,
+            "status": status,
+            "mode": p.get("mode") or job.request.get("mode", "vibe"),
+            "ticker": ticker,
+            "trade_date": trade_date,
+            "asset_type": asset_type,
+            "created_at": job.created_at,
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "provider": p.get("provider"),
+            "deep_model": p.get("deep_model"),
+            "quick_model": p.get("quick_model"),
+            "research_depth": p.get("research_depth"),
+            "report_path": job.report_path,
+            "verdict": verdict,
+            "cost": cost,
+            # Dream Team provenance: the resolved role->{provider,model} cast list (None on a plain run).
+            "agent_models": p.get("agent_models"),
+            "error": job.error,
+        }
+
+    def list_runs(self) -> list[dict[str, Any]]:
+        """Every persisted run summary (newest first), read from the ``run.json`` manifests on disk so
+        history survives a sidecar restart. Unreadable manifests are skipped, not fatal."""
+        out: list[dict[str, Any]] = []
+        if not self._results_dir.exists():
+            return out
+        for manifest in self._results_dir.glob("*/run.json"):
+            try:
+                out.append(json.loads(manifest.read_text(encoding="utf-8")))
+            except Exception:
+                logger.debug("skipping unreadable manifest %s", manifest, exc_info=True)
+        out.sort(key=lambda m: m.get("finished_at") or m.get("created_at") or "", reverse=True)
+        return out
+
+    def _load_prior_runs(self) -> None:
+        """On startup, register prior runs (from their manifests) so ``GET /runs/{id}`` resolves after
+        a restart. Lightweight: status + report_path only (no event log / final_state) — the Hub list
+        reads the manifest summary, and a cached review re-reads the report tree from ``report_path``."""
+        for manifest in self.list_runs():
+            run_id = manifest.get("run_id")
+            if not run_id or run_id in self._jobs:
+                continue
+            job = Job(
+                run_id=run_id,
+                request={"mode": manifest.get("mode", "vibe")},
+                event_log=EventLog(run_id),
+                status=manifest.get("status", "done"),
+                created_at=manifest.get("created_at", ""),
+                report_path=manifest.get("report_path"),
+                error=manifest.get("error"),
+            )
+            with self._lock:
+                self._jobs.setdefault(run_id, job)
 
     @staticmethod
     def report_sections(job: Job) -> dict[str, str]:
-        fs = job.final_state or {}
-        return {k: fs[k] for k in _CANONICAL_SECTIONS if fs.get(k)}
+        """Canonical report sections for a run. Fresh runs serve them from the in-memory final_state;
+        a run restored from disk after a restart (no final_state) reads them back from the persisted
+        ``reports.json`` so a cached review still renders the full reports."""
+        fs = job.final_state
+        if fs:
+            return _sections_from_state(fs)
+        if job.report_path:
+            try:
+                rp = Path(job.report_path)
+                run_dir = rp if rp.is_dir() else rp.parent
+                data = json.loads((run_dir / "reports.json").read_text(encoding="utf-8"))
+                return {k: v for k, v in data.items() if k in _ALL_SECTIONS and v}
+            except Exception:
+                logger.debug("reports.json read failed for %s", job.run_id, exc_info=True)
+        return {}

@@ -21,6 +21,15 @@ class CostSnapshot {
   const CostSnapshot({
     this.llmCalls = 0, this.toolCalls = 0, this.tokensIn = 0, this.tokensOut = 0, this.estUsd,
   });
+
+  /// Parse the `cost` block of a run manifest / cost event (snake_case keys). Tolerant of nulls.
+  factory CostSnapshot.fromJson(Map<String, dynamic> j) => CostSnapshot(
+        llmCalls: (j['llm_calls'] as num?)?.toInt() ?? 0,
+        toolCalls: (j['tool_calls'] as num?)?.toInt() ?? 0,
+        tokensIn: (j['tokens_in'] as num?)?.toInt() ?? 0,
+        tokensOut: (j['tokens_out'] as num?)?.toInt() ?? 0,
+        estUsd: (j['est_usd'] as num?)?.toDouble(),
+      );
 }
 
 class Verdict {
@@ -33,6 +42,15 @@ class Verdict {
     required this.finalDecision, this.rating, this.confidence, this.thesis, this.structured,
     this.cancelled = false,
   });
+
+  /// Parse the `verdict` block of a run manifest / RUN_DONE event (snake_case keys).
+  factory Verdict.fromJson(Map<String, dynamic> j) => Verdict(
+        finalDecision: j['final_decision'] as String? ?? '',
+        rating: j['rating'] as String?,
+        confidence: (j['confidence'] as num?)?.toDouble(),
+        thesis: j['thesis'] as String?,
+        structured: (j['structured'] as Map?)?.cast<String, dynamic>(),
+      );
 
   // Convenience accessors for the verdict rail (present when the PM emitted them).
   double? get priceTarget => (structured?['price_target'] as num?)?.toDouble();
@@ -61,6 +79,10 @@ class RunViewState {
   final String? error;
   final int lastSeq;
 
+  /// Epoch seconds when the run started — seeded optimistically by the client, then overwritten by
+  /// the authoritative RunStarted.ts. Drives the header's elapsed timer; null until a run starts.
+  final double? startedAtTs;
+
   const RunViewState({
     this.runId,
     this.ticker,
@@ -74,6 +96,7 @@ class RunViewState {
     this.verdict,
     this.error,
     this.lastSeq = -1,
+    this.startedAtTs,
   });
 
   factory RunViewState.initial() => const RunViewState();
@@ -94,6 +117,7 @@ class RunViewState {
     Verdict? verdict,
     String? error,
     int? lastSeq,
+    double? startedAtTs,
   }) {
     return RunViewState(
       runId: runId ?? this.runId,
@@ -108,6 +132,7 @@ class RunViewState {
       verdict: verdict ?? this.verdict,
       error: error ?? this.error,
       lastSeq: lastSeq ?? this.lastSeq,
+      startedAtTs: startedAtTs ?? this.startedAtTs,
     );
   }
 }

@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Defense in depth: no job needs write scope (test/lint/build only). Fork PRs already get a read-only
+# token, but pin it so a future step can't silently inherit write.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: tests (py${{ matrix.python-version }})
@@ -59,3 +64,45 @@ jobs:
         # The repo is fully clean under the strict select, so we lint everything
         # (results/ and worklog/ are excluded via pyproject extend-exclude).
         run: ruff check .
+
+  flutter:
+    name: flutter (analyze + test + goldens + build)
+    # windows-latest is REQUIRED, not a preference: the 8 committed goldens were rasterized on Windows
+    # and matchesGoldenFile is byte-exact (no tolerance). Pin the EXACT Flutter version the goldens were
+    # generated on (3.38.6) — the Skia raster bytes are engine-version-baked, so a floating channel would
+    # drift. flutter_test_config.dart loads the bundled fonts + MaterialIcons, so goldens don't depend on
+    # host system fonts.
+    runs-on: windows-latest
+    timeout-minutes: 30 # fail fast if a hosted-image toolchain drift hangs the SDK/build step
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.6
+          cache: true
+      - run: flutter --version
+      - name: quorum_core — pure-Dart tests
+        working-directory: packages/quorum_core
+        run: |
+          dart pub get
+          dart test
+      - name: Desktop — deps
+        working-directory: apps/desktop
+        run: flutter pub get
+      - name: Desktop — analyze
+        working-directory: apps/desktop
+        run: flutter analyze
+      - name: Desktop — test (unit + widget + goldens)
+        working-directory: apps/desktop
+        run: flutter test
+      - name: Upload golden failures (diagnose a first mismatch without a re-run)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: apps/desktop/test/golden/failures/
+          if-no-files-found: ignore
+      - name: Desktop — build windows (compile smoke; last so it never masks the test signal)
+        working-directory: apps/desktop
+        run: flutter build windows --debug

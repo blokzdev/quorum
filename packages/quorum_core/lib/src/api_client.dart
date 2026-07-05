@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'engine_endpoint.dart';
+import 'run_summary.dart';
 
 class ApiClient {
   final EngineConnection conn;
@@ -19,6 +20,10 @@ class ApiClient {
   Future<Map<String, dynamic>> health() => _getJson('/healthz', auth: false);
 
   Future<Map<String, dynamic>> catalog() => _getJson('/catalog/providers');
+
+  /// Host-only: provider keys read from the sidecar host's `.env`, for a one-time import into the
+  /// desktop's OS keystore. Returns `{provider: key}`; values are never logged.
+  Future<Map<String, dynamic>> envKeys() => _getJson('/env-keys');
 
   /// POST /runs -> 202 {run_id}. [body] is the run request (mode/ticker/provider/...).
   Future<String> createRun(Map<String, dynamic> body) async {
@@ -34,6 +39,15 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> getRun(String runId) => _getJson('/runs/$runId');
+
+  /// GET /runs -> the persisted run history (newest first), as typed [RunSummary]s.
+  Future<List<RunSummary>> listRuns() async {
+    final body = await _getJson('/runs');
+    final runs = (body['runs'] as List?) ?? const [];
+    return runs
+        .map((e) => RunSummary.fromJson((e as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
 
   Future<Map<String, dynamic>> reports(String runId) => _getJson('/runs/$runId/reports');
 

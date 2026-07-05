@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'state/settings_controller.dart';
+import 'ui/brand.dart';
 import 'ui/quorum_colors.dart';
-import 'ui/terminal_screen.dart';
+import 'ui/quorum_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,13 @@ Future<void> main() async {
     await windowManager.show();
     await windowManager.focus();
   });
-  runApp(const ProviderScope(child: QuorumApp()));
+  // Load persisted settings before the first frame so Model Studio and the launch config start from
+  // disk (best-effort: a missing/corrupt file yields defaults).
+  final settings = await SettingsStore.load();
+  runApp(ProviderScope(
+    overrides: [initialSettingsProvider.overrideWithValue(settings)],
+    child: const QuorumApp(),
+  ));
 }
 
 class QuorumApp extends StatelessWidget {
@@ -45,8 +53,10 @@ class QuorumApp extends StatelessWidget {
         // Inter app-wide; numeric widgets opt into JetBrains Mono via QC.fontMono.
         textTheme: base.textTheme.apply(fontFamily: QC.fontUi),
         primaryTextTheme: base.primaryTextTheme.apply(fontFamily: QC.fontUi),
+        // Brand tokens for new surfaces (Hub, Settings/Model Studio) via Theme.of(context).extension.
+        extensions: const [QuorumBrand.dark()],
       ),
-      home: const Scaffold(body: TerminalScreen()),
+      home: const QuorumShell(),
     );
   }
 }

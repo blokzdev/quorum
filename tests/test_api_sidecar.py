@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 import services.api.app as app_module
 import services.api.jobs as jobs_mod
 import tradingagents.agents.utils.structured as structmod
+import tradingagents.graph.trading_graph as trading_graph_mod
 from services.api.jobs import JobRegistry, plan_run
 from tradingagents.runtime.events import EventType
 
@@ -98,6 +99,36 @@ def test_plan_run_pro_uses_explicit_fields():
     assert plan["config"]["max_risk_discuss_rounds"] == 3
 
 
+def test_plan_run_threads_provider_effort_knobs():
+    g = plan_run({"ticker": "SPY", "provider": "google", "google_thinking_level": "high"})
+    assert g["config"]["google_thinking_level"] == "high"
+    o = plan_run({"ticker": "SPY", "provider": "openai", "openai_reasoning_effort": "medium"})
+    assert o["config"]["openai_reasoning_effort"] == "medium"
+    a = plan_run({"ticker": "SPY", "provider": "anthropic", "anthropic_effort": "low"})
+    assert a["config"]["anthropic_effort"] == "low"
+    # Unset -> stays at the engine default (None), never a spurious value.
+    assert plan_run({"ticker": "SPY", "provider": "google"})["config"].get("google_thinking_level") is None
+
+
+def test_plan_run_threads_agent_models_and_resolved_provenance():
+    plan = plan_run({
+        "ticker": "SPY", "provider": "openai", "deep_model": "gpt-5.5", "quick_model": "gpt-5.4-mini",
+        "agent_models": {"bull_researcher": {"provider": "xai", "model": "grok-x"}},
+    })
+    # the raw overrides reach config (the graph resolves per role)
+    assert plan["config"]["agent_models"] == {"bull_researcher": {"provider": "xai", "model": "grok-x"}}
+    # the RESOLVED cast list is recorded for provenance: the override + quick/deep fallback for the rest
+    am = plan["params"]["agent_models"]
+    assert am["bull_researcher"] == {"provider": "xai", "model": "grok-x"}
+    assert am["portfolio_manager"] == {"provider": "openai", "model": "gpt-5.5"}  # DEEP fallback
+
+
+def test_plan_run_without_agent_models_records_no_provenance():
+    plan = plan_run({"ticker": "SPY", "provider": "openai"})
+    assert "agent_models" not in plan["config"]
+    assert plan["params"]["agent_models"] is None
+
+
 def test_plan_run_vibe_extracts_ticker_from_intent():
     plan = plan_run({"mode": "vibe", "intent": "what's the vibe on NVDA this week?"})
     assert plan["ticker"] == "NVDA"
@@ -116,7 +147,7 @@ def test_plan_run_without_ticker_raises():
 # --- Full job lifecycle ---
 
 def test_job_runs_and_streams_full_event_sequence(monkeypatch, tmp_path):
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     registry = JobRegistry(results_dir=tmp_path)
 
@@ -147,7 +178,7 @@ def test_job_runs_and_streams_full_event_sequence(monkeypatch, tmp_path):
 
 
 def test_reports_endpoint_data_after_run(monkeypatch, tmp_path):
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     registry = JobRegistry(results_dir=tmp_path)
     job = registry.create({"mode": "pro", "ticker": "SPY"})
@@ -157,9 +188,133 @@ def test_reports_endpoint_data_after_run(monkeypatch, tmp_path):
     assert sections["final_trade_decision"] == "DEC"
 
 
+# --- Run manifest + history (P2.4a) ---
+
+def test_manifest_written_with_track_record_fields(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    registry = JobRegistry(results_dir=tmp_path)
+
+    job = registry.create({"mode": "pro", "ticker": "SPY",
+                           "provider": "anthropic", "deep_model": "claude-opus-4-8"})
+    _wait_done(job)
+
+    runs = registry.list_runs()
+    assert len(runs) == 1
+    m = runs[0]
+    assert m["run_id"] == job.run_id
+    assert m["ticker"] == "SPY"
+    assert m["status"] == "done"
+    assert m["mode"] == "pro"
+    assert m["provider"] == "anthropic"
+    assert m["deep_model"] == "claude-opus-4-8"
+    # Track Record seed fields: trade_date, timestamps, and the verdict (rating + entry/price context).
+    assert m["trade_date"]
+    assert m["created_at"] and m["finished_at"]
+    assert m["verdict"]["rating"] == "Buy"
+    assert m["verdict"]["structured"] == {"rating": "Buy", "investment_thesis": "solid moat"}
+    assert "cost" in m
+    assert list(tmp_path.glob("*/run.json"))  # the manifest is on disk, beside the report tree
+
+
+def test_history_survives_restart(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    reg1 = JobRegistry(results_dir=tmp_path)
+    job = reg1.create({"mode": "pro", "ticker": "SPY"})
+    _wait_done(job)
+    rid = job.run_id
+
+    # A fresh registry over the same dir = a sidecar restart.
+    reg2 = JobRegistry(results_dir=tmp_path)
+    assert any(r["run_id"] == rid for r in reg2.list_runs())
+    restored = reg2.get(rid)  # registered on startup so GET /runs/{id} still resolves post-restart
+    assert restored is not None and restored.status == "done"
+
+
+def test_list_runs_over_http(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+
+    created = client.post("/runs", json={"mode": "demo", "ticker": "NVDA", "step_delay": 0})
+    run_id = created.json()["run_id"]
+    _poll_status(client, run_id, "done")
+
+    body = client.get("/runs").json()
+    assert "runs" in body
+    match = [r for r in body["runs"] if r["run_id"] == run_id]
+    assert match and match[0]["mode"] == "demo" and match[0]["ticker"] == "NVDA"
+
+
+def test_restored_run_reports_read_from_disk(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    reg1 = JobRegistry(results_dir=tmp_path)
+    job = reg1.create({"mode": "pro", "ticker": "SPY"})
+    _wait_done(job)
+    rid = job.run_id
+
+    # Restart: the restored job has no in-memory final_state, so a cached review must read the
+    # persisted reports.json off disk.
+    reg2 = JobRegistry(results_dir=tmp_path)
+    restored = reg2.get(rid)
+    assert restored is not None and restored.final_state is None
+    sections = JobRegistry.report_sections(restored)
+    assert sections["market_report"] == "MKT"
+    assert sections["final_trade_decision"] == "DEC"
+
+
+def test_restored_run_includes_debate_sections(monkeypatch, tmp_path):
+    # The bull/bear tug-of-war + the three risk views live nested in the engine final_state
+    # (investment_debate_state / risk_debate_state); a cached review needs them decomposed and
+    # persisted, or the signature debate renders empty.
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    reg1 = JobRegistry(results_dir=tmp_path)
+    job = reg1.create({"mode": "pro", "ticker": "SPY"})
+    _wait_done(job)
+
+    reg2 = JobRegistry(results_dir=tmp_path)  # restart
+    sections = JobRegistry.report_sections(reg2.get(job.run_id))
+    assert sections["bull"] == "B"
+    assert sections["bear"] == "R"
+    assert sections["aggressive"] == "A"
+    assert sections["conservative"] == "C"
+    assert sections["neutral"] == "N"
+
+
+def test_manifest_records_agent_models_provenance(monkeypatch, tmp_path):
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    registry = JobRegistry(results_dir=tmp_path)
+    job = registry.create({
+        "mode": "pro", "ticker": "SPY", "provider": "openai",
+        "agent_models": {"bull_researcher": {"provider": "xai", "model": "grok-x"}},
+    })
+    _wait_done(job)
+    m = registry.list_runs()[0]
+    assert m["agent_models"]["bull_researcher"] == {"provider": "xai", "model": "grok-x"}
+    assert m["agent_models"]["portfolio_manager"]["provider"] == "openai"  # resolved fallback
+
+
+def test_demo_run_ignores_agent_models(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+    created = client.post("/runs", json={
+        "mode": "demo", "ticker": "NVDA", "step_delay": 0,
+        "agent_models": {"bull_researcher": {"provider": "xai", "model": "grok-x"}},
+    })
+    run_id = created.json()["run_id"]
+    _poll_status(client, run_id, "done")
+    m = next(r for r in client.get("/runs").json()["runs"] if r["run_id"] == run_id)
+    assert m["agent_models"] is None  # demo never reaches plan_run -> no provenance
+
+
 def test_cooperative_cancel_stops_the_run(monkeypatch, tmp_path):
     slow = [{"market_report": f"m{i}"} for i in range(60)]
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(slow, sleep=0.02))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(slow, sleep=0.02))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     registry = JobRegistry(results_dir=tmp_path)
 
@@ -207,6 +362,18 @@ def test_healthz_and_catalog_endpoints():
     assert body["analysts"] == ["market", "social", "news", "fundamentals"]
 
 
+def test_catalog_exposes_tool_capable_flag(monkeypatch):
+    # P2.5a: each option additively carries `tool_capable` for the Dream Team gate, without changing
+    # the existing label/value contract.
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    body = TestClient(app_module.app).get("/catalog/providers").json()
+    opt = body["providers"]["anthropic"]["deep"][0]
+    assert opt["label"] and opt["value"]  # existing contract preserved
+    assert opt["tool_capable"] is True
+    custom = next(o for o in body["providers"]["ollama"]["deep"] if o["value"] == "custom")
+    assert custom["tool_capable"] is None  # unknown user/local model -> UI warns, not blocks
+
+
 def test_bearer_auth_enforced(monkeypatch):
     monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
     client = TestClient(app_module.app)
@@ -224,7 +391,7 @@ def test_unknown_run_returns_404():
 
 def test_post_run_streams_sse_to_completion(monkeypatch, tmp_path):
     monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
-    monkeypatch.setattr(jobs_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
     monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
     client = TestClient(app_module.app)
@@ -311,3 +478,41 @@ def test_demo_run_over_http_without_keys(monkeypatch, tmp_path):
     assert received[-1] == "run_done"
     _poll_status(client, run_id, "done")
     assert client.get(f"/runs/{run_id}/reports").json()["sections"]["final_trade_decision"].startswith("BUY")
+
+
+def test_demo_run_strips_api_keys_from_stored_request(monkeypatch, tmp_path):
+    # Defense-in-depth: a demo request must never retain BYO keys on the stored job.
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr(app_module.registry, "_results_dir", tmp_path)
+    client = TestClient(app_module.app)
+    created = client.post("/runs", json={
+        "mode": "demo", "ticker": "NVDA", "step_delay": 0,
+        "api_keys": {"google": "should-be-stripped"},
+    })
+    assert created.status_code == 202
+    job = app_module.registry.get(created.json()["run_id"])
+    assert job is not None
+    assert job.request.get("api_keys") is None
+
+
+def test_env_keys_requires_bearer(monkeypatch):
+    monkeypatch.setenv("QUORUM_API_TOKEN", "secret-token")
+    client = TestClient(app_module.app)
+    assert client.get("/env-keys").status_code == 401
+    assert client.get("/env-keys", headers={"Authorization": "Bearer secret-token"}).status_code == 200
+
+
+def test_env_keys_reads_known_provider_keys_from_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    envf = tmp_path / ".env"
+    envf.write_text("GOOGLE_API_KEY=g-secret\nUNRELATED=x\n")
+    monkeypatch.setattr("dotenv.find_dotenv", lambda *a, **k: str(envf))
+    body = TestClient(app_module.app).get("/env-keys").json()
+    assert body.get("google") == "g-secret"
+    assert "unrelated" not in body  # only known providers are surfaced
+
+
+def test_env_keys_missing_dotenv_returns_empty(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    monkeypatch.setattr("dotenv.find_dotenv", lambda *a, **k: str(tmp_path / "absent.env"))
+    assert TestClient(app_module.app).get("/env-keys").json() == {}

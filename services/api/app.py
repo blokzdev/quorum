@@ -12,7 +12,7 @@ import asyncio
 import json
 import os
 import threading
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -21,6 +21,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from services.api.jobs import JobRegistry
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
+from tradingagents.llm_clients.tool_capability import model_supports_tools
 from tradingagents.runtime.events import CONTRACT_VERSION, EventType
 
 app = FastAPI(title="Quorum API", version=str(CONTRACT_VERSION))
@@ -42,7 +43,16 @@ class RunRequest(BaseModel):
     deep_model: str | None = None
     quick_model: str | None = None
     backend_url: str | None = None
+    # Per-provider effort/thinking knob — the UI sends only the one for the chosen provider; the
+    # engine reads these from config (_get_provider_kwargs) and clients ignore unsupported efforts.
+    google_thinking_level: str | None = None
+    openai_reasoning_effort: str | None = None
+    anthropic_effort: str | None = None
     output_language: str = "English"
+    # "Dream Team" (P2.5): per-agent-role model overrides ({role_key: {provider, model, backend_url?,
+    # effort?}}). Inner type stays permissive so a forward-compat field never 422s the request; the
+    # engine reads keys defensively. Unset -> the shared quick/deep split runs every role.
+    agent_models: dict[str, dict[str, Any]] | None = None
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
     # demo mode only: per-step delay in seconds (0 = instant, for tests).
@@ -68,9 +78,15 @@ async def healthz():
 
 @app.get("/catalog/providers")
 async def catalog():
+    # `tool_capable` (additive) feeds the Dream Team gate: market/news/fundamentals analysts loop on
+    # tool calls, so the desktop blocks a non-tool model there. null = unknown (e.g. a custom/local
+    # model) → the UI warns rather than blocks. Existing label/value are unchanged.
     providers = {
         provider: {
-            mode: [{"label": label, "value": value} for label, value in options]
+            mode: [
+                {"label": label, "value": value, "tool_capable": model_supports_tools(provider, value)}
+                for label, value in options
+            ]
             for mode, options in modes.items()
         }
         for provider, modes in MODEL_OPTIONS.items()
@@ -82,10 +98,41 @@ async def catalog():
     }
 
 
+@app.get("/env-keys")
+async def env_keys():
+    """Host-only: surface provider keys from the local gitignored ``.env`` so the desktop can offer a
+    one-time import into its OS keystore. Loopback + bearer only (NOT in ``_PUBLIC_PATHS``); values
+    are NEVER logged and must never be exposed on a future remote-mobile surface (ADR 0001 — keys
+    stay on the sidecar host). Missing ``.env`` returns ``{}`` (never 500)."""
+    from dotenv import dotenv_values, find_dotenv
+
+    from tradingagents.llm_clients.api_key_env import PROVIDER_API_KEY_ENV
+
+    vals = dotenv_values(find_dotenv(usecwd=True))
+    out: dict[str, str] = {}
+    for provider, env_var in PROVIDER_API_KEY_ENV.items():
+        if env_var and vals.get(env_var):
+            out[provider] = vals[env_var]
+    return out
+
+
 @app.post("/runs", status_code=202)
 async def create_run(req: RunRequest):
-    job = registry.create(req.model_dump())
+    body = req.model_dump()
+    # Defense-in-depth: a demo run never touches the engine or keys, so drop any api_keys before the
+    # request is stored on the job (the engine path already routes demo before plan_run).
+    if body.get("mode") == "demo":
+        body["api_keys"] = None
+    job = registry.create(body)
     return {"run_id": job.run_id, "status": job.status}
+
+
+@app.get("/runs")
+async def list_runs():
+    """Run history: the persisted ``run.json`` summaries (newest first), read from disk so the list
+    survives a sidecar restart. Each item carries the verdict/cost summary + model/provider — the
+    drill-down reports stay in the report tree, fetched per-run via ``GET /runs/{id}/reports``."""
+    return {"runs": registry.list_runs()}
 
 
 @app.get("/runs/{run_id}")

@@ -1,0 +1,22 @@
+Quorum
+Copyright 2026 blokzdev
+
+This product includes software originally developed by Tauric Research as part
+of the TradingAgents project:
+
+    TradingAgents — https://github.com/TauricResearch/TradingAgents
+    Copyright Tauric Research. Licensed under the Apache License, Version 2.0.
+
+The `tradingagents/` package and parts of the CLI, dataflows, and graph
+orchestration in this repository are derived from TradingAgents and remain under
+the Apache License, Version 2.0 (see the LICENSE file). New code in this
+repository — the Quorum desktop app (`apps/`), the pure-Dart core
+(`packages/`), the FastAPI sidecar (`services/`), and the runtime streaming seam
+(`tradingagents/runtime/`) — is also released under the Apache License,
+Version 2.0.
+
+TradingAgents citation:
+
+    Yijia Xiao, Edward Sun, Di Luo, Wei Wang.
+    "TradingAgents: Multi-Agents LLM Financial Trading Framework."
+    arXiv:2412.20138, 2025. https://arxiv.org/abs/2412.20138

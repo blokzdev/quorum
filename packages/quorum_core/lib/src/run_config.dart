@@ -1,0 +1,159 @@
+/// Immutable run request for the Quorum engine — the typed value-object behind `POST /runs`.
+///
+/// Mirrors `services/api/app.py` `RunRequest` field-for-field. Pure Dart (no Flutter), so the
+/// desktop app and a future mobile client share it. [toJson] is the exact wire body.
+library;
+
+import 'agent_model.dart';
+
+class RunConfig {
+  /// `demo` | `pro` | `vibe`. ALWAYS serialized: the sidecar defaults `mode` to `vibe`, so omitting
+  /// it would silently turn a demo into a real (cost-incurring) run.
+  final String mode;
+  final String? intent;
+  final String? ticker;
+  final String? tradeDate;
+  final String? assetType;
+  final List<String>? analysts;
+
+  /// Always serialized (server-safe default); keeps the body explicit.
+  final int researchDepth;
+  final String? provider;
+  final String? deepModel;
+  final String? quickModel;
+  final String? backendUrl;
+
+  /// Per-provider effort/thinking knob — only the one for the chosen provider is set; the others stay
+  /// null and are omitted. The engine ignores an effort a model doesn't support.
+  final String? googleThinkingLevel;
+  final String? openaiReasoningEffort;
+  final String? anthropicEffort;
+
+  /// Always serialized (server-safe default).
+  final String outputLanguage;
+
+  /// BYO provider keys ({provider: key}); request-scoped, never persisted server-side.
+  final Map<String, String>? apiKeys;
+
+  /// Demo-only per-step delay (seconds). Omitted for real runs.
+  final double? stepDelay;
+
+  /// "Dream Team" (P2.5): per-agent-role model overrides (`role_key -> AgentModel`). Null/absent → the
+  /// shared quick/deep split runs every role (additive). The engine resolves each role independently.
+  final Map<String, AgentModel>? agentModels;
+
+  const RunConfig({
+    this.mode = 'demo',
+    this.intent,
+    this.ticker,
+    this.tradeDate,
+    this.assetType,
+    this.analysts,
+    this.researchDepth = 1,
+    this.provider,
+    this.deepModel,
+    this.quickModel,
+    this.backendUrl,
+    this.googleThinkingLevel,
+    this.openaiReasoningEffort,
+    this.anthropicEffort,
+    this.outputLanguage = 'English',
+    this.apiKeys,
+    this.stepDelay,
+    this.agentModels,
+  });
+
+  /// Inverse of [toJson] — used to persist/restore a chosen config and saved presets locally.
+  /// (`api_keys` round-trips if present, but the desktop never persists keys to disk — they live in
+  /// the OS keystore and are merged in only at launch.)
+  factory RunConfig.fromJson(Map<String, dynamic> j) => RunConfig(
+        mode: j['mode'] as String? ?? 'demo',
+        intent: j['intent'] as String?,
+        ticker: j['ticker'] as String?,
+        tradeDate: j['trade_date'] as String?,
+        assetType: j['asset_type'] as String?,
+        analysts: (j['analysts'] as List?)?.map((e) => e as String).toList(growable: false),
+        researchDepth: (j['research_depth'] as num?)?.toInt() ?? 1,
+        provider: j['provider'] as String?,
+        deepModel: j['deep_model'] as String?,
+        quickModel: j['quick_model'] as String?,
+        backendUrl: j['backend_url'] as String?,
+        googleThinkingLevel: j['google_thinking_level'] as String?,
+        openaiReasoningEffort: j['openai_reasoning_effort'] as String?,
+        anthropicEffort: j['anthropic_effort'] as String?,
+        outputLanguage: j['output_language'] as String? ?? 'English',
+        apiKeys: (j['api_keys'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)),
+        stepDelay: (j['step_delay'] as num?)?.toDouble(),
+        agentModels: agentModelsFromJson(j['agent_models']),
+      );
+
+  /// The exact `POST /runs` body. `mode` / `research_depth` / `output_language` are always present
+  /// (safe server defaults, but explicit); every other field is emitted only when non-null, under the
+  /// snake_case keys the sidecar `RunRequest` expects.
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{
+      'mode': mode,
+      'research_depth': researchDepth,
+      'output_language': outputLanguage,
+    };
+    if (intent != null) json['intent'] = intent;
+    if (ticker != null) json['ticker'] = ticker;
+    if (tradeDate != null) json['trade_date'] = tradeDate;
+    if (assetType != null) json['asset_type'] = assetType;
+    if (analysts != null) json['analysts'] = analysts;
+    if (provider != null) json['provider'] = provider;
+    if (deepModel != null) json['deep_model'] = deepModel;
+    if (quickModel != null) json['quick_model'] = quickModel;
+    if (backendUrl != null) json['backend_url'] = backendUrl;
+    if (googleThinkingLevel != null) json['google_thinking_level'] = googleThinkingLevel;
+    if (openaiReasoningEffort != null) json['openai_reasoning_effort'] = openaiReasoningEffort;
+    if (anthropicEffort != null) json['anthropic_effort'] = anthropicEffort;
+    if (apiKeys != null) json['api_keys'] = apiKeys;
+    if (stepDelay != null) json['step_delay'] = stepDelay;
+    final am = agentModelsToJson(agentModels);
+    if (am != null) json['agent_models'] = am;
+    return json;
+  }
+
+  RunConfig copyWith({
+    String? mode,
+    String? intent,
+    String? ticker,
+    String? tradeDate,
+    String? assetType,
+    List<String>? analysts,
+    int? researchDepth,
+    String? provider,
+    String? deepModel,
+    String? quickModel,
+    String? backendUrl,
+    String? googleThinkingLevel,
+    String? openaiReasoningEffort,
+    String? anthropicEffort,
+    String? outputLanguage,
+    Map<String, String>? apiKeys,
+    double? stepDelay,
+    Map<String, AgentModel>? agentModels,
+  }) {
+    return RunConfig(
+      mode: mode ?? this.mode,
+      intent: intent ?? this.intent,
+      ticker: ticker ?? this.ticker,
+      tradeDate: tradeDate ?? this.tradeDate,
+      assetType: assetType ?? this.assetType,
+      analysts: analysts ?? this.analysts,
+      researchDepth: researchDepth ?? this.researchDepth,
+      provider: provider ?? this.provider,
+      deepModel: deepModel ?? this.deepModel,
+      quickModel: quickModel ?? this.quickModel,
+      backendUrl: backendUrl ?? this.backendUrl,
+      googleThinkingLevel: googleThinkingLevel ?? this.googleThinkingLevel,
+      openaiReasoningEffort: openaiReasoningEffort ?? this.openaiReasoningEffort,
+      anthropicEffort: anthropicEffort ?? this.anthropicEffort,
+      outputLanguage: outputLanguage ?? this.outputLanguage,
+      apiKeys: apiKeys ?? this.apiKeys,
+      stepDelay: stepDelay ?? this.stepDelay,
+      agentModels: agentModels ?? this.agentModels,
+    );
+  }
+}
