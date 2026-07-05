@@ -24,8 +24,19 @@ test key only.)
   returned mergeable) → self-merged to `phase-3`. Cost stayed within boundary (Ollama + the shared Gemini
   test key only — a couple of depth-2/real-path runs). **Merges to `main` are founder-gated** (doctrine):
   the `phase-3 → main` PR is yours to review (recommend in slices, not one mega-diff) + approve. Backlog is
-  drained (vendor-provenance → roadmap P7). End-of-phase audit passed (completeness verified, zero scope
-  creep, CI green: 385 pytest + 146 flutter + ruff). **The `phase-3 → main` PR is open for you:
+  drained (vendor-provenance → roadmap P7). End-of-phase audit passed (completeness verified, zero scope creep).
+  **Post-close-out CI honesty fix (2026-07-05):** the flutter CI job was actually RED on #29 — `flutter
+  analyze` (fatal-infos) tripped on a `_ollamaCatalog` lint that rode in from P3.2b and, because analyze
+  aborts first, had *skipped* the flutter test step on the P3.3/P3.4 sub-PR merges (they merged red). Fixed
+  in `15c025c`; **the current phase-3 tip is fully green** (ruff + pytest py3.10–3.13 + flutter
+  analyze/test/goldens/build + clean-install smoke). A **fresh-context slice-by-slice verification** (6
+  reviewers, one per slice #23–#28, each reading its golden PNGs) then confirmed all 5 subphases
+  merge-ready. **Two non-blocking concerns to note:** (a) P3.3's "risk-verdict ribbon = risk judge, *not*
+  PM decision" criterion is literally unsatisfiable — the engine sets `risk_debate_state.judge_decision =
+  final_trade_decision` (`portfolio_manager.py:75`), so they're the same value; the ribbon is correct, the
+  criterion was mis-specified and honestly reframed in the close-out (a separate risk-manager node = future
+  engine work); (b) sub-PRs #26/#27 self-merged while flutter CI was red — a verification-gate process gap,
+  now resolved. **The `phase-3 → main` PR is open for you:
   [#29](https://github.com/blokzdev/quorum/pull/29)** — review it in slices (the 6 sub-PRs #22–#28,
   linked in the PR body), then approve + merge. I have NOT merged it (founder-gated).
 
