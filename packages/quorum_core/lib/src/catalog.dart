@@ -163,6 +163,9 @@ bool? toolCapabilityOf(
   if (provider == null || model == null || model.trim().isEmpty) return null;
   if (provider == 'ollama') {
     for (final m in localModels) {
+      // Discovery is ground truth: a matched local model's flag wins outright, even when it's null (an
+      // older Ollama that omits `capabilities`) — null then flows through as UNKNOWN → warn, never block.
+      // (Ollama's static catalog options carry no tool_capable today, so there's nothing to fall back to.)
       if (m.name == model) return m.toolCapable;
     }
   }

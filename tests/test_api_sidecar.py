@@ -492,6 +492,15 @@ def test_local_models_endpoint_degrades_to_empty_when_ollama_down(monkeypatch):
     assert body["local_models"] == []  # no 500, no hang -> clean empty; desktop keeps its static list
 
 
+def test_local_models_endpoint_is_bearer_gated(monkeypatch):
+    # The discovery endpoint reveals installed models — it must sit behind the same bearer boundary as
+    # the other /catalog routes (not in _PUBLIC_PATHS).
+    monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
+    client = TestClient(app_module.app)
+    assert client.get("/catalog/local-models").status_code == 401  # no bearer -> rejected
+    assert "/catalog/local-models" not in app_module._PUBLIC_PATHS
+
+
 def test_bearer_auth_enforced(monkeypatch):
     monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
     client = TestClient(app_module.app)
