@@ -17,10 +17,14 @@ concurrency:
   group: packaging-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   installer:
     name: build installer
     runs-on: windows-latest
+    timeout-minutes: 45 # freeze + release build + Inno is ~6-10 min; cap so a hang fails fast
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,8 +44,10 @@ jobs:
         run: choco install innosetup -y --no-progress
       - name: Build the installer
         shell: pwsh
+        # `inputs.sign` is only set on workflow_dispatch; on a tag push it renders empty -> unsigned,
+        # which is the intended default (a tag build shouldn't carry a debug self-signed cert).
         run: |
-          if ("${{ inputs.sign }}" -eq "true") { .\packaging\build_installer.ps1 -Sign }
+          if ("${{ github.event.inputs.sign }}" -eq "true") { .\packaging\build_installer.ps1 -Sign }
           else { .\packaging\build_installer.ps1 }
       - name: Upload installer
         uses: actions/upload-artifact@v4

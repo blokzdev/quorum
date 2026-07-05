@@ -126,6 +126,13 @@ $iscc = @(
   "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
   "C:\Program Files\Inno Setup 6\ISCC.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+# Fallbacks if Inno was installed somewhere non-standard (choco/registry): PATH, then the uninstall key.
+if (-not $iscc) { $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
+if (-not $iscc) {
+  $reg = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1"
+  $loc = (Get-ItemProperty $reg -ErrorAction SilentlyContinue).InstallLocation
+  if ($loc) { $cand = Join-Path $loc "ISCC.exe"; if (Test-Path $cand) { $iscc = $cand } }
+}
 if (-not $iscc) { throw "ISCC.exe not found (Inno Setup 6)" }
 New-Item -ItemType Directory -Force -Path (Join-Path $pkg "output") | Out-Null
 & $iscc "/DStagingDir=$staging" "/DAppVersion=$Version" (Join-Path $pkg "installer\quorum.iss")
