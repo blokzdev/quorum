@@ -5,12 +5,12 @@
   compile a per-user Inno Setup installer.
 
 .NOTES
-  Run from anywhere; paths resolve relative to the repo. Production keystore signing is Phase 3 -- the
-  -Sign switch here uses a debug self-signed cert to validate the pipeline only.
+  Run from anywhere; paths resolve relative to the repo. Production code-signing is deferred to V2
+  (ADR 0007); the -Sign switch here uses a debug self-signed cert to validate the pipeline only.
 
 .EXAMPLE
   # Full clean build:
-  powershell -File packaging\build_installer.ps1 -Version 0.2.0 -Sign
+  powershell -File packaging\build_installer.ps1 -Version 1.0.0 -Sign
   # Fast iteration reusing existing freeze + release:
   powershell -File packaging\build_installer.ps1 -SkipFreeze -SkipFlutter
 #>

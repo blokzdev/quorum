@@ -2,10 +2,10 @@
 ;
 ; Ships the Flutter release runner + the bundled frozen sidecar (staging\sidecar\quorum_sidecar.exe,
 ; where SidecarLauncher.resolve() finds it) + the app-local VC++ CRT DLLs, so it launches on a clean
-; machine with no separate VC++ redist and no admin rights. Production keystore signing is Phase 3;
-; here we validate the pipeline with a debug/self-signed cert (see build_installer.ps1 -Sign).
+; machine with no separate VC++ redist and no admin rights. Production code-signing is deferred to V2
+; (ADR 0007); here we validate the pipeline with a debug/self-signed cert (see build_installer.ps1 -Sign).
 ;
-; Compile:  ISCC.exe /DStagingDir=<abs staging path> /DAppVersion=0.2.0 quorum.iss
+; Compile:  ISCC.exe /DStagingDir=<abs staging path> /DAppVersion=1.0.0 quorum.iss
 ; (build_installer.ps1 passes these; the defaults below let a maintainer compile standalone.)
 
 #ifndef StagingDir

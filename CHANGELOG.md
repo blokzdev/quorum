@@ -1,12 +1,44 @@
 # Changelog
 
-All notable changes to TradingAgents are documented here.
+The **Quorum desktop product** (this app) and the underlying **`tradingagents` engine** version
+*independently*: the app follows the `1.x` line below; the engine keeps its upstream-mergeable `0.x`
+line (preserved for provenance with [TradingAgents](https://github.com/TauricResearch/TradingAgents)).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Breaking changes within the 0.x line are called out explicitly.
 
-## [0.3.0] — 2026-06-22
+## [1.0.0] — Quorum V1 · Windows GA
+
+*(Release date is set at the GA tag.)* The first Quorum desktop release — a premium multi-agent
+market-research terminal built on the TradingAgents engine.
+
+### Product (Phases 1–3)
+- **Desktop app + sidecar** — a frameless Flutter terminal (Hub · Model Studio · debate Terminal) over a
+  bundled FastAPI sidecar (loopback + per-launch bearer token; BYO keys stay in the OS keychain, injected
+  per-run, never written to disk).
+- **Model Studio + Dream Team** — per-provider model selection across ~19 cloud providers + local Ollama;
+  assign a different model to each of the 12 agent roles, with a live tool-capability gate.
+- **Debate terminal** — turn-structured bull/bear debate, a risk-team synthesis, structured signal chips.
+- **Data sources** — BYO-key data vendors (Yahoo Finance default; Alpha Vantage / FRED / Polymarket) + an
+  honest stock/crypto toggle.
+- **Historical as-of** analysis with a look-ahead correctness clamp.
+- **Windows installer** (Inno Setup, per-user, no admin) bundling the PyInstaller-frozen engine.
+
+### Release hardening (Phase 4)
+- **Security** — a gitleaks secret-scan CI gate, `SECURITY.md` + a threat model, keys-never-on-disk
+  regression tests.
+- **UX / a11y** — WCAG AA contrast across signal/rating chips, golden coverage of the frameless window
+  chrome, vendor-attributed API-key fields.
+- **Release CI** — an end-to-end packaging build + a clean-install smoke + a per-provider freeze
+  regression check.
+- **Ships unsigned** — SmartScreen shows a one-time "Run anyway" on first launch; production code-signing
+  is a fast-follow ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)).
+
+Windows-only (macOS is post-V1). **Not financial advice** — research/educational only, no real-money execution.
+
+---
+
+## [0.3.0] — 2026-06-22 · `tradingagents` engine
 
 Stabilization and extensibility release: a CI gate, a unified verified
 data-access contract, a provider and data-vendor registry, and a maintenance

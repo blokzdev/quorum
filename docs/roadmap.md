@@ -1,7 +1,8 @@
 # Quorum — Product Vision & Roadmap
 
-The canonical product roadmap. For the in-flight phase detail, see [phase-2-plan.md](phase-2-plan.md);
-for decisions, see [decisions/](decisions/). This doc holds the *why it's world-class* and the long arc.
+The canonical product roadmap. For the in-flight phase detail, see [phase-4-plan.md](phase-4-plan.md)
+(V1 Release & Hardening → an unsigned 1.0.0 Windows GA); for decisions, see [decisions/](decisions/). This
+doc holds the *why it's world-class* and the long arc.
 
 ## What Quorum is
 

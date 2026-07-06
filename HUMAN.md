@@ -138,6 +138,19 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
 
+### 2026-07-06 — **P4-GA readiness audit + P4.4a/P4.5a close-out docs** — *Phase 4 all but the GA publish*
+- **GA-readiness audit** (Workflow, 4 fresh-context agents): **every P4.1/P4.2/P4.3 exit criterion is
+  genuinely met** (verified against code/CI/goldens), **zero scope creep**, all deferrals correctly tracked.
+  2 GA-blockers + should-fixes were all doc/version drift → fixed in P4.5a. The audit also caught a guard:
+  do **not** bump `pyproject.toml` (engine `0.3.0` stays for upstream merge-ability).
+- **P4.4a** ✅ — README "Installing on Windows (first run)" section with the honest SmartScreen "Run anyway"
+  walkthrough. *(A real-dialog screenshot is a founder/real-install follow-up — can't capture the GUI here.)*
+- **P4.5a** ✅ — reconciled README (Phase-2→Phase-4/1.0.0 GA), CHANGELOG (a `[1.0.0]` entry + app-vs-engine
+  dual-versioning note), CLAUDE.md status, roadmap pointer, and the 3 packaging files (`0.2.0`→`1.0.0`,
+  "Phase 3 signing"→"V2/ADR 0007").
+- **P4.5b** ✅ (audit part) — completeness-critic + scope audit done. **Remaining = the founder-gated GA
+  publish** (§1) + the **hub-03** disclaimer (§2, the audit's top GA-runway item). After those, Phase 4 = GA.
+
 ### 2026-07-06 — **P4.3 Release-pipeline CI COMPLETE** — *installer built + proven end-to-end (#41/#42/#43)*
 - **P4.3a** (#41/#42): the first real `packaging.yml` run **caught + fixed 2 never-exercised bugs** (dev-only
   `.venv` python path; VS-redist-only CRT staging) — both would have blocked any release build. It now builds
