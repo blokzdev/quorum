@@ -32,7 +32,16 @@ if (-not $Version) {
 Write-Host "== Quorum installer build (v$Version) ==" -ForegroundColor Cyan
 Write-Host "repo: $repo"
 
+# Prefer the repo .venv (dev machines); fall back to the ambient `python` on CI / clean checkouts where
+# there is no .venv (the packaging workflow installs the engine + PyInstaller into the runner's system
+# Python via setup-python + pip). Without this the freeze step dies with ".venv\Scripts\python.exe not
+# recognized" (P4.3a — surfaced by the first real packaging.yml e2e run).
 $venvPy = Join-Path $repo ".venv\Scripts\python.exe"
+if (-not (Test-Path $venvPy)) {
+  $venvPy = (Get-Command python -ErrorAction SilentlyContinue).Source
+  if (-not $venvPy) { throw "no Python found: neither .venv\Scripts\python.exe nor a `python` on PATH" }
+  Write-Host "    (no .venv — using ambient python: $venvPy)" -ForegroundColor DarkYellow
+}
 $staging = Join-Path $pkg "staging"
 $distSidecar = Join-Path $pkg "dist\quorum_sidecar"
 $release = Join-Path $repo "apps\desktop\build\windows\x64\runner\Release"
@@ -90,7 +99,19 @@ if (Test-Path $vsRoot) {
   }
   $crtDir = ($candidates | Sort-Object Ver -Descending | Select-Object -First 1).Path
 }
-if (-not $crtDir) { throw "VC143.CRT redist not found under any VS 2022 edition ($vsRoot)" }
+if (-not $crtDir) {
+  # CI / no VS redist folder: the same CRT DLLs ship in System32 (installed with the VC++ runtime).
+  # Bundling those app-local is standard + works on a clean machine (P4.3a — CI has no VS redist path).
+  $sys32 = Join-Path $env:WINDIR "System32"
+  $crtDlls = @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+  $missing = $crtDlls | Where-Object { -not (Test-Path (Join-Path $sys32 $_)) }
+  if ($missing.Count -eq 0) {
+    $crtDir = $sys32
+    Write-Host "    (no VS 2022 redist — bundling CRT from System32)" -ForegroundColor DarkYellow
+  } else {
+    throw "VC143.CRT not found: no VS 2022 redist under $vsRoot, and System32 lacks $($missing -join ', ')"
+  }
+}
 foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
   Copy-Item -Force (Join-Path $crtDir $dll) $staging
 }
