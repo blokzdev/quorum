@@ -70,10 +70,11 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
 
 ### P4.1 — Security + CI merge-hardening
 
-- [x] **P4.1a Secret-scan gate** — added `.gitleaks.toml` (extends the default ruleset + a tight allowlist
-  for the fake test fixtures + placeholder `.env.*.example` files) and `.github/workflows/secret-scan.yml`
-  (gitleaks, full-history, read-only, on push+PR; free for public repos). *Follow-up:* add `secret-scan` as a
-  required status check on `main` once the workflow is on `main` (branch-protection toggle). *(The shared
+- [x] **P4.1a Secret-scan gate** — added `.gitleaks.toml` (extends the default ruleset; allowlists the fake
+  fixtures **by value, never by whole file/path** — the fresh-context review caught that a directory-path
+  allowlist would mask an entire tree, so a real key committed under `tests/` is still caught) and
+  `.github/workflows/secret-scan.yml` (gitleaks, full-history, read-only, on push+PR; free for public repos).
+  *Follow-up:* add `secret-scan` as a required status check on `main` (branch-protection toggle). *(The shared
   Gemini `.env` key is a **dev/CI-only credential** — gitignored, never shipped, separate from the product's
   per-run keychain BYOK; rotation deferred to post-V1.)*
 - [x] **P4.1b Required merge gate** — the **full flutter job** (analyze + test + goldens + build) is a
