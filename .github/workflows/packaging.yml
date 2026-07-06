@@ -49,6 +49,17 @@ jobs:
         run: |
           if ("${{ github.event.inputs.sign }}" -eq "true") { .\packaging\build_installer.ps1 -Sign }
           else { .\packaging\build_installer.ps1 }
+      - name: Freeze regression — frozen bundle imports every provider SDK
+        shell: pwsh
+        # P4.3b: provider SDKs are lazily imported, so a provider package dropped from the PyInstaller
+        # spec (collect_all) crashes only a REAL run — not startup/demo/healthz (the P2.6b HIGH). Run the
+        # freshly-frozen exe's --check-freeze: it constructs a client per provider family (importing the
+        # SDK, no API call, key-free) and exits non-zero if any provider package is missing from the freeze.
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sc = Join-Path (Resolve-Path packaging/dist/quorum_sidecar).Path 'quorum_sidecar.exe'
+          & $sc --check-freeze
+          if ($LASTEXITCODE -ne 0) { throw "freeze regression: --check-freeze exited $LASTEXITCODE (a provider package is missing from the freeze)" }
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -94,6 +105,7 @@ jobs:
           } finally {
             if ($sc -and -not $sc.HasExited) { Stop-Process -Id $sc.Id -Force }
           }
+          $sc.WaitForExit(5000) | Out-Null  # let the sidecar fully release its files before uninstall (avoids a rare file-in-use flake)
 
           # Uninstall (Inno's per-user unins000.exe) and confirm the tree is gone.
           $unins = Join-Path $appDir 'unins000.exe'
