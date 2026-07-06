@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4 underway** — P4.1 security ✅ (#34) + P4.2a a11y contrast ✅ (#35) self-merged to `main` via the delegated merge-as-you-go workflow (each CI-green + fresh-reviewed). Next: P4.2b (ghosted Settings-H1 golden). **Nothing blocking; one optional 1-click action in §1** (add secret-scan to required checks). §3/§4)
+**Last AI update:** 2026-07-06 (**Phase 4: P4.1 ✅ + P4.2 ✅ — all 4 UX-integrity blockers landed** (#34–#39, 6 self-merged PRs, each CI-green + fresh-reviewed; the keystone review caught real defects in 3). Next: **P4.3 release-pipeline CI**. **§2 has one product decision: the hub-03 disclaimer.** §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -26,8 +26,13 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
-- _(none open)_ — the two Phase-4 forks are **decided** (defer signing → unsigned 1.0.0; Windows-first GA);
-  see §3.
+- **hub-03 — a persistent "not financial advice" disclaimer.** P4.2c's shell-chrome golden confirmed the
+  app's **persistent chrome carries no disclaimer** (audit finding hub-03). CLAUDE.md mandates disclaimers
+  in-product for the regulatory posture, so for GA I **recommend adding a lightweight, always-visible
+  disclaimer** — a thin footer/status line in the shell, present across all surfaces. It's a new UI element +
+  a regulatory-posture call, so it's **yours** (not self-approved). If you approve, I'll add it as a small
+  golden-tested task in P4.4. *(Not blocking — P4.3 proceeds regardless.)*
+  *(The earlier signing + Windows-first forks are decided — see §3.)*
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
@@ -127,6 +132,18 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-06 — **P4.2 UX-integrity COMPLETE** — *all 4 audit blockers closed (#37/#38/#39)*
+- **P4.2b Settings-H1** (#37): root-caused (empirical bisection) a **golden-harness capture bug** — capturing
+  the non-RepaintBoundary `SettingsBody` rasterised the H1 at a fractional offset (faint/ghosted). Test-only
+  fix (capture the Scaffold); the H1 code was always correct. 5 goldens re-baselined + Read-verified.
+- **P4.2d vendor-key label** (#38): data-source key fields now vendor-attributed ("Alpha Vantage API key" /
+  "FRED API key") so a stored key is always identifiable.
+- **P4.2c shell-chrome golden** (#39): extracted a pure `ShellChrome` (behaviour-preserving) + 2 goldens
+  (windowed + maximized) — closed the zero-coverage gap on the frameless chrome. Surfaced **hub-03** (no
+  persistent disclaimer) → §2.
+- **P4.1 ✅ + P4.2 ✅** = 6 self-merged PRs, each CI-green + fresh-context-reviewed; the review caught real
+  defects in P4.1 (gitleaks tree-masking blind spot) and P4.2a (Sell risk-ribbon still sub-AA). Next: P4.3.
 
 ### 2026-07-06 — **P4.1 security + P4.2a a11y contrast shipped** — *first Phase-4 implementation, self-merged*
 - **P4.1 (#34)** — a `gitleaks` **secret-scan CI gate** (so no key can land in the public repo), `SECURITY.md`
