@@ -4,8 +4,9 @@ Builds the **self-contained Windows installer**: the Flutter release app + the b
 sidecar + the app-local VC++ CRT, packaged with **Inno Setup** into a per-user installer that runs on
 a clean machine with no admin rights and no separate VC++ redist.
 
-> Production keystore code-signing + GA are **Phase 3**. This validates the pipeline with a **debug /
-> self-signed** cert. Installer format decision: **Inno Setup** (not MSIX/WiX) — chosen because the app
+> Production code-signing is **deferred to V2** ([ADR 0007](../docs/decisions/0007-defer-code-signing-to-v2.md));
+> the 1.0.0 GA (Phase 4) ships **unsigned**, and this pipeline validates with a **debug / self-signed** cert.
+> Installer format decision: **Inno Setup** (not MSIX/WiX) — chosen because the app
 > spawns a bundled child process and manages it via `taskkill`/`tasklist`, which MSIX's app-container
 > virtualization would fight. Sidecar bundling: PyInstaller **onedir**, see
 > [ADR 0002](../docs/decisions/0002-sidecar-bundling.md).
@@ -26,7 +27,7 @@ The installer lays the sidecar into `<appDir>\sidecar\quorum_sidecar.exe`; the a
 
 ```powershell
 # Full clean build (requires: repo .venv, Flutter, VS 2022 C++ toolchain, Inno Setup 6):
-powershell -File packaging\build_installer.ps1 -Version 0.2.0 -Sign
+powershell -File packaging\build_installer.ps1 -Version 1.0.0 -Sign
 
 # Fast iteration (reuse an existing freeze + release):
 powershell -File packaging\build_installer.ps1 -SkipFreeze -SkipFlutter

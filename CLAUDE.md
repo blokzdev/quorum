@@ -5,13 +5,18 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 3 complete — merged to `main`** (2026-07-06, PR #29 → merge commit `0a7ad57`; `phase-3`
-> branch deleted) — P3.1–P3.5. **Now: Phase 4 (V1 Release & Hardening) — plan-locked (proposed)** in
-> **[docs/phase-4-plan.md](docs/phase-4-plan.md)**, awaiting founder approval of the plan PR. Phase 4 = an
-> **unsigned 1.0.0 Windows GA** (**zero paid spend** — production code-signing **deferred to V2**,
-> [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)): security sweep + a secret-scan CI gate,
-> end-to-end release CI, a bounded UX-integrity pass closing the 4 V1-blocking defects from the Phase-4 recon
-> audit (23 findings, 21 confirmed, 4 blocking), and unsigned-release readiness. Phase 3 (Depth & Refinement)
+> Status: **Phase 4 (V1 Release & Hardening) in progress — P4.1 ✅ P4.2 ✅ P4.3 ✅; P4.4/P4.5 remain.**
+> Plan-locked + merged (**[docs/phase-4-plan.md](docs/phase-4-plan.md)**, PR #32). Heading to an **unsigned
+> 1.0.0 Windows GA** (**zero paid spend** — production code-signing **deferred to V2**,
+> [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)). Done: **P4.1** security + CI-hardening
+> (gitleaks secret-scan gate, SECURITY.md + threat model, required-flutter merge gate); **P4.2** UX-integrity
+> (the 4 recon-audit blockers: WCAG-AA chip contrast, a golden-harness H1 fix, shell-chrome golden coverage,
+> vendor-attributed key labels); **P4.3** release CI (packaging build **proven e2e** + clean-install smoke +
+> a frozen-bundle per-provider freeze check). Remaining: **P4.4** unsigned-release readiness (Run-anyway docs
+> + Defender pre-submission; the **hub-03** in-app disclaimer is a founder decision — [HUMAN.md](HUMAN.md) §2)
+> and **P4.5** GA close-out (version/docs reconciliation, then the founder-gated 1.0.0 publish). Merge model:
+> subphases self-merged as-you-go (founder-delegated) gated on full CI green + fresh-context review; the GA
+> publish stays founder-surfaced. Phases 1–3 shipped to `main` (Phase 3 = PR #29 `0a7ad57`). Phase 3 (Depth & Refinement)
 > surfaced the untapped engine — **BYO-key data vendors** (P3.1),
 > **local-model discovery + a live capability gate** (P3.2), **debate-terminal depth** (P3.3), **UI/UX +
 > a11y** (P3.4), and **historical as-of + a look-ahead correctness fix** (P3.5) — all locked in

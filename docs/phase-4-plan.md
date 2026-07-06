@@ -144,25 +144,33 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
 
 ### P4.4 — Unsigned-release readiness *(the deferred-signing mitigations — [ADR 0007](decisions/0007-defer-code-signing-to-v2.md))*
 
-- [ ] **P4.4a First-run UX docs** — a README / download-page walkthrough of the **"More info → Run anyway"**
-  SmartScreen step with a screenshot (of P4.3's built installer), set honestly (unsigned early release;
-  signing coming in a later version), so a first-time user isn't scared off by the warning.
-- [ ] **P4.4b AV false-positive pre-submission** — before launch, submit the built installer + the frozen
-  `quorum_sidecar.exe` to **Microsoft Defender** ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission))
-  to reduce the PyInstaller false-positive risk; note the `-Sign` seam is retained for V2.
+- [x] **P4.4a First-run UX docs** — added an **"Installing on Windows (first run)"** section to `README.md`
+  with the honest **"More info → Run anyway"** SmartScreen walkthrough (unsigned early release; per-user, no
+  admin; signing a 1.x/V2 fast-follow). *(A screenshot of the actual SmartScreen dialog is a founder/real-
+  install follow-up — this env can't capture the live Windows GUI.)*
+- [ ] **P4.4b AV false-positive pre-submission** *(founder action)* — before launch, submit the built
+  installer + the frozen `quorum_sidecar.exe` to **Microsoft Defender** ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission))
+  to reduce the PyInstaller false-positive risk; the `-Sign` seam is retained for V2 (verified intact by the
+  P4-GA audit). Surfaced in [HUMAN.md](../HUMAN.md) §1.
   *Exit (falsifiable):* the download page documents the Run-anyway step with a screenshot; the Defender
   submission is filed (reference recorded); `build_installer.ps1 -Sign` still works (self-signed dev path
   intact) so V2 signing is a wiring-only change.
 
 ### P4.5 — GA close-out
 
-- [ ] **P4.5a Version + docs reconciliation** — reconcile the version (pubspec is already `1.0.0+1`; the build
-  script/docs/examples still say `0.2.0`); refresh `CHANGELOG.md`, `README.md` (GA posture, unsigned-release
-  note), `roadmap.md`, and this plan's checkboxes.
-- [ ] **P4.5b Completeness-critic + scope audit + publish** — a fresh-context pass (any shipped capability with
-  no exit criterion is unsanctioned creep); backlog drained (triage the 16 `P4-recon` items + P3 carryovers
-  into the next phase or won't-do); then **surface the 1.0.0 GA publish to the founder** (tag + GitHub release
-  + installer distribution — the one outward-facing act not self-merged).
+- [x] **P4.5a Version + docs reconciliation** — reconciled all version/status drift the P4-GA audit found:
+  `README.md` status block → Phase-4 / unsigned 1.0.0 GA (was "Phase 2 in progress"); `CHANGELOG.md` → a
+  `[1.0.0]` Quorum-GA entry + an app-vs-engine dual-versioning note (the engine stays `0.3.0` for upstream
+  merge-ability — *not* bumped, per the audit); `CLAUDE.md` status block refreshed (was stale "plan-locked
+  proposed"); `roadmap.md` in-flight pointer → `phase-4-plan.md`; packaging examples `0.2.0`→`1.0.0` and
+  "signing is Phase 3" → "deferred to V2 (ADR 0007)" across the 3 packaging files.
+- [x] **P4.5b Completeness-critic + scope audit** *(done; publish is the remaining founder step)* — a
+  fresh-context 4-agent GA-readiness audit verified **every P4.1/P4.2/P4.3 exit criterion is genuinely met**
+  (against code/CI/goldens, not just "merged") and found **zero scope creep** + all deferrals correctly
+  tracked; its 2 GA-blockers (stale README, missing CHANGELOG entry) + should-fixes were the version drift,
+  all fixed in P4.5a. Backlog: the 16 `P4-recon` items stay as post-V1 refinements. **Remaining: the 1.0.0
+  GA publish** (tag + GitHub release + distribute) — the one outward-facing act, **founder-gated** (HUMAN.md
+  §1), plus the **hub-03** disclaimer decision (§2) which the audit flagged as the top GA-runway item.
   *Exit (phase):* an **unsigned** Windows installer installs → launches → runs a real analysis → uninstalls
   cleanly on a fresh machine; the first-run Run-anyway UX is documented + the Defender submission filed;
   release CI is green end-to-end with the freeze + install-smoke + per-provider guards; the 4 UX-integrity
