@@ -51,6 +51,19 @@ void main() {
     }
   });
 
+  test('accessibleTint clears AA for a chip on a same-hue tinted ribbon (Sell risk verdict)', () {
+    // The risk-verdict ribbon tints its bg down@0.08 and the chip adds down@0.13 on top — a NESTED
+    // same-hue tint. Targeting flat surface2 would leave a Sell chip ~4.2:1; the fix targets the
+    // ribbon bg. (surface2 is the worst-case parent — the real feed bg is darker → more contrast.)
+    final ribbonBg = Color.alphaBlend(QC.down.withValues(alpha: 0.08), QC.surface2);
+    final chipBg = Color.alphaBlend(QC.down.withValues(alpha: 0.13), ribbonBg);
+    expect(wcagContrast(QC.down, chipBg), lessThan(4.5)); // regression: raw down fails on the nested bg
+    expect(wcagContrast(accessibleTint(QC.down, ribbonBg, fillAlpha: 0.13), chipBg),
+        greaterThanOrEqualTo(4.5)); // chip ink (targets ribbonBg) clears AA on the real chip bg
+    expect(wcagContrast(accessibleTint(QC.down, QC.surface2, fillAlpha: 0.08), ribbonBg),
+        greaterThanOrEqualTo(4.5)); // ribbon icon/label ink clears AA on the ribbon bg
+  });
+
   test('accessibleTint lifts only the sub-AA hues; bright hues pass through unchanged', () {
     // Regression lock — these two were the audit failures (below 4.5 raw on their own tint).
     expect(wcagContrast(QC.accent, _tintBg(QC.accent, QC.surface2, 0.16)), lessThan(4.5));
