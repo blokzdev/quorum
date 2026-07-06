@@ -12,7 +12,7 @@ here. Keep it current; it is loaded into context each session.
 > a11y** (P3.4), and **historical as-of + a look-ahead correctness fix** (P3.5) — all locked in
 > **[docs/phase-3-plan.md](docs/phase-3-plan.md)** with the open-core raw-vs-curated line in
 > [0006](docs/decisions/0006-open-core-signal-boundary.md); every subphase went recon → adversarial-validate
-> → real-path verify → fresh-context review → self-merge, CI green (385 pytest + 146 flutter + ruff).
+> → real-path verify → fresh-context review → self-merge, full CI suite green (ruff + pytest + flutter analyze/test/goldens/build + clean-install smoke).
 > (Phase 2 complete, merged to `main` 2026-07-05; Phase 1 vertical slice + de-fork 2026-06-26 — Phase 2
 > shipped the Hub + nav, Settings/**Model Studio**, the **Dream Team** roster + gates, brand, and a
 > validated Windows installer + Flutter CI gate, per [docs/phase-2-plan.md](docs/phase-2-plan.md) + ADRs
