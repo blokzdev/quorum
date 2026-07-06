@@ -1,0 +1,25 @@
+# Quorum gitleaks config — the secret-scan gate for a PUBLIC repo (Phase 4 P4.1a).
+# Extends gitleaks' built-in ruleset (which already covers AIza… / sk-… / sk-ant-… / AKIA… /
+# "BEGIN … PRIVATE KEY" blocks) and adds a Quorum allowlist so our fake test fixtures + empty
+# placeholder env files don't false-positive. Real secrets live only in the gitignored .env
+# (verified never-committed); every `sk-…` string in the tree is a deliberate low-entropy fixture.
+title = "Quorum gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Quorum test fixtures + placeholder env files — fake keys only."
+# Fixture zones + the tracked *.example env files (empty placeholders). Keeping these tight (test
+# dirs + the two example files) rather than broad avoids masking a real key elsewhere.
+paths = [
+  '''^\.env\.example$''',
+  '''^\.env\.enterprise\.example$''',
+  '''^tests/.*\.py$''',
+  '''^apps/desktop/test/.*\.dart$''',
+]
+# Defensive marker: the deliberate fake-key stem used across fixtures, in case one is ever added
+# outside the allowlisted dirs. Matches the secret *value*.
+regexes = [
+  '''sk-SECRET-[A-Za-z0-9-]+''',
+]
