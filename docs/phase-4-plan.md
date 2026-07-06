@@ -155,6 +155,16 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
   *Exit (falsifiable):* the download page documents the Run-anyway step with a screenshot; the Defender
   submission is filed (reference recorded); `build_installer.ps1 -Sign` still works (self-signed dev path
   intact) so V2 signing is a wiring-only change.
+- [x] **P4.4c In-product disclaimer (hub-03)** *(founder-approved: "proceed with inapp shell footer")* — a
+  persistent `DisclaimerBar` in the shell chrome, present below **every** surface: *"Research & educational
+  tool — not financial advice. No real-money execution."* Puts the regulatory posture CLAUDE.md mandates
+  **in the product**, not just the README (the P4-GA audit's top GA-runway item). Shipped in PR #46;
+  fresh-context APPROVE. *Exit (falsifiable, MET):* the footer renders on Terminal/Hub/Settings (golden
+  `shell_disclaimer.png`, Read-verified); a `find.textContaining('not financial advice')` assertion guards the
+  copy; contrast is locked by a `wcagContrast(textMid, surface1) ≥ 4.5` unit test (**7.24:1**), not just the
+  golden. *(Accompanying founder-requested polish, same session: a fresh-context UX quick-wins sweep → 4
+  golden-verified fixes shipped in PR #47 [cost-column alignment, verdict-tinted confidence bar, title-bar
+  divider (drains backlog shell-03), single error-screen primary]; 2 net-new items → `docs/backlog.md`.)*
 
 ### P4.5 — GA close-out
 
@@ -168,9 +178,10 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
   fresh-context 4-agent GA-readiness audit verified **every P4.1/P4.2/P4.3 exit criterion is genuinely met**
   (against code/CI/goldens, not just "merged") and found **zero scope creep** + all deferrals correctly
   tracked; its 2 GA-blockers (stale README, missing CHANGELOG entry) + should-fixes were the version drift,
-  all fixed in P4.5a. Backlog: the 16 `P4-recon` items stay as post-V1 refinements. **Remaining: the 1.0.0
-  GA publish** (tag + GitHub release + distribute) — the one outward-facing act, **founder-gated** (HUMAN.md
-  §1), plus the **hub-03** disclaimer decision (§2) which the audit flagged as the top GA-runway item.
+  all fixed in P4.5a. Backlog: the 16 `P4-recon` items stay as post-V1 refinements. With **P4.4c (hub-03)**
+  now shipped, the audit's top GA-runway item is closed. **Remaining: the 1.0.0 GA publish** (tag + GitHub
+  release + distribute) — the one outward-facing act, **founder-gated** (HUMAN.md §1) — plus the optional
+  **P4.4b** Defender pre-submission (founder MS account).
   *Exit (phase):* an **unsigned** Windows installer installs → launches → runs a real analysis → uninstalls
   cleanly on a fresh machine; the first-run Run-anyway UX is documented + the Defender submission filed;
   release CI is green end-to-end with the freeze + install-smoke + per-provider guards; the 4 UX-integrity
