@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4 plan-locked (proposed)** — [docs/phase-4-plan.md](docs/phase-4-plan.md) + this PR; recon audit done, 4 blockers → P4.3. **You decided to defer signing → unsigned 1.0.0 GA** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)) — Phase 4 is now **zero paid spend**. §1 = plan-PR merge + Gemini rotation. §3/§4)
+**Last AI update:** 2026-07-06 (**Phase 4 plan-locked (proposed)** — [docs/phase-4-plan.md](docs/phase-4-plan.md) + this PR; recon audit done, 4 blockers → P4.3. **You decided to defer signing → unsigned 1.0.0 GA** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)) — Phase 4 is now **zero paid spend**. §1 = plan-PR merge only (Gemini-key rotation deferred post-V1, your call). §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -21,9 +21,8 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   [docs/phase-4-plan.md](docs/phase-4-plan.md) + [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)
   + status/roadmap/HUMAN/backlog. Approving it locks the 5 subphases + falsifiable exit criteria. *(I can
   start the subphases — all zero-spend — on your word without waiting for the merge.)*
-- **Rotate the shared Gemini test key** *(P4.1a, release hygiene)* — rotate it in the Google AI Studio
-  console, invalidate the old one, and hand me the new key for the gitignored `.env`. A human-only step (not
-  a fork); I'll wire the secret-scan CI gate around it.
+
+*(Nothing else is blocked on you — the Gemini-key rotation is deferred to post-V1; see §3.)*
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -32,6 +31,12 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-06 — **Keep the shared dev Gemini key; defer rotation to post-V1 (your call).** Clarified the
+  architecture: the `.env` `GOOGLE_API_KEY` is a **dev/CI-only** credential (engine auto-loads `.env` via
+  `tradingagents/__init__.py`) — it is **not** the product key and **never ships** (gitignored, not in the
+  PyInstaller spec). Users' keys go the separate write-only-keychain → per-run-injection BYOK path
+  (`jobs.py` `build_api_keys_dict`). So rotation is dev-hygiene, not a GA gate. P4.1a keeps the genuinely
+  valuable **secret-scan CI gate** (protects the public repo); rotation stays in `docs/backlog.md` → post-V1.
 - 2026-07-06 — **Defer production code-signing → V2; ship an unsigned 1.0.0 GA (your call)** →
   [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md). After a researched options pass (free
   **SignPath Foundation** — but it shows "SignPath Foundation" as the publisher + our open-core model risks
@@ -134,8 +139,8 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   `-Sign` seam is retained; the SmartScreen "Run anyway" + AV-FP tradeoffs are mitigated in P4.4.
 - **Plan-locked + restructured** [docs/phase-4-plan.md](docs/phase-4-plan.md): 5 subphases (P4.1 security ·
   P4.2 release CI · P4.3 UX-integrity · P4.4 unsigned-release readiness · P4.5 GA close-out), falsifiable exit
-  criteria, unsigned Windows-first 1.0.0. **Awaiting you: §1** (plan-PR merge + Gemini rotation). No
-  implementation started.
+  criteria, unsigned Windows-first 1.0.0. **Awaiting you: §1** (plan-PR merge only — Gemini rotation deferred
+  post-V1). No implementation started.
 
 ### 2026-07-06 — **Phase 3 MERGED to `main`** (PR #29 → merge commit `0a7ad57`) — *Band B core V1 depth landed*
 - You authorized the founder-gated merge on the **slice-by-slice visual review** (6 fresh-context reviewers,

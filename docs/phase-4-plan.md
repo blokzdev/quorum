@@ -2,7 +2,7 @@
 
 > Status: **plan-locked (proposed)** — awaiting founder approval of this docs PR. Phase 3 shipped to `main`
 > 2026-07-06 (PR #29, `0a7ad57`). Phase 4 takes the validated, feature-complete app to an **unsigned 1.0.0
-> Windows GA**: a security sweep + secret rotation, end-to-end release CI, a small bounded **UX-integrity**
+> Windows GA**: a security sweep + a secret-scan gate, end-to-end release CI, a small bounded **UX-integrity**
 > pass closing the four V1-blocking defects from the Phase-4 recon audit, and unsigned-release readiness.
 > **Production code-signing is deferred to a post-1.0 (1.x / V2) fast-follow** ([ADR 0007](decisions/0007-defer-code-signing-to-v2.md),
 > founder call 2026-07-06) — so **Phase 4 carries zero paid spend and no founder-gated cost.** Scope wall
@@ -14,8 +14,8 @@
 
 Phase 3 left the app **feature-complete and CI-green** but **not release-hardened**: the release CI
 (`packaging.yml`) has never been verified end-to-end, no per-provider freeze regression guards the frozen
-installer, the shared Gemini test key is unrotated, and there is no `SECURITY.md` / threat model for a
-public tool that handles user API keys. Phase 4 closes exactly those gaps — and nothing else. The engine
+installer, there is no CI secret-scan gate on a public repo, and there is no `SECURITY.md` / threat model
+for a public tool that handles user API keys. Phase 4 closes exactly those gaps — and nothing else. The engine
 package `tradingagents` stays frozen; all changes are additive.
 
 **Signing is deferred, not skipped.** An unsigned installer + app run **100% normally** (signing is
@@ -52,8 +52,9 @@ as a bounded subphase — **not** spun out as a separate UX-hardening phase.
 - **Cost boundary:** **entirely free tier** — Ollama + demo + the shared Gemini test key + free data-vendor
   keys + free public-repo CI. **Zero paid spend** (signing deferred per ADR 0007). If anything would cost
   money, it stops and surfaces first.
-- **Sensitive ops (surface, never self-approve):** the **Gemini key rotation** (founder-only step), the
-  `phase-4 → main` merge, publishing/GA, and any contract/scope change. *(No cert purchase this phase.)*
+- **Sensitive ops (surface, never self-approve):** the `phase-4 → main` merge, publishing/GA, and any
+  contract/scope change. *(No cert purchase and no key rotation this phase — the shared dev/CI Gemini key
+  stays in use; rotation is post-V1.)*
 - **Verification:** unchanged bar — ruff + pytest + flutter analyze/test/goldens/build + clean-install smoke;
   golden render-to-PNG (Read the PNG) for visual claims; **real-path** (not demo) for freeze + install proofs.
 
@@ -65,17 +66,18 @@ first-run UX; **P4.5** closes out. None require spend.
 
 ### P4.1 — Security sweep + secret hygiene
 
-- [ ] **P4.1a Secret rotation + scan gate** — rotate the **shared Gemini test key** (founder rotates in the
-  Google AI Studio console → hands me the new key for the gitignored `.env`; old key invalidated). Add a CI
-  **secret-scan** step (e.g. `gitleaks`/`trufflehog` or equivalent) that fails on any committed key pattern,
-  so a future leak can't merge.
+- [ ] **P4.1a Secret-scan gate** — add a CI **secret-scan** step (e.g. `gitleaks`/`trufflehog` or
+  equivalent) that fails on any committed key pattern, so a key can never land in the public repo. *(The
+  shared Gemini `.env` key is a **dev/CI-only credential** — gitignored, never shipped [not in the
+  PyInstaller spec], separate from the product's per-run keychain BYOK path. **Rotation is deferred to
+  post-V1** per founder call 2026-07-06 — this phase keeps using it and just guards the repo.)*
 - [ ] **P4.1b Security docs + posture re-assert** — add a `SECURITY.md` (coordinated vulnerability-disclosure
   policy) and a lightweight **threat model** (`docs/security.md`: assets = user API keys + the local sidecar
   boundary; the bearer-token + ephemeral-port + `QUORUM_PARENT_PID` model; BYO-key never-on-disk). Re-assert
   keys-never-on-disk on the **frozen** path (byte-scan a real spawned-installer run).
-  *Exit (falsifiable):* the old Gemini key is revoked (a run with it fails auth); the secret-scan gate is
-  green and **fails red** on a planted dummy key in a scratch file; `SECURITY.md` + `docs/security.md` merged;
-  a frozen-path run leaves no key on disk or in logs (byte-scan).
+  *Exit (falsifiable):* the secret-scan gate is green and **fails red** on a planted dummy key in a scratch
+  file; `SECURITY.md` + `docs/security.md` merged; a frozen-path run leaves no user key on disk or in logs
+  (byte-scan).
 
 ### P4.2 — Release CI end-to-end
 
@@ -138,7 +140,7 @@ first-run UX; **P4.5** closes out. None require spend.
   *Exit (phase):* an **unsigned** Windows installer installs → launches → runs a real analysis → uninstalls
   cleanly on a fresh machine; the first-run Run-anyway UX is documented + the Defender submission filed;
   release CI is green end-to-end with the freeze + install-smoke + per-provider guards; the 4 UX-integrity
-  criteria pass; the security docs + Gemini rotation are in; CI stays green (Python + Flutter); `phase-4 →
+  criteria pass; the security docs + secret-scan gate are in; CI stays green (Python + Flutter); `phase-4 →
   main` merged as **1.0.0**.
 
 ## Not in Phase 4 (deferred — captured, not dropped)
@@ -147,6 +149,9 @@ first-run UX; **P4.5** closes out. None require spend.
   founder call 2026-07-06). The `-Sign` seam is retained; recommended cert then is Certum Open Source
   (~€29/yr) or Azure Artifact Signing (~$120/yr). Revisit when distribution traction justifies the spend.
 - **macOS port + notarization** → roadmap **P13** (post-V1). Phase 4 ships a **Windows-only** 1.0.0 GA.
+- **Shared Gemini test-key rotation** → **post-V1** (founder call 2026-07-06). It's a dev/CI-only credential
+  that never ships (gitignored, not bundled), so it's dev-hygiene, not a GA gate; the secret-scan gate (P4.1a)
+  is the part that protects the public repo. Stays in `docs/backlog.md`.
 - **The 16 `P4-recon` audit refinements** → [backlog.md](backlog.md) (debate-terminal liveness, capability-gate
   weight, token-scale system, a11y polish, minor consistency). Vision-aligned ones (bet #2/#3) noted for a
   post-V1 premium-feel pass on the roadmap.

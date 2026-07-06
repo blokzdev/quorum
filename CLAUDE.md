@@ -9,7 +9,7 @@ here. Keep it current; it is loaded into context each session.
 > branch deleted) — P3.1–P3.5. **Now: Phase 4 (V1 Release & Hardening) — plan-locked (proposed)** in
 > **[docs/phase-4-plan.md](docs/phase-4-plan.md)**, awaiting founder approval of the plan PR. Phase 4 = an
 > **unsigned 1.0.0 Windows GA** (**zero paid spend** — production code-signing **deferred to V2**,
-> [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)): security sweep + Gemini-key rotation,
+> [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)): security sweep + a secret-scan CI gate,
 > end-to-end release CI, a bounded UX-integrity pass closing the 4 V1-blocking defects from the Phase-4 recon
 > audit (23 findings, 21 confirmed, 4 blocking), and unsigned-release readiness. Phase 3 (Depth & Refinement)
 > surfaced the untapped engine — **BYO-key data vendors** (P3.1),
@@ -22,7 +22,7 @@ here. Keep it current; it is loaded into context each session.
 > shipped the Hub + nav, Settings/**Model Studio**, the **Dream Team** roster + gates, brand, and a
 > validated Windows installer + Flutter CI gate, per [docs/phase-2-plan.md](docs/phase-2-plan.md) + ADRs
 > [0001](docs/decisions/0001-byo-api-key-storage.md)/[0002](docs/decisions/0002-sidecar-bundling.md)/[0004](docs/decisions/0004-per-agent-model-routing.md)/[0005](docs/decisions/0005-installer-format.md).)
-> Phase 4 (V1 Release & Hardening, current) is security sweep + secret rotation, release CI, UX-integrity,
+> Phase 4 (V1 Release & Hardening, current) is security sweep + a secret-scan gate, release CI, UX-integrity,
 > and an unsigned GA; **production code-signing is a V2 fast-follow** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md));
 > mobile remote + paper-trading + a real crypto pipeline + macOS are post-V1/future phases. Product vision +
 > the 3 signature bets (Track Record, Dream Team, debate terminal + FRED/Polymarket signals) live in
@@ -212,8 +212,10 @@ CI (`.github/workflows/ci.yml`) gates on **ruff + pytest** — keep new packages
 - **Docker**: a separate **Knovo** project runs a Supabase stack (ports 54321–54327, 5432). Do not
   disturb it. Avoid Windows-excluded port ranges for the sidecar (let it pick ephemeral).
 - Scratch/work files go in the session scratchpad, not the repo.
-- **Secret hygiene**: provider keys live only in the gitignored `.env` (never committed — verified
-  clean of history). A shared Gemini test key is pending rotation (release-hygiene task).
+- **Secret hygiene**: the **product** BYOK keys live write-only in the OS keychain (injected per-run, never
+  on disk); the only `.env` key is a **dev/CI-only** shared Gemini key (gitignored, never committed —
+  verified clean of history — and never shipped: not in the PyInstaller spec). Its rotation is **deferred to
+  post-V1** (dev-hygiene, not a GA gate); a secret-scan CI gate lands in Phase 4 (P4.1a).
 
 ## Working loop (phase cadence)
 

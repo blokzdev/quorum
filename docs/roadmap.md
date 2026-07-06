@@ -53,7 +53,8 @@ the original `P#` IDs from the first roadmap draft, for continuity.
   **BYO-key raw = free, hosted-curated = paid** ([ADR 0006](decisions/0006-open-core-signal-boundary.md)).
   Detail: [phase-3-plan.md](phase-3-plan.md).
 - **Phase 4 — V1 Release & Hardening** *(≈ old P6; plan-locked → [phase-4-plan.md](phase-4-plan.md))* —
-  security sweep + secret/key rotation (incl. the shared Gemini test key), release CI (+ end-to-end
+  security sweep + a secret-scan CI gate (the shared Gemini test-key rotation is **post-V1** — a dev/CI-only
+  credential that never ships), release CI (+ end-to-end
   `packaging.yml` verification, a clean-VM install smoke, a per-provider freeze regression test), a bounded
   **UX-integrity** pass (the 4 V1-blocking defects from the Phase-4 recon audit), unsigned-release readiness,
   and an **unsigned 1.0.0 Windows GA**. **Production code-signing is deferred to a 1.x/V2 fast-follow**
