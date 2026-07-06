@@ -21,3 +21,20 @@ double wcagContrast(Color a, Color b) {
   final hi = math.max(la, lb), lo = math.min(la, lb);
   return (hi + 0.05) / (lo + 0.05);
 }
+
+/// AA-safe text ink for a **tinted chip** — a pill whose fill is the same [hue] at low [fillAlpha]
+/// over [surface], with [hue] itself as the label. A saturated/recessive hue on its own faint tint
+/// can fall below WCAG AA-normal (e.g. accent 4.0:1, textLo 4.22:1); this returns [hue] unchanged when
+/// it already clears [target], else lightens it toward white just enough to clear the bar. Pass the
+/// **lightest** surface the chip renders on (the worst case for a lightened ink), so the result also
+/// holds on any darker surface. Pure (unit-tested in contrast_test.dart), like [wcagContrast].
+Color accessibleTint(Color hue, Color surface, {double fillAlpha = 0.14, double target = 4.5}) {
+  final bg = Color.alphaBlend(hue.withValues(alpha: fillAlpha), surface);
+  if (wcagContrast(hue, bg) >= target) return hue;
+  const white = Color(0xFFFFFFFF);
+  for (var t = 0.06; t < 1.0; t += 0.04) {
+    final ink = Color.lerp(hue, white, t)!;
+    if (wcagContrast(ink, bg) >= target) return ink;
+  }
+  return white;
+}

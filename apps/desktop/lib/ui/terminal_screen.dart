@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quorum_core/quorum_core.dart';
 
+import 'contrast.dart';
 import 'quorum_colors.dart';
 
 /// Motion budget (calm-luxury): fast 120 / normal 180 / slow 240ms, ease-out. All animations are
@@ -796,6 +797,11 @@ class _RiskVerdictRibbon extends StatelessWidget {
     final rating = verdict?.rating;
     final c = ratingColor(rating);
     final oneLine = (decision?.markdown ?? verdict?.finalDecision ?? '').trim().split('\n').first;
+    // P4.2a a11y: this ribbon tints its OWN bg (c@0.08), so its icon/label/chip sit on a same-hue
+    // tint — accessibleTint must target that composited bg, not flat surface2, or a Sell (down)
+    // verdict's ink stays sub-AA (~4.2:1). ribbonBg uses surface2 as the worst-case (lightest) parent.
+    final ribbonBg = Color.alphaBlend(c.withValues(alpha: 0.08), QC.surface2);
+    final ink = accessibleTint(c, QC.surface2, fillAlpha: 0.08); // for the icon + label on ribbonBg
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -805,11 +811,11 @@ class _RiskVerdictRibbon extends StatelessWidget {
         border: Border.all(color: c.withValues(alpha: 0.40)),
       ),
       child: Row(children: [
-        Icon(Icons.gavel_outlined, size: 15, color: c),
+        Icon(Icons.gavel_outlined, size: 15, color: ink),
         const SizedBox(width: 8),
         Text('RISK VERDICT',
-            style: TextStyle(color: c, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-        if (rating != null) ...[const SizedBox(width: 8), _SignalChip(rating, c)],
+            style: TextStyle(color: ink, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+        if (rating != null) ...[const SizedBox(width: 8), _SignalChip(rating, c, surface: ribbonBg)],
         if (oneLine.isNotEmpty) ...[
           const SizedBox(width: 10),
           Expanded(
@@ -900,7 +906,10 @@ Color _sentimentColor(String band) {
 class _SignalChip extends StatelessWidget {
   final String label;
   final Color color;
-  const _SignalChip(this.label, this.color);
+  /// The background the chip composites over — pass the chip's real surface (e.g. a tinted ribbon)
+  /// so [accessibleTint] targets the right bg. Defaults to surface2 (the flat section-card case).
+  final Color surface;
+  const _SignalChip(this.label, this.color, {this.surface = QC.surface2});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -911,7 +920,9 @@ class _SignalChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
       child: Text(label,
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          style: TextStyle(
+              color: accessibleTint(color, surface, fillAlpha: 0.13),
+              fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
