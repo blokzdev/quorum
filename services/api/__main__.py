@@ -14,6 +14,7 @@ import json
 import os
 import secrets
 import socket
+import sys
 import threading
 import time
 
@@ -65,7 +66,37 @@ def _watch_parent(pid: int) -> None:
             os._exit(0)
 
 
+def _check_freeze() -> int:
+    """P4.3b freeze regression: verify the frozen bundle can import every bundled provider client
+    stack. The provider SDKs are lazily imported (``factory.create_llm_client``), so a provider
+    package silently dropped from the PyInstaller spec (``collect_all``) crashes only a REAL run —
+    not startup, a demo, or ``/healthz`` (this is exactly the P2.6b HIGH). Run on the FROZEN exe
+    (``quorum_sidecar.exe --check-freeze``) it exercises the import in the shipped bundle, key-free:
+    constructing a client triggers the SDK import; no API call is made. Bedrock (``langchain_aws``)
+    is intentionally NOT bundled, so it is excluded."""
+    from tradingagents.llm_clients.factory import create_llm_client
+
+    providers = ("anthropic", "google", "openai")  # the 3 bundled langchain provider stacks
+    failures: list[str] = []
+    for provider in providers:
+        try:
+            create_llm_client(provider, "freeze-check-model", api_key="x")
+        except (ImportError, ModuleNotFoundError) as e:  # the freeze regression we guard against
+            failures.append(f"{provider}: {type(e).__name__}: {e}")
+        except Exception:  # noqa: BLE001 — a bad key/model is fine; it means the SDK already imported
+            pass
+    if failures:
+        print("FREEZE CHECK FAILED — provider package(s) not importable in the frozen bundle:")
+        for f in failures:
+            print("  " + f)
+        return 1
+    print(f"freeze check OK: {', '.join(providers)} client stacks import in the frozen bundle")
+    return 0
+
+
 def main() -> None:
+    if "--check-freeze" in sys.argv:  # P4.3b: frozen-bundle provider-import regression check
+        raise SystemExit(_check_freeze())
     token = os.environ.get("QUORUM_API_TOKEN") or secrets.token_urlsafe(32)
     os.environ["QUORUM_API_TOKEN"] = token
     port = int(os.environ.get("QUORUM_API_PORT") or _free_port())
