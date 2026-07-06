@@ -32,7 +32,16 @@ if (-not $Version) {
 Write-Host "== Quorum installer build (v$Version) ==" -ForegroundColor Cyan
 Write-Host "repo: $repo"
 
+# Prefer the repo .venv (dev machines); fall back to the ambient `python` on CI / clean checkouts where
+# there is no .venv (the packaging workflow installs the engine + PyInstaller into the runner's system
+# Python via setup-python + pip). Without this the freeze step dies with ".venv\Scripts\python.exe not
+# recognized" (P4.3a — surfaced by the first real packaging.yml e2e run).
 $venvPy = Join-Path $repo ".venv\Scripts\python.exe"
+if (-not (Test-Path $venvPy)) {
+  $venvPy = (Get-Command python -ErrorAction SilentlyContinue).Source
+  if (-not $venvPy) { throw "no Python found: neither .venv\Scripts\python.exe nor a `python` on PATH" }
+  Write-Host "    (no .venv — using ambient python: $venvPy)" -ForegroundColor DarkYellow
+}
 $staging = Join-Path $pkg "staging"
 $distSidecar = Join-Path $pkg "dist\quorum_sidecar"
 $release = Join-Path $repo "apps\desktop\build\windows\x64\runner\Release"
