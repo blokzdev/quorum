@@ -70,23 +70,29 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
 
 ### P4.1 — Security + CI merge-hardening
 
-- [ ] **P4.1a Secret-scan gate** — add a CI **secret-scan** step (e.g. `gitleaks`/`trufflehog` or
-  equivalent) that fails on any committed key pattern, so a key can never land in the public repo. *(The
-  shared Gemini `.env` key is a **dev/CI-only credential** — gitignored, never shipped [not in the
-  PyInstaller spec], separate from the product's per-run keychain BYOK path. **Rotation is deferred to
-  post-V1** per founder call 2026-07-06 — this phase keeps using it and just guards the repo.)*
-- [x] **P4.1b Required merge gate** — the **full flutter job** (analyze + test + goldens + build) is now a
-  **required status check on `main`** (founder set it in branch protection, 2026-07-06), so the merge-as-you-go
-  workflow can't land a red commit (closes the P3 slice-verify gap where sub-PRs merged red). *Remaining:* add
-  the ruff + pytest jobs as required checks too (belt-and-suspenders), and fix the stale `ci.yml` "8 goldens"
-  comment (now 14) — folded into P4.1a's PR.
-- [ ] **P4.1c Security docs + posture re-assert** — add a `SECURITY.md` (coordinated vulnerability-disclosure
-  policy) and a lightweight **threat model** (`docs/security.md`: assets = user API keys + the local sidecar
-  boundary; the bearer-token + ephemeral-port + `QUORUM_PARENT_PID` model; BYO-key never-on-disk). Re-assert
-  keys-never-on-disk on the **frozen** path (byte-scan a real spawned-installer run).
-  *Exit (falsifiable):* the secret-scan gate is green and **fails red** on a planted dummy key in a scratch
-  file; the full flutter job is a **required check on `main`** (a red flutter job blocks the merge);
-  `SECURITY.md` + `docs/security.md` merged; a frozen-path run leaves no user key on disk or in logs (byte-scan).
+- [x] **P4.1a Secret-scan gate** — added `.gitleaks.toml` (extends the default ruleset; allowlists the fake
+  fixtures **by value, never by whole file/path** — the fresh-context review caught that a directory-path
+  allowlist would mask an entire tree, so a real key committed under `tests/` is still caught) and
+  `.github/workflows/secret-scan.yml` (gitleaks, full-history, read-only, on push+PR; free for public repos).
+  *Follow-up:* add `secret-scan` as a required status check on `main` (branch-protection toggle). *(The shared
+  Gemini `.env` key is a **dev/CI-only credential** — gitignored, never shipped, separate from the product's
+  per-run keychain BYOK; rotation deferred to post-V1.)*
+- [x] **P4.1b Required merge gate** — the **full flutter job** (analyze + test + goldens + build) is a
+  **required status check on `main`** (founder set it in branch protection, 2026-07-06), so merge-as-you-go
+  can't land a red commit (closes the P3 slice-verify gap). Fixed the stale `ci.yml` "8 goldens" comment
+  (now 14). *Follow-up (branch-protection toggle):* add ruff + pytest + secret-scan as required checks too.
+- [x] **P4.1c Security docs + posture re-assert** — added `SECURITY.md` (GitHub private-advisory disclosure
+  policy + scope) and `docs/security.md` (threat model: assets, the 5 trust boundaries, the loopback
+  bearer-token + ephemeral-port + `QUORUM_PARENT_PID` model, BYO-key never-on-disk, honest residual risks).
+  **Adversarial-validate correction:** the recon flagged keys-never-on-disk + `/env-keys` as *untested*
+  residuals — **both were already regression-tested** (`test_vendor_and_provider_keys_never_touch_disk`
+  byte-scans every persisted file for sentinel keys; `test_env_keys_requires_bearer` gates the plaintext-key
+  endpoint, now also asserting it's not in `_PUBLIC_PATHS`), so no new key-safety test was needed. The
+  frozen-path byte-scan re-verify folds into **P4.3** (when the installer is actually built).
+  *Exit (falsifiable):* the secret-scan gate runs green on the repo and **fails red** on a planted dummy key
+  (verify with a scratch commit on the PR branch); the full flutter job is a **required check on `main`** (a
+  red flutter job blocks the merge — proven by the merge model); `SECURITY.md` + `docs/security.md` merged;
+  the keys-never-on-disk invariant stays guarded by `test_vendor_and_provider_keys_never_touch_disk` (green).
 
 ### P4.2 — UX-integrity *(the 4 KEEP audit findings)*
 

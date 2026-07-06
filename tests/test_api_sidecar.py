@@ -623,6 +623,9 @@ def test_demo_run_strips_api_keys_from_stored_request(monkeypatch, tmp_path):
 
 
 def test_env_keys_requires_bearer(monkeypatch):
+    # /env-keys returns RAW plaintext .env provider keys — it is the highest-value credential endpoint,
+    # so it must be bearer-gated and NEVER public (must never be reachable on a future remote surface).
+    assert "/env-keys" not in app_module._PUBLIC_PATHS
     monkeypatch.setenv("QUORUM_API_TOKEN", "secret-token")
     client = TestClient(app_module.app)
     assert client.get("/env-keys").status_code == 401
