@@ -448,9 +448,12 @@ class _ErrorPane extends StatelessWidget {
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 18),
+              // Tonal (not a second filled-blue primary): the header already carries the filled
+              // "Run analysis" CTA for this same action, so a duplicate accent button here diluted
+              // the single-primary hierarchy (terminal-cta-01).
               FilledButton.icon(
                 onPressed: onRetry,
-                style: FilledButton.styleFrom(backgroundColor: QC.accent, foregroundColor: QC.onAccent),
+                style: FilledButton.styleFrom(backgroundColor: QC.surface2, foregroundColor: QC.textHi),
                 icon: const Icon(Icons.refresh, size: 18),
                 label: const Text('Retry'),
               ),
@@ -1040,7 +1043,7 @@ class _VerdictRail extends StatelessWidget {
             _RatingPill(v.rating),
             if (v.confidence != null) ...[
               const SizedBox(height: 16),
-              _Reveal(child: _Confidence(v.confidence!)),
+              _Reveal(child: _Confidence(v.confidence!, ratingColor(v.rating))),
             ],
             if (v.thesis != null) ...[
               const SizedBox(height: 16),
@@ -1140,7 +1143,8 @@ class _RatingPill extends StatelessWidget {
 
 class _Confidence extends StatelessWidget {
   final double value;
-  const _Confidence(this.value);
+  final Color color;
+  const _Confidence(this.value, this.color);
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -1166,7 +1170,9 @@ class _Confidence extends StatelessWidget {
                 value: v,
                 minHeight: 6,
                 backgroundColor: QC.surface2,
-                valueColor: const AlwaysStoppedAnimation(QC.accent),
+                // Tint the fill to the verdict's rating color (green BUY / red SELL / amber HOLD) so
+                // the answer column reads as one color story instead of a stray blue bar (terminal-conf-01).
+                valueColor: AlwaysStoppedAnimation(color),
               ),
             ),
           ),

@@ -651,11 +651,17 @@ class _RunRow extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (cost != null) ...[
-                Text('\$${cost.toStringAsFixed(2)}',
-                    style: const TextStyle(color: QC.textMid, fontSize: 12, fontFamily: QC.fontMono)),
-                const SizedBox(width: 10),
-              ],
+              // Fixed-width right-aligned cost slot so a no-cost row (e.g. DEMO) still reserves the
+              // cell — keeps the trailing star + chevron column-aligned with costed rows (hub-n1).
+              SizedBox(
+                width: 58,
+                child: cost != null
+                    ? Text('\$${cost.toStringAsFixed(2)}',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(color: QC.textMid, fontSize: 12, fontFamily: QC.fontMono))
+                    : null,
+              ),
+              const SizedBox(width: 10),
               _IconBtn(
                 icon: watched ? Icons.star : Icons.star_border,
                 tooltip: watched ? 'Unwatch' : 'Watch',
