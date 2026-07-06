@@ -128,15 +128,16 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
 
 ### P4.3 — Release pipeline end-to-end
 
-- [ ] **P4.3a `packaging.yml` e2e + install smoke** — trigger `packaging.yml` via a real `workflow_dispatch`
-  (unblocked — it's on `main`) and confirm it produces a working (unsigned) installer artifact; add a
-  **clean-VM install-and-launch smoke** (install the built `.exe` on a fresh runner, launch, hit `/healthz`,
-  uninstall) — closing the "builds the installer but never runs it" gap. *(Runner-local install files carry no
-  Mark-of-the-Web, so SmartScreen doesn't gate the CI smoke — unsigned is fine here.)* Run after P4.2 so the
-  validated artifact reflects the final UX code.
-- [ ] **P4.3b Per-provider freeze regression** — add the **per-provider freeze regression test** (a headless
-  real run per provider family asserting a *non-empty* report — the P2.6b HIGH proved a demo-only check can't
-  catch a missing provider package in the freeze).
+- [x] **P4.3a `packaging.yml` e2e + install smoke** — the first real `workflow_dispatch` run **caught + fixed
+  2 never-exercised bugs** (`.venv`-only python → ambient fallback; VS-redist-only CRT → System32 fallback);
+  it now builds a **61 MB installer e2e**. Added a **clean-install smoke** (silent install → run the installed
+  frozen sidecar → assert public `/healthz` → uninstall) — the true transitive-deps proof (GUI launch isn't
+  testable headless). Proven green on real CI. #41, #42.
+- [x] **P4.3b Per-provider freeze regression** — key-free approach (CI has no BYO keys): a `--check-freeze`
+  mode on the **frozen** sidecar calls `create_llm_client` per provider family (anthropic/google/openai —
+  construction triggers the module-top SDK import; no API call), exiting non-zero if any provider package
+  isn't importable in the shipped bundle. `packaging.yml` runs it right after the freeze. Proven: "freeze
+  check OK … in the frozen bundle". Factory-driven (no drift); bedrock excluded (not bundled). #43.
   *Exit (falsifiable):* a `workflow_dispatch` run is green and yields a launchable (unsigned) installer; the
   install smoke is green (a broken installer fails it); the freeze test is green and **fails red** when a
   provider package is removed from the spec.
