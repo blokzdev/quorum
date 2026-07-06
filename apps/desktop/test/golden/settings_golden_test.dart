@@ -77,6 +77,10 @@ Widget _wrap(SettingsState initial, {VendorCatalog? vendorCatalog}) => ProviderS
           scaffoldBackgroundColor: QC.bg,
           extensions: const [QuorumBrand.dark()],
         ),
+        // Goldens capture find.byType(Scaffold), NOT SettingsBody: SettingsBody is not a
+        // RepaintBoundary, so capturing it rasterised the 22px H1 at a fractional offset (faint,
+        // pink-fringed, doubled — a sub-pixel AA artifact). The Scaffold rasters cleanly at origin.
+        // The H1 code was always correct; this was a harness capture bug. (P4.2b)
         home: Scaffold(
           backgroundColor: QC.bg,
           body: SettingsBody(catalog: _catalog, vendorCatalog: vendorCatalog),
@@ -139,7 +143,7 @@ void main() {
 
     // Belt-and-braces: the stored key value must not be in the tree at all.
     expect(find.textContaining('SECRET'), findsNothing);
-    await expectLater(find.byType(SettingsBody), matchesGoldenFile('goldens/settings_model_studio.png'));
+    await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/settings_model_studio.png'));
   });
 
   testWidgets('data sources — Alpha Vantage selected (required key), FRED + crypto framing', (tester) async {
@@ -163,6 +167,6 @@ void main() {
     // The section renders; no stored key value leaks into the tree.
     expect(find.text('DATA SOURCES'), findsOneWidget);
     expect(find.textContaining('SECRET'), findsNothing);
-    await expectLater(find.byType(SettingsBody), matchesGoldenFile('goldens/settings_data_sources.png'));
+    await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/settings_data_sources.png'));
   });
 }
