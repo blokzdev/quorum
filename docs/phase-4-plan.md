@@ -102,11 +102,13 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
   the `_SignalChip` inside the risk-verdict ribbon sits on the ribbon's own `c@0.08` tint, so a Sell (`down`)
   chip/label stayed ~4.2:1 despite the sweep — now targets the composited ribbon bg (regression-tested). One
   golden re-baselined (`terminal_midrun`, isolated-diff-verified = only the confidence chip). PR #35.
-- [ ] **P4.2b Settings-H1 render/golden integrity** (`set-02`+`tok-01`) — root-cause the washed-out/ghosted
-  "Settings" H1 (code is correct — `brand.textHi`, w700, no opacity — so this is a golden-capture/raster
-  artifact enshrined in the committed reference, which renders *differently* across two goldens). Verify the
-  real render, fix if live, and re-baseline the affected goldens with a **written visual-diff justification**
-  so the committed truth shows the title as the most prominent element.
+- [x] **P4.2b Settings-H1 render/golden integrity** (`set-02`+`tok-01`) — **root-caused by empirical
+  bisection:** the H1 code was always correct; the artifact was a **golden-harness capture bug** —
+  `matchesGoldenFile(find.byType(SettingsBody))` rasterised the non-RepaintBoundary `SettingsBody` at a
+  fractional offset, so the 22px H1 anti-aliased into a faint/pink-fringed/doubled glyph. Proven: identical
+  state + `find.byType(Scaffold)` → crisp; `find.byType(SettingsBody)` → the artifact. **Fix = capture the
+  Scaffold** (test-only, no product code change). 5 goldens re-baselined (settings ×2, dream_team ×3); Read +
+  verified crisp H1, all other content pixel-equivalent. 149 flutter + analyze green.
 - [ ] **P4.2c Shell-chrome golden coverage** (`shell-01`) — add a `QuorumShell` golden (title bar + nav tabs
   + caption buttons, in active/inactive states) and Read it. This closes the CLAUDE.md golden-verification
   gap on the make-or-break frameless chrome and lets us confirm, in one place: nav active-state, caption

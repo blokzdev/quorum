@@ -50,6 +50,8 @@ Widget _wrap(SettingsState initial) => ProviderScope(
           extensions: const [QuorumBrand.dark()],
         ),
         // provider:null keeps Model Studio short (no key field / vault) so the focus is the roster.
+        // Goldens capture find.byType(Scaffold), NOT SettingsBody — see settings_golden_test.dart:
+        // capturing the non-RepaintBoundary SettingsBody rasterised the H1 with a sub-pixel artifact.
         home: Scaffold(
           backgroundColor: QC.bg,
           body: SettingsBody(catalog: _catalog, forceExpandDreamTeam: true),
@@ -74,7 +76,7 @@ void main() {
     expect(find.text('Falls back · QUICK'), findsNWidgets(10));
 
     await expectLater(
-        find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_all_default.png'));
+        find.byType(Scaffold), matchesGoldenFile('goldens/dream_team_all_default.png'));
   });
 
   testWidgets('dream team — partially assigned (solid chips span stages)', (tester) async {
@@ -103,7 +105,7 @@ void main() {
     expect(find.text('Falls back · QUICK'), findsNWidgets(8));
 
     await expectLater(
-        find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_partial.png'));
+        find.byType(Scaffold), matchesGoldenFile('goldens/dream_team_partial.png'));
   });
 
   testWidgets('dream team — capability gate chips (red block / amber degrade)', (tester) async {
@@ -126,6 +128,6 @@ void main() {
     expect(find.byIcon(Icons.error_outline), findsOneWidget); // fundamentals (tool, block)
     expect(find.byIcon(Icons.warning_amber), findsOneWidget); // portfolio (structured, degrade)
     await expectLater(
-        find.byType(SettingsBody), matchesGoldenFile('goldens/dream_team_capability.png'));
+        find.byType(Scaffold), matchesGoldenFile('goldens/dream_team_capability.png'));
   });
 }
