@@ -96,10 +96,12 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
 
 ### P4.2 — UX-integrity *(the 4 KEEP audit findings)*
 
-- [ ] **P4.2a A11y contrast sweep** (`a11y-01`) — raise the sub-AA text-on-tint elements (pinned cast badge
-  4.0:1; `textLo` confidence `_SignalChip` 4.22:1; defensively the SELL `_RatingPill` at 4.60:1) to ≥4.5:1,
-  the AA-normal bar P3.4b established. Lock with a pure-Dart `wcagContrast` test, like the existing onAccent
-  proof.
+- [x] **P4.2a A11y contrast sweep** (`a11y-01`) — added a pure `accessibleTint(hue, surface)` (contrast.dart)
+  that lifts a sub-AA tinted-chip ink to ≥4.5:1 and is a no-op for hues that already pass; wired into the
+  pinned badge, `_SignalChip`, `_RatingPill`. Locked with `wcagContrast` tests. **Fresh-review catch fixed:**
+  the `_SignalChip` inside the risk-verdict ribbon sits on the ribbon's own `c@0.08` tint, so a Sell (`down`)
+  chip/label stayed ~4.2:1 despite the sweep — now targets the composited ribbon bg (regression-tested). One
+  golden re-baselined (`terminal_midrun`, isolated-diff-verified = only the confidence chip). PR #35.
 - [ ] **P4.2b Settings-H1 render/golden integrity** (`set-02`+`tok-01`) — root-cause the washed-out/ghosted
   "Settings" H1 (code is correct — `brand.textHi`, w700, no opacity — so this is a golden-capture/raster
   artifact enshrined in the committed reference, which renders *differently* across two goldens). Verify the
