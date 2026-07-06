@@ -9,6 +9,7 @@ import '../state/capability_gate.dart';
 import '../state/hub_provider.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
+import 'contrast.dart';
 import 'quorum_colors.dart';
 import 'terminal_screen.dart' show TerminalBody;
 
@@ -777,8 +778,9 @@ class _CastListBarState extends State<_CastListBar> {
                         border: Border.all(color: QC.accent.withValues(alpha: 0.5)),
                       ),
                       child: Text('$overrides pinned',
-                          style: const TextStyle(
-                              color: QC.accent, fontSize: 10, fontWeight: FontWeight.w700)),
+                          style: TextStyle(
+                              color: accessibleTint(QC.accent, QC.surface2, fillAlpha: 0.16),
+                              fontSize: 10, fontWeight: FontWeight.w700)),
                     ),
                   ],
                   const Spacer(),
@@ -930,7 +932,9 @@ class _RatingPill extends StatelessWidget {
         border: Border.all(color: c.withValues(alpha: 0.5)),
       ),
       child: Text((rating == null ? '—' : ratingFamily(rating)).toUpperCase(),
-          style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+          style: TextStyle(
+              color: accessibleTint(c, QC.surface2, fillAlpha: 0.14),
+              fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quorum_core/quorum_core.dart';
 
+import 'contrast.dart';
 import 'quorum_colors.dart';
 
 /// Motion budget (calm-luxury): fast 120 / normal 180 / slow 240ms, ease-out. All animations are
@@ -911,7 +912,9 @@ class _SignalChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
       child: Text(label,
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          style: TextStyle(
+              color: accessibleTint(color, QC.surface2, fillAlpha: 0.13),
+              fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
