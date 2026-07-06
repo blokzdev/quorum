@@ -31,6 +31,14 @@ void main() {
     expect(wcagContrast(const Color(0xFF000000), white), closeTo(21.0, 0.1));
   });
 
+  // hub-03: the persistent, always-visible disclaimer footer ("… not financial advice …") is textMid
+  // on surface1 — a flat surface, not a tinted chip. Lock its AA claim in unit-land so the copy can't
+  // silently regress below 4.5:1 (until now it was only asserted visually via the golden).
+  test('the persistent disclaimer footer text clears WCAG AA-normal (≥4.5:1)', () {
+    final ratio = wcagContrast(QC.textMid, QC.surface1);
+    expect(ratio, greaterThanOrEqualTo(4.5), reason: 'disclaimer copy (textMid on surface1) must pass AA-normal');
+  });
+
   // P4.2a: tinted signal/rating chips (accent "pinned" badge, textLo confidence chip, rating pills)
   // put a saturated/recessive hue on its own faint tint — some fell below AA-normal. accessibleTint
   // lifts them; every chip ink must clear 4.5:1 on its composited background.
