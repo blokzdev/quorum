@@ -287,7 +287,12 @@ class _TitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 36,
-      color: QC.surface1,
+      // 1px baseline anchors the chrome to the body — without it the active nav underline + caption
+      // row float on a near-invisible surface1/bg tonal seam (shell-tokens-01 / backlog shell-03).
+      decoration: const BoxDecoration(
+        color: QC.surface1,
+        border: Border(bottom: BorderSide(color: QC.border)),
+      ),
       child: Row(
         children: [
           ?leading,
