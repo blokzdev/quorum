@@ -7,38 +7,22 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**Phase 3 implementation COMPLETE** — P3.1–P3.5 all on `phase-3`; `phase-3 → main` is a fork for you; §1/§4)
-**Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
-data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
-Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
-test key only.)
+**Last AI update:** 2026-07-06 (**Phase 3 MERGED to `main`** — PR #29 / merge commit `0a7ad57`; `phase-3` branch deleted. **Next: Phase 4 (V1 Release & Hardening)** — awaiting your go to plan-lock. §1/§4)
+**Spend:** Phase 3 closed **within boundary** — Ollama + demo + the shared Gemini test key + free-tier
+data-vendor keys, **no paid spend**. **Phase 4's boundary is TBD, set with you at plan-lock**: production
+keystore signing + release CI is where the first real spend (cert, CI minutes) is expected — I'll surface
+specifics before spending. (Phase-2 spend was ~cents on the Gemini test key only.)
 
 ---
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- **`phase-3 → main` merge — your call.** The **entire Phase 3 implementation is done** on the `phase-3`
-  integration branch: P3.1 (BYO-key vendors + asset toggle), P3.2 (local-model discovery + capability
-  gate), P3.3 (debate-terminal depth), P3.4 (UX/a11y), P3.5 (as-of + look-ahead fix). Every subphase:
-  parallel recon → my adversarial validation → real-path verification → **fresh-context review** (each
-  returned mergeable) → self-merged to `phase-3`. Cost stayed within boundary (Ollama + the shared Gemini
-  test key only — a couple of depth-2/real-path runs). **Merges to `main` are founder-gated** (doctrine):
-  the `phase-3 → main` PR is yours to review (recommend in slices, not one mega-diff) + approve. Backlog is
-  drained (vendor-provenance → roadmap P7). End-of-phase audit passed (completeness verified, zero scope creep).
-  **Post-close-out CI honesty fix (2026-07-05):** the flutter CI job was actually RED on #29 — `flutter
-  analyze` (fatal-infos) tripped on a `_ollamaCatalog` lint that rode in from P3.2b and, because analyze
-  aborts first, had *skipped* the flutter test step on the P3.3/P3.4 sub-PR merges (they merged red). Fixed
-  in `15c025c`; **the current phase-3 tip is fully green** (ruff + pytest py3.10–3.13 + flutter
-  analyze/test/goldens/build + clean-install smoke). A **fresh-context slice-by-slice verification** (6
-  reviewers, one per slice #23–#28, each reading its golden PNGs) then confirmed all 5 subphases
-  merge-ready. **Two non-blocking concerns to note:** (a) P3.3's "risk-verdict ribbon = risk judge, *not*
-  PM decision" criterion is literally unsatisfiable — the engine sets `risk_debate_state.judge_decision =
-  final_trade_decision` (`portfolio_manager.py:75`), so they're the same value; the ribbon is correct, the
-  criterion was mis-specified and honestly reframed in the close-out (a separate risk-manager node = future
-  engine work); (b) sub-PRs #26/#27 self-merged while flutter CI was red — a verification-gate process gap,
-  now resolved. **The `phase-3 → main` PR is open for you:
-  [#29](https://github.com/blokzdev/quorum/pull/29)** — review it in slices (the 6 sub-PRs #22–#28,
-  linked in the PR body), then approve + merge. I have NOT merged it (founder-gated).
+- _(no active blocker)_ — **Phase 3 is merged to `main`** (PR [#29](https://github.com/blokzdev/quorum/pull/29),
+  merge commit `0a7ad57`, 2026-07-06); the founder-gated merge is complete and the `phase-3` branch is deleted.
+  You authorized it on the **slice-by-slice visual review** (6 fresh-context reviewers, one per slice #23–#28,
+  each reading its golden PNGs; CI fully green). **Next human step:** greenlight **Phase 4 (V1 Release &
+  Hardening)** when you're ready — I'll open it with a plan-lock docs PR (falsifiable exit criteria + phase
+  cadence + ADRs), *not* autonomous code. Nothing is blocked on you right now. *(Resolved-blocker detail in §4.)*
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -114,6 +98,21 @@ test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-06 — **Phase 3 MERGED to `main`** (PR #29 → merge commit `0a7ad57`) — *Band B core V1 depth landed*
+- You authorized the founder-gated merge on the **slice-by-slice visual review** (6 fresh-context reviewers,
+  one per slice #23–#28, each Reading its golden PNGs; full CI suite green). `phase-3` branch deleted.
+- **Pre-merge catch:** flutter CI was actually RED on #29 — `flutter analyze` (fatal-info) tripped on a
+  `_ollamaCatalog` lint from P3.2b that had *skipped* the P3.3/P3.4 flutter test step at their sub-PR merges.
+  Fixed in `15c025c`; the current `main` tip is fully green. (Lesson saved: run `flutter analyze`, not just
+  `flutter test`, before claiming flutter-green.)
+- **Post-merge hygiene:** durable CI phrasing (dropped the brittle "385 pytest" counts) + two backlog captures
+  — *CI-gate hardening* (gate sub-PR merges on the full flutter job → Phase 4) and *true separate risk-manager
+  verdict node* (advanced-AI / debate-depth). Also captured this session: the **Edge Model Draft Board**
+  post-V1 roadmap capability (Band C).
+- **Two documented non-blockers:** P3.3's "risk-ribbon = risk judge, not PM decision" criterion is
+  unsatisfiable (engine sets them equal, `portfolio_manager.py:75` — ribbon is correct); and #26/#27 had
+  self-merged red (now resolved).
 
 ### 2026-07-05 — **P3.4 UI/UX + a11y** (merged to `phase-3`) — *Phase 3 implementation COMPLETE*
 - **Keyboard operability**: every custom control (nav tabs, depth toggles, analyst chips, disclosures,

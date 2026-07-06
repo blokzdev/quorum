@@ -5,9 +5,9 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 3 implementation complete** — P3.1–P3.5 all self-merged to the `phase-3` integration
-> branch (2026-07-05); the **`phase-3 → main` merge is founder-gated and pending** (see [HUMAN.md](HUMAN.md)
-> §1). Phase 3 (Depth & Refinement) surfaced the untapped engine — **BYO-key data vendors** (P3.1),
+> Status: **Phase 3 complete — merged to `main`** (2026-07-06, PR #29 → merge commit `0a7ad57`; `phase-3`
+> branch deleted) — P3.1–P3.5. **Next: Phase 4 (V1 Release & Hardening)**, not yet started (plan-lock
+> pending; see [HUMAN.md](HUMAN.md) §1). Phase 3 (Depth & Refinement) surfaced the untapped engine — **BYO-key data vendors** (P3.1),
 > **local-model discovery + a live capability gate** (P3.2), **debate-terminal depth** (P3.3), **UI/UX +
 > a11y** (P3.4), and **historical as-of + a look-ahead correctness fix** (P3.5) — all locked in
 > **[docs/phase-3-plan.md](docs/phase-3-plan.md)** with the open-core raw-vs-curated line in
