@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4 plan-locked + merged** (PR #32); **you delegated merge authority** + branch-protected `main` (flutter = required check), so I self-merge verified work + surface only the GA publish. Subphases **reordered** (release CI → late, per your prompt). **Nothing blocked on you** — implementation starting at P4.1. §3/§4)
+**Last AI update:** 2026-07-06 (**Phase 4 underway** — P4.1 security ✅ (#34) + P4.2a a11y contrast ✅ (#35) self-merged to `main` via the delegated merge-as-you-go workflow (each CI-green + fresh-reviewed). Next: P4.2b (ghosted Settings-H1 golden). **Nothing blocking; one optional 1-click action in §1** (add secret-scan to required checks). §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -17,11 +17,12 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- _(nothing blocked)_ — Phase-4 plan-lock (PR #32) is **merged**; you **delegated merge authority**
-  (2026-07-06) and set the **flutter job as a required status check on `main`**, so I self-merge verified
-  subphase work (full CI green + fresh-context review) and only surface the **GA publish** of 1.0.0 (tag +
-  release — outward-facing). Gemini rotation → post-V1, signing → V2 (both §3). Implementation is underway
-  (P4.1 first); I'll keep §4 current.
+- _(nothing blocking)_ — merge authority is delegated + `main` is branch-protected (flutter = required
+  check), so I self-merge verified work (full CI green + fresh review) and surface only the **GA publish** of
+  1.0.0. Gemini rotation → post-V1, signing → V2 (both §3).
+- **Optional (non-gating), 1-click:** make **`secret-scan`** (and, if you like, `ruff` / `tests`) required
+  status checks on `main` alongside the flutter check. The secret-scan gate (P4.1) runs on every PR
+  regardless; this just hard-enforces it. My merge discipline covers the interim, so it doesn't block me.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -126,6 +127,19 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-06 — **P4.1 security + P4.2a a11y contrast shipped** — *first Phase-4 implementation, self-merged*
+- **P4.1 (#34)** — a `gitleaks` **secret-scan CI gate** (so no key can land in the public repo), `SECURITY.md`
+  (private-advisory disclosure policy), and `docs/security.md` (threat model: assets, 5 trust boundaries, the
+  loopback bearer/ephemeral-port/parent-PID model, BYO-key never-on-disk). Recon-grounded; I **rejected** two
+  false "untested residual" findings (keys-never-on-disk + `/env-keys` were already regression-tested). The
+  fresh review caught a real gitleaks blind spot (a path allowlist masked whole test trees) → fixed to
+  allowlist by value.
+- **P4.2a (#35)** — lifted sub-AA tinted chips to WCAG AA-normal via a pure, tested `accessibleTint`. The
+  fresh review caught that the risk-verdict-ribbon chip sits on its own tint (a Sell verdict stayed ~4.2:1)
+  → fixed to target the composited bg. One golden re-baselined (isolated-diff-verified).
+- **Both self-merged** on the delegated workflow (full CI green + fresh-context review each). The keystone
+  review earned its cost — it caught a real defect in *both* PRs that my own context missed.
 
 ### 2026-07-06 — **Phase 4 kickoff: docs #31 merged + Phase-4 plan-locked** — *V1 Release & Hardening opened*
 - Merged the Phase-3 close-out docs PR [#31](https://github.com/blokzdev/quorum/pull/31) to `main`
