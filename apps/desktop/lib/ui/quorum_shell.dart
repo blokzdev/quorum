@@ -110,10 +110,36 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
               ],
             ),
           ),
+          const DisclaimerBar(),
         ],
       ),
     );
   }
+}
+
+/// A slim, always-visible footer stating the regulatory posture — **persistent across every surface**
+/// so the "research/educational, not financial advice" disclaimer lives in the product itself, not just
+/// the README (hub-03; CLAUDE.md mandates in-product disclaimers). Pure + golden-testable.
+class DisclaimerBar extends StatelessWidget {
+  const DisclaimerBar({super.key});
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 24,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          color: QC.surface1,
+          border: Border(top: BorderSide(color: QC.border)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.info_outline, size: 12, color: QC.textLo),
+            SizedBox(width: 6),
+            Text('Research & educational tool — not financial advice. No real-money execution.',
+                style: TextStyle(color: QC.textMid, fontSize: 11)),
+          ],
+        ),
+      );
 }
 
 /// The Terminal surface: watches the run + wires Run/Cancel into the pure 3-pane [TerminalBody].

@@ -73,4 +73,28 @@ void main() {
 
     await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/shell_chrome_max.png'));
   });
+
+  testWidgets('shell — persistent disclaimer footer (hub-03)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 120));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        fontFamily: 'Inter',
+        scaffoldBackgroundColor: QC.bg,
+        extensions: const [QuorumBrand.dark()],
+      ),
+      home: const Scaffold(
+        backgroundColor: QC.bg,
+        body: Column(children: [Expanded(child: SizedBox.expand()), DisclaimerBar()]),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // The regulatory-posture disclaimer is present in the persistent chrome (hub-03).
+    expect(find.textContaining('not financial advice'), findsOneWidget);
+    await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/shell_disclaimer.png'));
+  });
 }
