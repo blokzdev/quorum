@@ -109,11 +109,14 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
   state + `find.byType(Scaffold)` → crisp; `find.byType(SettingsBody)` → the artifact. **Fix = capture the
   Scaffold** (test-only, no product code change). 5 goldens re-baselined (settings ×2, dream_team ×3); Read +
   verified crisp H1, all other content pixel-equivalent. 149 flutter + analyze green.
-- [ ] **P4.2c Shell-chrome golden coverage** (`shell-01`) — add a `QuorumShell` golden (title bar + nav tabs
-  + caption buttons, in active/inactive states) and Read it. This closes the CLAUDE.md golden-verification
-  gap on the make-or-break frameless chrome and lets us confirm, in one place: nav active-state, caption
-  buttons, the title-bar seam, cross-surface brand consistency, **and** whether the "research, not financial
-  advice" disclaimer is present in the persistent chrome (the `hub-03` posture question).
+- [x] **P4.2c Shell-chrome golden coverage** (`shell-01`) — extracted a pure, window_manager-decoupled
+  **`ShellChrome`** (the same pure-body pattern `TerminalBody` uses; behavior-preserving refactor of
+  `QuorumShell`) and added **2 goldens** (`shell_chrome_hub` windowed + `shell_chrome_max` maximized).
+  Read-verified: nav active-state (accent underline + w700 on the active tab, grey inactive), all 3 caption
+  buttons, the maximize→restore glyph swap, and the title-bar→body seam. `find.text`/`find.byIcon` assertions
+  guard the tabs + buttons. 151 flutter + analyze green. **`hub-03` confirmed: the persistent chrome has NO
+  "not financial advice" disclaimer** — surfaced to the founder (adding one is a product-posture decision, not
+  self-approved; likely a GA item for a research-tool posture).
 - [x] **P4.2d Data-sources vendor-key label** (`set-01`) — the required-key field now prefixes the vendor
   name (`_ApiKeyField.label` threaded into the visible `_FieldLabel`): "Alpha Vantage API key" / "FRED API
   key" in both empty and stored states, so a stored key is attributable even when its vendor dropdown is rows

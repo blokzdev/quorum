@@ -67,7 +67,7 @@ jobs:
 
   flutter:
     name: flutter (analyze + test + goldens + build)
-    # windows-latest is REQUIRED, not a preference: the 14 committed goldens were rasterized on Windows
+    # windows-latest is REQUIRED, not a preference: the 16 committed goldens were rasterized on Windows
     # and matchesGoldenFile is byte-exact (no tolerance). Pin the EXACT Flutter version the goldens were
     # generated on (3.38.6) — the Skia raster bytes are engine-version-baked, so a floating channel would
     # drift. flutter_test_config.dart loads the bundled fonts + MaterialIcons, so goldens don't depend on

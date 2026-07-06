@@ -92,12 +92,10 @@ class _QuorumShellState extends ConsumerState<QuorumShell>
       backgroundColor: QC.bg,
       body: Column(
         children: [
-          _TitleBar(
+          ShellChrome(
+            active: surface,
             isMaximized: _isMaximized,
-            leading: _NavTabs(
-              active: surface,
-              onSelect: (s) => ref.read(appSurfaceProvider.notifier).go(s),
-            ),
+            onSelect: (s) => ref.read(appSurfaceProvider.notifier).go(s),
             onMinimize: () => windowManager.minimize(),
             onToggleMaximize: _toggleMaximize,
             onClose: () => windowManager.close(),
@@ -165,6 +163,37 @@ class _TerminalSurfaceState extends ConsumerState<TerminalSurface> {
       onCancel: ctrl.cancel,
     );
   }
+}
+
+/// The frameless window chrome — title bar + surface-switcher nav tabs + Windows caption buttons —
+/// **decoupled from `window_manager`** so it can be golden-tested in isolation (the same pure-body
+/// pattern [TerminalBody] uses). [QuorumShell] wires the live window callbacks + maximized state in;
+/// tests pump [ShellChrome] directly with no-op callbacks. (P4.2c / shell-01)
+class ShellChrome extends StatelessWidget {
+  final AppSurface active;
+  final bool isMaximized;
+  final ValueChanged<AppSurface> onSelect;
+  final VoidCallback onMinimize;
+  final VoidCallback onToggleMaximize;
+  final VoidCallback onClose;
+  const ShellChrome({
+    super.key,
+    required this.active,
+    required this.isMaximized,
+    required this.onSelect,
+    required this.onMinimize,
+    required this.onToggleMaximize,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) => _TitleBar(
+        isMaximized: isMaximized,
+        leading: _NavTabs(active: active, onSelect: onSelect),
+        onMinimize: onMinimize,
+        onToggleMaximize: onToggleMaximize,
+        onClose: onClose,
+      );
 }
 
 /// In-shell surface switcher, rendered at the left of the title bar.
