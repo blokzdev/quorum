@@ -55,3 +55,50 @@ jobs:
           name: quorum-installer
           path: packaging/output/*.exe
           if-no-files-found: error
+
+      # P4.3a clean-install smoke: prove the just-built installer lays down a working tree and the
+      # frozen sidecar actually runs from the installed location (the true transitive-deps proof —
+      # a demo/import check can't catch a broken freeze). GUI launch isn't testable headless, so we
+      # run the installed sidecar directly and assert its public /healthz. Then uninstall cleanly.
+      - name: Clean-install smoke — install → sidecar /healthz → uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Get-ChildItem packaging/output/*.exe | Select-Object -First 1).FullName
+          Write-Host "installing: $setup"
+          Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $appDir = Join-Path $env:LOCALAPPDATA 'Programs\Quorum'
+          foreach ($f in @('quorum.exe', 'sidecar\quorum_sidecar.exe',
+                           'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
+            if (-not (Test-Path (Join-Path $appDir $f))) { throw "install tree missing: $f" }
+          }
+          Write-Host "install tree OK ($appDir)"
+
+          # Run the INSTALLED frozen sidecar on a fixed port; /healthz is public (no bearer).
+          $port = 8756
+          $env:QUORUM_PARENT_PID = "$PID"   # keep the watchdog alive while this step runs
+          $env:QUORUM_API_PORT = "$port"
+          $sc = Start-Process -FilePath (Join-Path $appDir 'sidecar\quorum_sidecar.exe') -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 60; $i++) {   # up to ~30s for the frozen exe to boot + import langgraph etc.
+              Start-Sleep -Milliseconds 500
+              if ($sc.HasExited) { throw "sidecar exited early (code $($sc.ExitCode))" }
+              try {
+                $r = Invoke-RestMethod "http://127.0.0.1:$port/healthz" -TimeoutSec 2
+                if ($r.status -eq 'ok') { $ok = $true; break }
+              } catch { }
+            }
+            if (-not $ok) { throw "installed sidecar /healthz never returned ok on port $port" }
+            Write-Host "frozen sidecar /healthz = ok"
+          } finally {
+            if ($sc -and -not $sc.HasExited) { Stop-Process -Id $sc.Id -Force }
+          }
+
+          # Uninstall (Inno's per-user unins000.exe) and confirm the tree is gone.
+          $unins = Join-Path $appDir 'unins000.exe'
+          if (-not (Test-Path $unins)) { throw "uninstaller missing: $unins" }
+          Start-Process -FilePath $unins -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          Start-Sleep -Seconds 2
+          if (Test-Path (Join-Path $appDir 'quorum.exe')) { throw "uninstall failed: quorum.exe still present" }
+          Write-Host "install -> healthz -> uninstall smoke PASSED"
