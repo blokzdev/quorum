@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4: P4.1 ✅ P4.2 ✅ P4.3 ✅ — the hard hardening is done.** 13 self-merged PRs (#31–#43), each CI-green + fresh-reviewed. Release pipeline built + proven on real CI (installer e2e + install smoke + freeze check). **Remaining P4.4/P4.5 have founder-gated bits — see §1/§2.** §3/§4)
+**Last AI update:** 2026-07-06 (**Phase 4: P4.1 ✅ P4.2 ✅ P4.3 ✅ + hub-03 disclaimer ✅ — every AI-ownable Phase-4 task is done.** 15 self-merged PRs (#31–#47), each CI-green + fresh-reviewed. **The only Phase-4 work left is founder-gated: (1) Defender submission (optional), (2) the 1.0.0 GA publish — both in §1.** §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -20,27 +20,27 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 - _(nothing blocking my current work)_ — merge authority delegated + `main` branch-protected, so I self-merge
   verified work (full CI green + fresh review). Gemini rotation → post-V1, signing → V2 (both §3). **The
   GA-path items below need you, but don't block the P4.4/P4.5 *docs* work I can do now.**
-- **The GA runway needs 3 human steps (P4.4/P4.5, not urgent yet):** (1) the **hub-03 disclaimer** decision
-  (§2); (2) **submit the built installer to Microsoft Defender** ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission))
-  pre-launch to cut PyInstaller AV false-positives (needs your MS account) — or we skip it and accept the
-  risk; (3) the **1.0.0 GA publish itself** (tag + GitHub release + distribute) — the one outward-facing act I
-  never self-approve. I'll tee these up so they're one-click when you're ready.
+- **The GA runway now needs just 2 human steps (hub-03 is done):** (1) **submit the built installer to
+  Microsoft Defender** ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission)) pre-launch to
+  cut PyInstaller AV false-positives (needs your MS account) — or we skip it and accept the risk; (2) the
+  **1.0.0 GA publish itself** (tag + GitHub release + distribute) — the one outward-facing act I never
+  self-approve. I'll tee these up so they're one-click when you're ready.
 - **Optional (non-gating), 1-click:** make **`secret-scan`** (and, if you like, `ruff` / `tests`) required
   status checks on `main` alongside the flutter check. The secret-scan gate (P4.1) runs on every PR
   regardless; this just hard-enforces it. My merge discipline covers the interim, so it doesn't block me.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
-- **hub-03 — a persistent "not financial advice" disclaimer.** P4.2c's shell-chrome golden confirmed the
-  app's **persistent chrome carries no disclaimer** (audit finding hub-03). CLAUDE.md mandates disclaimers
-  in-product for the regulatory posture, so for GA I **recommend adding a lightweight, always-visible
-  disclaimer** — a thin footer/status line in the shell, present across all surfaces. It's a new UI element +
-  a regulatory-posture call, so it's **yours** (not self-approved). If you approve, I'll add it as a small
-  golden-tested task in P4.4. *(Not blocking — P4.3 proceeds regardless.)*
-  *(The earlier signing + Windows-first forks are decided — see §3.)*
+- _(no open forks)_ — hub-03 (the disclaimer) is decided + shipped (§3); the signing + Windows-first forks
+  are decided (§3). Nothing awaiting a product/regulatory call right now.
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-06 — **hub-03 disclaimer: you said "proceed with inapp shell footer" → shipped** (PR #46). A
+  persistent, always-visible `DisclaimerBar` in the shell chrome (below every surface): *"Research &
+  educational tool — not financial advice. No real-money execution."* textMid on surface1 = **7.24:1** (passes
+  AA + AAA); golden-tested + a `wcagContrast` unit test locks the AA claim. Closes the last open §2 fork and
+  the audit's top GA-runway item — the regulatory posture now lives **in the product**, not just the README.
 - 2026-07-06 — **Merge authority delegated to me (your call) + `main` branch-protected.** Going forward I
   **self-merge** verified subphase work to `main` as-you-go (no integration branch), gated on **full CI green
   + a fresh-context pre-merge review**; you added the **flutter (analyze+test+goldens+build)** job as a
@@ -137,6 +137,21 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-06 — **hub-03 disclaimer + a UX quick-wins sweep** — *every AI-ownable Phase-4 task now done (#46/#47)*
+- **hub-03 disclaimer** (#46): a persistent `DisclaimerBar` in the shell chrome, present across all surfaces
+  (research/educational — not financial advice — no real-money execution). Contrast 7.24:1; golden + a
+  `wcagContrast` unit test. The fresh review's one kept nit (lock the AA claim in unit-land, not just the
+  golden) was folded in before merge; the magic-numbers nit was rejected → the tok-02 token-scale backlog item.
+- **UX quick-wins sweep** (Workflow, 4 fresh-context agents, every finding golden-grounded): 13 findings →
+  **4 shipped** (#47), 2 backlogged, rest dropped/already-tracked. Shipped: DEMO-row cost-column **alignment**;
+  the verdict **Confidence bar tinted to the rating color** (was a stray blue under a green BUY); a **title-bar
+  divider** (drains backlog shell-03); and **one filled primary on the error screen** (demoted the duplicate
+  Retry to tonal). 5 goldens re-baselined — each Read + visual-diff-justified.
+- **Honest coverage note:** the sweep's Settings/DreamTeam agent returned a broken stub, so I **re-swept those
+  two surfaces** with a focused follow-up — came back **clean** (0 net-new; all items already = set-03/dt-01..03).
+- Both PRs self-merged (CI-green + fresh-context APPROVE each); the **combined `main` re-verified green**
+  (analyze + 153 tests + all goldens) since each PR's CI ran without the other's changes.
 
 ### 2026-07-06 — **P4-GA readiness audit + P4.4a/P4.5a close-out docs** — *Phase 4 all but the GA publish*
 - **GA-readiness audit** (Workflow, 4 fresh-context agents): **every P4.1/P4.2/P4.3 exit criterion is
