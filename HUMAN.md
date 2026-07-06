@@ -20,19 +20,31 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 - _(nothing blocking my current work)_ — merge authority delegated + `main` branch-protected, so I self-merge
   verified work (full CI green + fresh review). Gemini rotation → post-V1, signing → V2 (both §3). **The
   GA-path items below need you, but don't block the P4.4/P4.5 *docs* work I can do now.**
-- **The GA runway now needs just 2 human steps (hub-03 is done):** (1) **submit the built installer to
-  Microsoft Defender** ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission)) pre-launch to
-  cut PyInstaller AV false-positives (needs your MS account) — or we skip it and accept the risk; (2) the
-  **1.0.0 GA publish itself** (tag + GitHub release + distribute) — the one outward-facing act I never
-  self-approve. I'll tee these up so they're one-click when you're ready.
+- **The GA runway now needs just 2 human steps (hub-03 is done)** — **full walkthrough in
+  [`SETUP.md`](SETUP.md) §3:** (1) **submit the built installer to Microsoft Defender**
+  ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission)) pre-launch to cut PyInstaller AV
+  false-positives (needs your MS account) — or we skip it and accept the risk; (2) the **1.0.0 GA publish
+  itself** (tag + GitHub release + distribute) — the one outward-facing act I never self-approve. I'll tee
+  these up so they're one-click when you're ready.
+- **New: [`SETUP.md`](SETUP.md) answers your setup questions** — the credential map (short version: **you need
+  no API keys/accounts to ship or run**; BYOK + local-first; the only optional adds are free FRED/Alpha Vantage
+  keys), the installer-build + Defender-submission walkthrough, and the analytics call (§2 below).
 - **Optional (non-gating), 1-click:** make **`secret-scan`** (and, if you like, `ruff` / `tests`) required
   status checks on `main` alongside the flutter check. The secret-scan gate (P4.1) runs on every PR
   regardless; this just hard-enforces it. My merge discipline covers the interim, so it doesn't block me.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
-- _(no open forks)_ — hub-03 (the disclaimer) is decided + shipped (§3); the signing + Windows-first forks
-  are decided (§3). Nothing awaiting a product/regulatory call right now.
+- **Analytics — Firebase vs Google Analytics vs none (your question 2026-07-06).** Two problems with the
+  framing: (a) **Firebase Analytics doesn't support Windows desktop** (`firebase_analytics` = Android/iOS/
+  macOS/web only — [FlutterFire #12847](https://github.com/firebase/flutterfire/issues/12847)), so a Firebase
+  project won't give you analytics on the Windows app; (b) **direct GA4** (via the Measurement Protocol) *is*
+  possible, but it's Google telemetry on a **local-first, privacy-first** product — a posture/privacy fork,
+  not plumbing. **My recommendation:** **ship 1.0.0 with no analytics** (not needed for GA, most posture-
+  consistent), and *if* you later want usage insight, use **[Aptabase](https://aptabase.com/for-flutter)**
+  (open-source, privacy-first, anonymous, real Windows+Flutter SDK) **opt-in with disclosure** — not Firebase/
+  GA. This is a **post-GA (V1.x)** call; I won't wire any telemetry until you decide. Full reasoning +
+  alternatives in [`SETUP.md`](SETUP.md) §4. *(hub-03 disclaimer + signing + Windows-first are all decided — §3.)*
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
