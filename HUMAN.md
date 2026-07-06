@@ -7,29 +7,46 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 3 MERGED to `main`** — PR #29 / merge commit `0a7ad57`; `phase-3` branch deleted. **Next: Phase 4 (V1 Release & Hardening)** — awaiting your go to plan-lock. §1/§4)
-**Spend:** Phase 3 closed **within boundary** — Ollama + demo + the shared Gemini test key + free-tier
-data-vendor keys, **no paid spend**. **Phase 4's boundary is TBD, set with you at plan-lock**: production
-keystore signing + release CI is where the first real spend (cert, CI minutes) is expected — I'll surface
-specifics before spending. (Phase-2 spend was ~cents on the Gemini test key only.)
+**Last AI update:** 2026-07-06 (**Phase 4 plan-locked (proposed)** — [docs/phase-4-plan.md](docs/phase-4-plan.md) + this PR; recon audit done, 4 blockers → P4.3. **You decided to defer signing → unsigned 1.0.0 GA** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)) — Phase 4 is now **zero paid spend**. §1 = plan-PR merge only (Gemini-key rotation deferred post-V1, your call). §3/§4)
+**Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
+free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
+cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
+surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ---
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- _(no active blocker)_ — **Phase 3 is merged to `main`** (PR [#29](https://github.com/blokzdev/quorum/pull/29),
-  merge commit `0a7ad57`, 2026-07-06); the founder-gated merge is complete and the `phase-3` branch is deleted.
-  You authorized it on the **slice-by-slice visual review** (6 fresh-context reviewers, one per slice #23–#28,
-  each reading its golden PNGs; CI fully green). **Next human step:** greenlight **Phase 4 (V1 Release &
-  Hardening)** when you're ready — I'll open it with a plan-lock docs PR (falsifiable exit criteria + phase
-  cadence + ADRs), *not* autonomous code. Nothing is blocked on you right now. *(Resolved-blocker detail in §4.)*
+- **Merge the Phase-4 plan-lock docs PR** (this one) — seeds the phase on `main` (founder-gated). Docs-only:
+  [docs/phase-4-plan.md](docs/phase-4-plan.md) + [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)
+  + status/roadmap/HUMAN/backlog. Approving it locks the 5 subphases + falsifiable exit criteria. *(I can
+  start the subphases — all zero-spend — on your word without waiting for the merge.)*
+
+*(Nothing else is blocked on you — the Gemini-key rotation is deferred to post-V1; see §3.)*
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
-- _(none open)_
+- _(none open)_ — the two Phase-4 forks are **decided** (defer signing → unsigned 1.0.0; Windows-first GA);
+  see §3.
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-06 — **Keep the shared dev Gemini key; defer rotation to post-V1 (your call).** Clarified the
+  architecture: the `.env` `GOOGLE_API_KEY` is a **dev/CI-only** credential (engine auto-loads `.env` via
+  `tradingagents/__init__.py`) — it is **not** the product key and **never ships** (gitignored, not in the
+  PyInstaller spec). Users' keys go the separate write-only-keychain → per-run-injection BYOK path
+  (`jobs.py` `build_api_keys_dict`). So rotation is dev-hygiene, not a GA gate. P4.1a keeps the genuinely
+  valuable **secret-scan CI gate** (protects the public repo); rotation stays in `docs/backlog.md` → post-V1.
+- 2026-07-06 — **Defer production code-signing → V2; ship an unsigned 1.0.0 GA (your call)** →
+  [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md). After a researched options pass (free
+  **SignPath Foundation** — but it shows "SignPath Foundation" as the publisher + our open-core model risks
+  its eligibility; **Certum Open Source** ~€29/yr; **Azure Artifact Signing** ~$120/yr), you chose to defer
+  rather than spend/set up a cert at GA. Unsigned works 100% functionally (our per-user installer even avoids
+  the UAC prompt); the cost is a first-run SmartScreen "Run anyway" warning + no publisher reputation + higher
+  PyInstaller AV-FP risk — mitigated in **P4.4** (Run-anyway docs + Defender pre-submission) with the `-Sign`
+  seam retained. **Net: Phase 4 = zero paid spend.** Revisit signing when distribution traction warrants.
+- 2026-07-06 — **Windows-first 1.0.0 GA (your call).** macOS stays a separate post-V1 port (roadmap P13);
+  1.0.0 does not wait for a multi-platform signed launch (that would add Apple notarization + $99/yr + delay).
 - 2026-07-05 — **Edge Model Draft Board → roadmap (post-V1), on your ask** ("browse/find applicable edge
   models"). A research pass (code recon + a **live Ollama 0.30.11 probe**) killed the literal "HuggingFace
   browser / live catalog" framing — Ollama exposes no machine-readable library or *pre-install*
@@ -98,6 +115,32 @@ specifics before spending. (Phase-2 spend was ~cents on the Gemini test key only
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-06 — **Phase 4 kickoff: docs #31 merged + Phase-4 plan-locked** — *V1 Release & Hardening opened*
+- Merged the Phase-3 close-out docs PR [#31](https://github.com/blokzdev/quorum/pull/31) to `main`
+  (`b60c00b`); §1 is clean of the resolved Phase-3 blocker.
+- **Release-hardening recon (inline):** signing is still debug **self-signed** (`build_installer.ps1` — needs
+  a production cert — would've been the first real spend, now deferred to V2 per your call below); `packaging.yml` is unverified e2e + has no clean-VM install smoke
+  or per-provider freeze test; `ci.yml` says "8 goldens" but there are now **14**. **Secret hygiene clean** —
+  `.env` untracked + never in history, PyInstaller `build/dist` untracked, a tracked-file scan found **zero**
+  committed keys (so the Gemini item is a *shared-key rotation*, not a leak). No `SECURITY.md`/threat model.
+  Version is already `1.0.0+1` (GA target).
+- **Phase-4 recon UI/UX/a11y audit** (Workflow, 7 surfaces, find → adversarial-verify, every finding grounded
+  in a committed golden PNG or code file:line): **23 findings, 21 CONFIRMED / 2 REJECTED / 0 UNGROUNDED**
+  (no hallucinated pixels; the verifier caught a phantom-chip miscite that the finding survived on corrected
+  evidence). Executive triage → **4 KEEP** (P4.3 exit criteria: sub-AA chips, washed-out Settings H1 in the
+  committed goldens [I Read both + confirmed], shell chrome has zero golden coverage, data-sources key has no
+  vendor label), **2 REJECT**, **16 DEFER → backlog** (`P4-recon`). Blocking set is small + coherent →
+  absorbed as a bounded subphase, **not** a separate UX phase.
+- **Signing researched → you chose to defer** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)):
+  free **SignPath Foundation** exists but shows "SignPath Foundation" as the publisher + our open-core model
+  risks its eligibility; cheap paths are **Certum Open Source** (~€29/yr) / **Azure Artifact Signing**
+  (~$120/yr). You opted to **ship unsigned 1.0.0** and sign in V2 — so **Phase 4 is zero paid spend** and the
+  `-Sign` seam is retained; the SmartScreen "Run anyway" + AV-FP tradeoffs are mitigated in P4.4.
+- **Plan-locked + restructured** [docs/phase-4-plan.md](docs/phase-4-plan.md): 5 subphases (P4.1 security ·
+  P4.2 release CI · P4.3 UX-integrity · P4.4 unsigned-release readiness · P4.5 GA close-out), falsifiable exit
+  criteria, unsigned Windows-first 1.0.0. **Awaiting you: §1** (plan-PR merge only — Gemini rotation deferred
+  post-V1). No implementation started.
 
 ### 2026-07-06 — **Phase 3 MERGED to `main`** (PR #29 → merge commit `0a7ad57`) — *Band B core V1 depth landed*
 - You authorized the founder-gated merge on the **slice-by-slice visual review** (6 fresh-context reviewers,
