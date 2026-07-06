@@ -94,8 +94,12 @@ judgment.** When a guardrail feels like ceremony, that feeling is the drift, not
     never buried; FYI/shipped are pull-only. Don't start work that depends on an open blocker. When
     unsure FYI-vs-fork, it's a fork. "Reversible" is judged at *phase-end* cost (rip out one commit, or
     ten?) — a contract/schema/token-name decision is a fork even if cheap to change now.
-13. **Still surface (never self-approve through):** merges to `main`, key rotation, cert/signing, paid
-    spend beyond the agreed boundary, publishing, genuine product forks, contract/security/scope changes.
+13. **Still surface (never self-approve through):** key rotation, cert/signing, paid spend beyond the
+    agreed boundary, **publishing / GA release (tag + distribute)**, genuine product forks,
+    contract/security/scope changes. **Merges to `main` are founder-delegated (2026-07-06)** — self-merge
+    verified subphase work gated on **full CI green** (a required-status-check on `main` enforces the flutter
+    analyze/test/goldens/build job) **+ a fresh-context pre-merge review**; the outward-facing **GA
+    publish/tag** stays surfaced.
 
 **Persistence.** This doctrine is the contract; **memory is a backstop — on any conflict, CLAUDE.md
 wins and memory is corrected.** Open each substantive subphase by restating the loop in one line + the

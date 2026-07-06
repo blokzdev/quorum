@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4 plan-locked (proposed)** — [docs/phase-4-plan.md](docs/phase-4-plan.md) + this PR; recon audit done, 4 blockers → P4.3. **You decided to defer signing → unsigned 1.0.0 GA** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)) — Phase 4 is now **zero paid spend**. §1 = plan-PR merge only (Gemini-key rotation deferred post-V1, your call). §3/§4)
+**Last AI update:** 2026-07-06 (**Phase 4 plan-locked + merged** (PR #32); **you delegated merge authority** + branch-protected `main` (flutter = required check), so I self-merge verified work + surface only the GA publish. Subphases **reordered** (release CI → late, per your prompt). **Nothing blocked on you** — implementation starting at P4.1. §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -17,12 +17,11 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- **Merge the Phase-4 plan-lock docs PR** (this one) — seeds the phase on `main` (founder-gated). Docs-only:
-  [docs/phase-4-plan.md](docs/phase-4-plan.md) + [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)
-  + status/roadmap/HUMAN/backlog. Approving it locks the 5 subphases + falsifiable exit criteria. *(I can
-  start the subphases — all zero-spend — on your word without waiting for the merge.)*
-
-*(Nothing else is blocked on you — the Gemini-key rotation is deferred to post-V1; see §3.)*
+- _(nothing blocked)_ — Phase-4 plan-lock (PR #32) is **merged**; you **delegated merge authority**
+  (2026-07-06) and set the **flutter job as a required status check on `main`**, so I self-merge verified
+  subphase work (full CI green + fresh-context review) and only surface the **GA publish** of 1.0.0 (tag +
+  release — outward-facing). Gemini rotation → post-V1, signing → V2 (both §3). Implementation is underway
+  (P4.1 first); I'll keep §4 current.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -31,6 +30,18 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-06 — **Merge authority delegated to me (your call) + `main` branch-protected.** Going forward I
+  **self-merge** verified subphase work to `main` as-you-go (no integration branch), gated on **full CI green
+  + a fresh-context pre-merge review**; you added the **flutter (analyze+test+goldens+build)** job as a
+  *required status check* on `main`, so a red build can't land. **Still surfaced (not self-merged):** the GA
+  publish/tag of 1.0.0 + anything security/cost/contract/scope. Recorded in CLAUDE.md doctrine rule 13 + the
+  phase-4 cadence.
+- 2026-07-06 — **Phase-4 subphase reorder (your prompt: "release CI shouldn't be #2").** Split the old
+  "release CI" into (a) **merge/repo guards** → **P4.1** (secret-scan gate + the required-flutter merge gate),
+  early, to protect merge-as-you-go, and (b) **release-artifact validation** (packaging e2e + install smoke +
+  per-provider freeze) → **P4.3**, late, to validate the *final* installer. New order: **P4.1** security + CI
+  merge-hardening · **P4.2** UX-integrity · **P4.3** release pipeline e2e · **P4.4** unsigned-release readiness
+  · **P4.5** GA close-out. Rationale in [phase-4-plan.md](docs/phase-4-plan.md).
 - 2026-07-06 — **Keep the shared dev Gemini key; defer rotation to post-V1 (your call).** Clarified the
   architecture: the `.env` `GOOGLE_API_KEY` is a **dev/CI-only** credential (engine auto-loads `.env` via
   `tradingagents/__init__.py`) — it is **not** the product key and **never ships** (gitignored, not in the
