@@ -99,7 +99,19 @@ if (Test-Path $vsRoot) {
   }
   $crtDir = ($candidates | Sort-Object Ver -Descending | Select-Object -First 1).Path
 }
-if (-not $crtDir) { throw "VC143.CRT redist not found under any VS 2022 edition ($vsRoot)" }
+if (-not $crtDir) {
+  # CI / no VS redist folder: the same CRT DLLs ship in System32 (installed with the VC++ runtime).
+  # Bundling those app-local is standard + works on a clean machine (P4.3a — CI has no VS redist path).
+  $sys32 = Join-Path $env:WINDIR "System32"
+  $crtDlls = @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+  $missing = $crtDlls | Where-Object { -not (Test-Path (Join-Path $sys32 $_)) }
+  if ($missing.Count -eq 0) {
+    $crtDir = $sys32
+    Write-Host "    (no VS 2022 redist — bundling CRT from System32)" -ForegroundColor DarkYellow
+  } else {
+    throw "VC143.CRT not found: no VS 2022 redist under $vsRoot, and System32 lacks $($missing -join ', ')"
+  }
+}
 foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
   Copy-Item -Force (Join-Path $crtDir $dll) $staging
 }
