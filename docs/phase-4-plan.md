@@ -114,8 +114,11 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
   gap on the make-or-break frameless chrome and lets us confirm, in one place: nav active-state, caption
   buttons, the title-bar seam, cross-surface brand consistency, **and** whether the "research, not financial
   advice" disclaimer is present in the persistent chrome (the `hub-03` posture question).
-- [ ] **P4.2d Data-sources vendor-key label** (`set-01`) — show the vendor name in the required-key field
-  label in **both** empty and stored states (e.g. "Alpha Vantage API key" not a bare "API key").
+- [x] **P4.2d Data-sources vendor-key label** (`set-01`) — the required-key field now prefixes the vendor
+  name (`_ApiKeyField.label` threaded into the visible `_FieldLabel`): "Alpha Vantage API key" / "FRED API
+  key" in both empty and stored states, so a stored key is attributable even when its vendor dropdown is rows
+  away. The Model Studio provider key (no label, under its Provider header) stays "API key" — so only the
+  data_sources golden re-baselined. Widget assertions updated to the vendor-labelled text; 149 flutter + analyze green.
   *Exit (falsifiable):* a contrast test asserts every audited chip/badge/pill ≥4.5:1 (fails today); the
   Settings goldens show a full-contrast H1 (with a diff justification); a shell golden exists + is Read-verified;
   a data-sources golden asserts the vendor name is visible next to the stored badge; full flutter suite green.

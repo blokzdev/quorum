@@ -1048,7 +1048,10 @@ class _ApiKeyFieldState extends ConsumerState<_ApiKeyField> {
       children: [
         Row(
           children: [
-            _FieldLabel('API key'),
+            // Prefix the vendor/provider name when one is passed (the data-sources vendor keys) so a
+            // stored key is always attributable — the vendor dropdown can be rows away (set-01). The
+            // Model Studio provider key passes no label (it sits under its Provider header) → "API key".
+            _FieldLabel(widget.label != null ? '${widget.label} API key' : 'API key'),
             const SizedBox(width: 8),
             if (_stored)
               Row(children: [

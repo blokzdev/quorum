@@ -282,8 +282,9 @@ void main() {
     // The optional macro (FRED) key field is always offered; Polymarket is a keyless default-on note.
     expect(find.text('Macroeconomic indicators'), findsOneWidget);
     expect(find.textContaining('Polymarket signals are on by default'), findsOneWidget);
-    // No CORE alpha_vantage key field yet (default is keyless yfinance) → exactly one 'API key' (FRED).
-    expect(find.text('API key'), findsOneWidget);
+    // No CORE alpha_vantage key field yet (default is keyless yfinance) → only FRED's key field,
+    // now vendor-labelled so a stored key is attributable (set-01).
+    expect(find.text('FRED API key'), findsOneWidget);
   });
 
   testWidgets('data sources: selecting a keyed core vendor reveals its required key field',
@@ -292,14 +293,15 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_wrap(const SettingsState(demoMode: false), vendorCatalog: _vendorCatalog));
     await tester.pumpAndSettle();
-    expect(find.text('API key'), findsOneWidget); // FRED only
+    expect(find.text('FRED API key'), findsOneWidget); // FRED only (vendor-labelled, set-01)
 
     final container = ProviderScope.containerOf(tester.element(find.byType(SettingsBody)));
     container.read(settingsControllerProvider.notifier).setDataVendor('core_stock_apis', 'alpha_vantage');
     await tester.pumpAndSettle();
 
-    // Now Alpha Vantage's required key field appears too → two 'API key' labels (AV + FRED).
-    expect(find.text('API key'), findsNWidgets(2));
+    // Now Alpha Vantage's required key field appears too → both vendor-attributed (set-01).
+    expect(find.text('Alpha Vantage API key'), findsOneWidget);
+    expect(find.text('FRED API key'), findsOneWidget);
     expect(container.read(settingsControllerProvider).dataVendors, {'core_stock_apis': 'alpha_vantage'});
   });
 
