@@ -6,8 +6,12 @@ trading-analysis engine, with a mobile remote planned post-V1. This file orients
 here. Keep it current; it is loaded into context each session.
 
 > Status: **Phase 3 complete — merged to `main`** (2026-07-06, PR #29 → merge commit `0a7ad57`; `phase-3`
-> branch deleted) — P3.1–P3.5. **Next: Phase 4 (V1 Release & Hardening)**, not yet started (plan-lock
-> pending; see [HUMAN.md](HUMAN.md) §1). Phase 3 (Depth & Refinement) surfaced the untapped engine — **BYO-key data vendors** (P3.1),
+> branch deleted) — P3.1–P3.5. **Now: Phase 4 (V1 Release & Hardening) — plan-locked (proposed)** in
+> **[docs/phase-4-plan.md](docs/phase-4-plan.md)**, awaiting founder approval of the plan PR + the one
+> paid-spend gate (production code-signing cert; [HUMAN.md](HUMAN.md) §1/§2). Phase 4 = signed **1.0.0
+> Windows GA**: production signing, security sweep + secret rotation, end-to-end release CI, and a bounded
+> UX-integrity pass closing the 4 V1-blocking defects from the Phase-4 recon audit (23 findings, 21 confirmed,
+> 4 blocking). Phase 3 (Depth & Refinement) surfaced the untapped engine — **BYO-key data vendors** (P3.1),
 > **local-model discovery + a live capability gate** (P3.2), **debate-terminal depth** (P3.3), **UI/UX +
 > a11y** (P3.4), and **historical as-of + a look-ahead correctness fix** (P3.5) — all locked in
 > **[docs/phase-3-plan.md](docs/phase-3-plan.md)** with the open-core raw-vs-curated line in
