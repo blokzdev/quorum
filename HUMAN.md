@@ -7,43 +7,41 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4 plan-locked (proposed)** — [docs/phase-4-plan.md](docs/phase-4-plan.md) + this PR; Phase-4 recon audit done, 4 blockers → P4.4. **Two things need you: §1** (signing-spend go + Gemini rotation) **/ §2** (2 forks, I've recommended both). §4)
-**Spend (Phase 4):** free tier unchanged (Ollama + demo + the shared Gemini test key + free data-vendor
-keys) **plus ONE founder-approved paid line: a production code-signing cert** (≈$120/yr Azure Trusted
-Signing recommended, pending eligibility; ≈$200–400/yr OV fallback) + any paid CI minutes. **No cert is
-purchased and no paid service provisioned without your explicit go** — the signing wiring I build is
-CA-agnostic so it lands before the cert exists. (Phase-2/3 spend was ~cents on the Gemini test key only.)
+**Last AI update:** 2026-07-06 (**Phase 4 plan-locked (proposed)** — [docs/phase-4-plan.md](docs/phase-4-plan.md) + this PR; recon audit done, 4 blockers → P4.3. **You decided to defer signing → unsigned 1.0.0 GA** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)) — Phase 4 is now **zero paid spend**. §1 = plan-PR merge + Gemini rotation. §3/§4)
+**Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
+free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
+cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
+surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ---
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- **Merge the Phase-4 plan-lock docs PR** (this one) — seeds the phase on `main` (founder-gated). It's
-  docs-only: [docs/phase-4-plan.md](docs/phase-4-plan.md) + status/roadmap/HUMAN/backlog. Approving it locks
-  the 5 subphases + falsifiable exit criteria. *(I can start the no-spend subphases — P4.1 security, P4.4
-  UX-integrity — on your word without waiting for the merge.)*
-- **Production code-signing spend — your go before I buy anything** *(gates P4.2, the first real spend)*.
-  Recommendation in §2. Once you pick a path I'll confirm exact 2026 cost + eligibility, then you provision
-  the cert (your identity/entity + card). The signing *wiring* (build script + `packaging.yml`) is built
-  CA-agnostic and lands **without** spend; only the actual sign step waits on the cert.
+- **Merge the Phase-4 plan-lock docs PR** (this one) — seeds the phase on `main` (founder-gated). Docs-only:
+  [docs/phase-4-plan.md](docs/phase-4-plan.md) + [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)
+  + status/roadmap/HUMAN/backlog. Approving it locks the 5 subphases + falsifiable exit criteria. *(I can
+  start the subphases — all zero-spend — on your word without waiting for the merge.)*
 - **Rotate the shared Gemini test key** *(P4.1a, release hygiene)* — rotate it in the Google AI Studio
-  console, invalidate the old one, and hand me the new key for the gitignored `.env`. Not a fork, just a
-  human-only step; I'll wire the secret-scan CI gate around it.
+  console, invalidate the old one, and hand me the new key for the gitignored `.env`. A human-only step (not
+  a fork); I'll wire the secret-scan CI gate around it.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
-- **Code-signing cert path** *(gates P4.2 spend).* **Recommend: Azure Trusted Signing** (≈$10/mo, cloud HSM,
-  no hardware token, CI-native) **if eligible** — the standard tier wants an org 3+ yrs old; there's an
-  individual-validation tier I'll check. **Fallback: an OV cert** (≈$200–400/yr, works for new orgs/
-  individuals). *Against EV* (≈$400–600+/yr): its old instant-SmartScreen advantage is essentially gone in
-  2026, so the premium isn't worth it for a desktop app. (You dismissed the inline question — I've baked the
-  recommended path into the plan; say the word to confirm or redirect before any purchase.)
-- **1.0.0 GA scope.** **Recommend: Windows-only 1.0.0 GA now** (matches roadmap — macOS is a separate post-V1
-  port, P13; a multi-platform launch adds Apple notarization + $99/yr and materially delays GA). Baked into
-  the plan as Windows-first; flag if you'd rather hold GA for a simultaneous Win+macOS launch.
+- _(none open)_ — the two Phase-4 forks are **decided** (defer signing → unsigned 1.0.0; Windows-first GA);
+  see §3.
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-06 — **Defer production code-signing → V2; ship an unsigned 1.0.0 GA (your call)** →
+  [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md). After a researched options pass (free
+  **SignPath Foundation** — but it shows "SignPath Foundation" as the publisher + our open-core model risks
+  its eligibility; **Certum Open Source** ~€29/yr; **Azure Artifact Signing** ~$120/yr), you chose to defer
+  rather than spend/set up a cert at GA. Unsigned works 100% functionally (our per-user installer even avoids
+  the UAC prompt); the cost is a first-run SmartScreen "Run anyway" warning + no publisher reputation + higher
+  PyInstaller AV-FP risk — mitigated in **P4.4** (Run-anyway docs + Defender pre-submission) with the `-Sign`
+  seam retained. **Net: Phase 4 = zero paid spend.** Revisit signing when distribution traction warrants.
+- 2026-07-06 — **Windows-first 1.0.0 GA (your call).** macOS stays a separate post-V1 port (roadmap P13);
+  1.0.0 does not wait for a multi-platform signed launch (that would add Apple notarization + $99/yr + delay).
 - 2026-07-05 — **Edge Model Draft Board → roadmap (post-V1), on your ask** ("browse/find applicable edge
   models"). A research pass (code recon + a **live Ollama 0.30.11 probe**) killed the literal "HuggingFace
   browser / live catalog" framing — Ollama exposes no machine-readable library or *pre-install*
@@ -117,7 +115,7 @@ CA-agnostic so it lands before the cert exists. (Phase-2/3 spend was ~cents on t
 - Merged the Phase-3 close-out docs PR [#31](https://github.com/blokzdev/quorum/pull/31) to `main`
   (`b60c00b`); §1 is clean of the resolved Phase-3 blocker.
 - **Release-hardening recon (inline):** signing is still debug **self-signed** (`build_installer.ps1` — needs
-  a production cert, the first real spend); `packaging.yml` is unverified e2e + has no clean-VM install smoke
+  a production cert — would've been the first real spend, now deferred to V2 per your call below); `packaging.yml` is unverified e2e + has no clean-VM install smoke
   or per-provider freeze test; `ci.yml` says "8 goldens" but there are now **14**. **Secret hygiene clean** —
   `.env` untracked + never in history, PyInstaller `build/dist` untracked, a tracked-file scan found **zero**
   committed keys (so the Gemini item is a *shared-key rotation*, not a leak). No `SECURITY.md`/threat model.
@@ -125,14 +123,19 @@ CA-agnostic so it lands before the cert exists. (Phase-2/3 spend was ~cents on t
 - **Phase-4 recon UI/UX/a11y audit** (Workflow, 7 surfaces, find → adversarial-verify, every finding grounded
   in a committed golden PNG or code file:line): **23 findings, 21 CONFIRMED / 2 REJECTED / 0 UNGROUNDED**
   (no hallucinated pixels; the verifier caught a phantom-chip miscite that the finding survived on corrected
-  evidence). Executive triage → **4 KEEP** (P4.4 exit criteria: sub-AA chips, washed-out Settings H1 in the
+  evidence). Executive triage → **4 KEEP** (P4.3 exit criteria: sub-AA chips, washed-out Settings H1 in the
   committed goldens [I Read both + confirmed], shell chrome has zero golden coverage, data-sources key has no
   vendor label), **2 REJECT**, **16 DEFER → backlog** (`P4-recon`). Blocking set is small + coherent →
   absorbed as a bounded subphase, **not** a separate UX phase.
-- **Plan-locked** [docs/phase-4-plan.md](docs/phase-4-plan.md): 5 subphases (P4.1 security · P4.2 signing ·
-  P4.3 release CI · P4.4 UX-integrity · P4.5 GA close-out), falsifiable exit criteria, Windows-first 1.0.0.
-  **Awaiting you: §1** (plan-PR merge + signing-spend go + Gemini rotation) **/ §2** (signing-cert path + GA
-  scope forks, both recommended). No implementation started.
+- **Signing researched → you chose to defer** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)):
+  free **SignPath Foundation** exists but shows "SignPath Foundation" as the publisher + our open-core model
+  risks its eligibility; cheap paths are **Certum Open Source** (~€29/yr) / **Azure Artifact Signing**
+  (~$120/yr). You opted to **ship unsigned 1.0.0** and sign in V2 — so **Phase 4 is zero paid spend** and the
+  `-Sign` seam is retained; the SmartScreen "Run anyway" + AV-FP tradeoffs are mitigated in P4.4.
+- **Plan-locked + restructured** [docs/phase-4-plan.md](docs/phase-4-plan.md): 5 subphases (P4.1 security ·
+  P4.2 release CI · P4.3 UX-integrity · P4.4 unsigned-release readiness · P4.5 GA close-out), falsifiable exit
+  criteria, unsigned Windows-first 1.0.0. **Awaiting you: §1** (plan-PR merge + Gemini rotation). No
+  implementation started.
 
 ### 2026-07-06 — **Phase 3 MERGED to `main`** (PR #29 → merge commit `0a7ad57`) — *Band B core V1 depth landed*
 - You authorized the founder-gated merge on the **slice-by-slice visual review** (6 fresh-context reviewers,

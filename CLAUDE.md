@@ -7,11 +7,12 @@ here. Keep it current; it is loaded into context each session.
 
 > Status: **Phase 3 complete — merged to `main`** (2026-07-06, PR #29 → merge commit `0a7ad57`; `phase-3`
 > branch deleted) — P3.1–P3.5. **Now: Phase 4 (V1 Release & Hardening) — plan-locked (proposed)** in
-> **[docs/phase-4-plan.md](docs/phase-4-plan.md)**, awaiting founder approval of the plan PR + the one
-> paid-spend gate (production code-signing cert; [HUMAN.md](HUMAN.md) §1/§2). Phase 4 = signed **1.0.0
-> Windows GA**: production signing, security sweep + secret rotation, end-to-end release CI, and a bounded
-> UX-integrity pass closing the 4 V1-blocking defects from the Phase-4 recon audit (23 findings, 21 confirmed,
-> 4 blocking). Phase 3 (Depth & Refinement) surfaced the untapped engine — **BYO-key data vendors** (P3.1),
+> **[docs/phase-4-plan.md](docs/phase-4-plan.md)**, awaiting founder approval of the plan PR. Phase 4 = an
+> **unsigned 1.0.0 Windows GA** (**zero paid spend** — production code-signing **deferred to V2**,
+> [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)): security sweep + Gemini-key rotation,
+> end-to-end release CI, a bounded UX-integrity pass closing the 4 V1-blocking defects from the Phase-4 recon
+> audit (23 findings, 21 confirmed, 4 blocking), and unsigned-release readiness. Phase 3 (Depth & Refinement)
+> surfaced the untapped engine — **BYO-key data vendors** (P3.1),
 > **local-model discovery + a live capability gate** (P3.2), **debate-terminal depth** (P3.3), **UI/UX +
 > a11y** (P3.4), and **historical as-of + a look-ahead correctness fix** (P3.5) — all locked in
 > **[docs/phase-3-plan.md](docs/phase-3-plan.md)** with the open-core raw-vs-curated line in
@@ -21,10 +22,11 @@ here. Keep it current; it is loaded into context each session.
 > shipped the Hub + nav, Settings/**Model Studio**, the **Dream Team** roster + gates, brand, and a
 > validated Windows installer + Flutter CI gate, per [docs/phase-2-plan.md](docs/phase-2-plan.md) + ADRs
 > [0001](docs/decisions/0001-byo-api-key-storage.md)/[0002](docs/decisions/0002-sidecar-bundling.md)/[0004](docs/decisions/0004-per-agent-model-routing.md)/[0005](docs/decisions/0005-installer-format.md).)
-> Next is **Phase 4 (V1 Release & Hardening)** —
-> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + a real crypto
-> pipeline + macOS are post-V1/future phases. Product vision + the 3 signature bets (Track Record, Dream
-> Team, debate terminal + FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
+> Phase 4 (V1 Release & Hardening, current) is security sweep + secret rotation, release CI, UX-integrity,
+> and an unsigned GA; **production code-signing is a V2 fast-follow** ([ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md));
+> mobile remote + paper-trading + a real crypto pipeline + macOS are post-V1/future phases. Product vision +
+> the 3 signature bets (Track Record, Dream Team, debate terminal + FRED/Polymarket signals) live in
+> **[docs/roadmap.md](docs/roadmap.md)**.
 > The engine package stays named `tradingagents` to preserve merge-ability with upstream
 > `TauricResearch/TradingAgents`.
 

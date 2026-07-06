@@ -53,11 +53,12 @@ the original `P#` IDs from the first roadmap draft, for continuity.
   **BYO-key raw = free, hosted-curated = paid** ([ADR 0006](decisions/0006-open-core-signal-boundary.md)).
   Detail: [phase-3-plan.md](phase-3-plan.md).
 - **Phase 4 — V1 Release & Hardening** *(≈ old P6; plan-locked → [phase-4-plan.md](phase-4-plan.md))* —
-  security sweep + secret/key rotation (incl. the shared Gemini test key), production code-signing, release
-  CI (+ end-to-end `packaging.yml` verification, a clean-VM install smoke, a per-provider freeze regression
-  test), a bounded **UX-integrity** pass (the 4 V1-blocking defects from the Phase-4 recon audit), and a
-  signed **1.0.0 Windows GA**. macOS is a **separate post-V1 port (P13)** — Windows-first GA; a multi-platform
-  signed launch is deferred, not coupled to 1.0.0.
+  security sweep + secret/key rotation (incl. the shared Gemini test key), release CI (+ end-to-end
+  `packaging.yml` verification, a clean-VM install smoke, a per-provider freeze regression test), a bounded
+  **UX-integrity** pass (the 4 V1-blocking defects from the Phase-4 recon audit), unsigned-release readiness,
+  and an **unsigned 1.0.0 Windows GA**. **Production code-signing is deferred to a 1.x/V2 fast-follow**
+  ([ADR 0007](decisions/0007-defer-code-signing-to-v2.md)) — the `-Sign` seam is retained. macOS is a
+  **separate post-V1 port (P13)** — Windows-first GA.
 
 > **Business model:** open-core (local client free + open; paid value server-side) —
 > [monetization.md](monetization.md), [ADR 0003](decisions/0003-open-source-and-open-core-monetization.md),
