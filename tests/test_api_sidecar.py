@@ -217,6 +217,37 @@ def test_manifest_written_with_track_record_fields(monkeypatch, tmp_path):
     assert list(tmp_path.glob("*/run.json"))  # the manifest is on disk, beside the report tree
 
 
+def test_vendor_and_provider_keys_never_touch_disk(monkeypatch, tmp_path):
+    # P3.1c security: BYO keys (LLM + data-vendor) are request-scoped and injected per run — they must
+    # NEVER be written to the manifest, the persisted reports, or the report tree. Falsify by driving a
+    # full run whose request carries sentinel keys, then scanning EVERY persisted byte for them.
+    monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
+    monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
+    registry = JobRegistry(results_dir=tmp_path)
+
+    secret_av = "SECRET-alpha-vantage-3f9a"
+    secret_fred = "SECRET-fred-7c1d"
+    secret_anth = "SECRET-anthropic-a2b8"
+    job = registry.create({
+        "mode": "pro", "ticker": "BTC-USD", "asset_type": "crypto",
+        "provider": "anthropic", "deep_model": "claude-opus-4-8",
+        "data_vendors": {"core_stock_apis": "alpha_vantage"},
+        "api_keys": {"alpha_vantage": secret_av, "fred": secret_fred, "anthropic": secret_anth},
+    })
+    _wait_done(job)
+    assert job.status == "done"
+
+    # The manifest records the honest asset_type + vendor-agnostic summary fields.
+    m = registry.list_runs()[0]
+    assert m["asset_type"] == "crypto"
+
+    # No persisted file anywhere under the results dir may contain any secret substring.
+    blob = "\n".join(p.read_text(encoding="utf-8", errors="ignore")
+                     for p in tmp_path.rglob("*") if p.is_file())
+    for secret in (secret_av, secret_fred, secret_anth):
+        assert secret not in blob
+
+
 def test_history_survives_restart(monkeypatch, tmp_path):
     monkeypatch.setattr(trading_graph_mod, "TradingAgentsGraph", _make_fake_graph(FULL_CHUNKS))
     monkeypatch.setattr(jobs_mod, "write_report_tree", lambda fs, t, p: p)
@@ -372,6 +403,102 @@ def test_catalog_exposes_tool_capable_flag(monkeypatch):
     assert opt["tool_capable"] is True
     custom = next(o for o in body["providers"]["ollama"]["deep"] if o["value"] == "custom")
     assert custom["tool_capable"] is None  # unknown user/local model -> UI warns, not blocks
+
+
+def test_catalog_vendors_endpoint(monkeypatch):
+    # P3.1: /catalog/vendors serves the per-category vendor picker; needs_key/key_env are single-sourced
+    # from VENDOR_API_KEY_ENV so the UI can never disagree with what actually gets injected.
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+    from tradingagents.runtime.isolation import VENDOR_API_KEY_ENV
+
+    body = TestClient(app_module.app).get("/catalog/vendors").json()
+    cats = {c["key"]: c for c in body["categories"]}
+    # The 6 engine categories, with the 2 optional ones flagged.
+    assert {"core_stock_apis", "technical_indicators", "fundamental_data", "news_data",
+            "macro_data", "prediction_markets"} <= set(cats)
+    assert cats["macro_data"]["optional"] and cats["prediction_markets"]["optional"]
+    assert not cats["core_stock_apis"]["optional"]
+    assert cats["core_stock_apis"]["default"] == "yfinance"
+    # core_stock_apis offers alpha_vantage (needs a key) + yfinance (keyless), agreeing with the map.
+    core = {v["value"]: v for v in cats["core_stock_apis"]["vendors"]}
+    assert core["yfinance"]["needs_key"] is False and core["yfinance"]["key_env"] is None
+    for c in body["categories"]:
+        for v in c["vendors"]:
+            assert v["needs_key"] == (v["value"] in VENDOR_API_KEY_ENV)
+            assert v["key_env"] == VENDOR_API_KEY_ENV.get(v["value"])
+
+
+# --- Local-model discovery (P3.2a) ---
+
+def test_parse_ollama_models_tool_capability_and_ordering():
+    # tool_capable is "tools" in capabilities; a MISSING capabilities field is None (unknown), NOT False,
+    # so the gate warns (never blocks) on a stale-Ollama user. Ordering: tool-capable first, unknown last.
+    from services.api.app import _parse_ollama_models
+    rows = _parse_ollama_models({"models": [
+        {"name": "dolphin:latest", "capabilities": ["completion"], "size": 4, "details": {"family": "llama"}},
+        {"name": "llama3.2:latest", "capabilities": ["completion", "tools"], "size": 2,
+         "details": {"family": "llama"}},
+        {"name": "mystery:latest", "size": 1, "details": {"family": "x"}},  # no capabilities -> None
+        {"model": "only-model-field", "capabilities": ["tools"]},  # 'model' is the name fallback
+        {"capabilities": ["tools"]},  # no name at all -> dropped
+    ]})
+    by = {r["name"]: r for r in rows}
+    assert by["llama3.2:latest"]["tool_capable"] is True
+    assert by["dolphin:latest"]["tool_capable"] is False
+    assert by["mystery:latest"]["tool_capable"] is None  # missing field = unknown, not False
+    assert by["llama3.2:latest"]["family"] == "llama" and by["llama3.2:latest"]["size"] == 2
+    assert "only-model-field" in by  # name resolved from the 'model' field
+    assert len(rows) == 4  # the nameless entry dropped
+    assert rows[0]["name"] == "llama3.2:latest"  # tool-capable surfaces first
+    assert rows[-1]["name"] == "mystery:latest"  # unknown sinks last
+
+
+def test_resolve_ollama_native_base_strips_v1(monkeypatch):
+    from services.api.app import _resolve_ollama_native_base
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    assert _resolve_ollama_native_base() == "http://localhost:11434"  # default, /v1 stripped
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://10.0.0.5:11434/v1/")
+    assert _resolve_ollama_native_base() == "http://10.0.0.5:11434"  # trailing slash + /v1 stripped
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host:1234")
+    assert _resolve_ollama_native_base() == "http://host:1234"  # no /v1 -> host preserved
+
+
+def test_local_models_endpoint_maps_discovered_models(monkeypatch):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+
+    async def fake_tags(_base):
+        return {"models": [
+            {"name": "llama3.2:latest", "capabilities": ["completion", "tools"], "size": 2,
+             "details": {"family": "llama"}},
+            {"name": "dolphin:latest", "capabilities": ["completion"], "size": 4,
+             "details": {"family": "llama"}},
+        ]}
+
+    monkeypatch.setattr(app_module, "_fetch_ollama_tags", fake_tags)
+    body = TestClient(app_module.app).get("/catalog/local-models").json()
+    assert body["contract_version"]
+    assert {m["name"]: m["tool_capable"] for m in body["local_models"]} == \
+        {"llama3.2:latest": True, "dolphin:latest": False}
+
+
+def test_local_models_endpoint_degrades_to_empty_when_ollama_down(monkeypatch):
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+
+    async def boom(_base):
+        raise ConnectionError("ollama unreachable")
+
+    monkeypatch.setattr(app_module, "_fetch_ollama_tags", boom)
+    body = TestClient(app_module.app).get("/catalog/local-models").json()
+    assert body["local_models"] == []  # no 500, no hang -> clean empty; desktop keeps its static list
+
+
+def test_local_models_endpoint_is_bearer_gated(monkeypatch):
+    # The discovery endpoint reveals installed models — it must sit behind the same bearer boundary as
+    # the other /catalog routes (not in _PUBLIC_PATHS).
+    monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
+    client = TestClient(app_module.app)
+    assert client.get("/catalog/local-models").status_code == 401  # no bearer -> rejected
+    assert "/catalog/local-models" not in app_module._PUBLIC_PATHS
 
 
 def test_bearer_auth_enforced(monkeypatch):

@@ -34,6 +34,10 @@ RunViewState reduce(RunViewState s, QuorumEvent e) {
       });
     case ToolCall():
       return base; // tool calls are streamed to the UI live; not part of durable state yet
+    case DebateTurn():
+      // P3.3a: append in arrival (= speaking) order; the runtime emits each turn exactly once.
+      return base.copyWith(
+        debateTurns: [...s.debateTurns, DebateTurnView(e.round, e.side, e.markdown)]);
     case ReportSectionDone():
       return base.copyWith(reports: {
         ...s.reports,

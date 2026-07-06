@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import '../state/app_surface.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
+import 'focusable.dart';
 import 'hub_surface.dart' show HubSurface;
 import 'quorum_colors.dart';
 import 'settings_surface.dart' show SettingsSurface;
@@ -207,10 +208,13 @@ class _NavTabButtonState extends State<_NavTabButton> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: () => widget.onSelect(widget.surface),
-          child: Container(
-            height: 36,
+        child: Focusable(
+          onActivate: () => widget.onSelect(widget.surface),
+          borderRadius: BorderRadius.circular(4),
+          child: GestureDetector(
+            onTap: () => widget.onSelect(widget.surface),
+            child: Container(
+              height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -228,6 +232,7 @@ class _NavTabButtonState extends State<_NavTabButton> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -308,14 +313,18 @@ class _CaptionButtonState extends State<_CaptionButton> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Container(
-            width: 46,
-            height: 36,
-            alignment: Alignment.center,
-            color: bg,
-            child: Icon(widget.icon, size: widget.iconSize, color: fg),
+        child: Focusable(
+          onActivate: widget.onTap,
+          borderRadius: BorderRadius.zero,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: Container(
+              width: 46,
+              height: 36,
+              alignment: Alignment.center,
+              color: bg,
+              child: Icon(widget.icon, size: widget.iconSize, color: fg),
+            ),
           ),
         ),
       ),

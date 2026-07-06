@@ -7,17 +7,38 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-05 (**Phase 2 SHIPPED** — merged to `main`; P2.7 close-out done)
-**Spend this phase:** ~cents paid · boundary = **Ollama + demo + the shared Gemini test key only** (a few
-minimal Gemini cloud validations within boundary: the frozen-exe real-run proof + the P2.5 hybrid
-Ollama-analysts/Gemini-judges close-out run; no other paid spend). **Phase 3 will need a fresh cost
-boundary** — production signing, a real cloud key for release testing, etc. (ask before any paid spend).
+**Last AI update:** 2026-07-05 (**Phase 3 implementation COMPLETE** — P3.1–P3.5 all on `phase-3`; `phase-3 → main` is a fork for you; §1/§4)
+**Spend this phase (Phase 3):** boundary = **Ollama + demo + the shared Gemini test key** **+ free-tier
+data-vendor keys** (FRED / Alpha Vantage free tiers, Polymarket keyless) — **no paid spend without asking**.
+Real spend (production signing, release infra) stays **Phase 4**. (Phase-2 spend was ~cents on the Gemini
+test key only.)
 
 ---
 
 ## 1 · ⛔ Blocked on you — *only-human steps; these gate progress*
 
-- _(none open — you approved the `phase-2 → main` merge; Phase 2 shipped. Next fork will be Phase 3 kickoff.)_
+- **`phase-3 → main` merge — your call.** The **entire Phase 3 implementation is done** on the `phase-3`
+  integration branch: P3.1 (BYO-key vendors + asset toggle), P3.2 (local-model discovery + capability
+  gate), P3.3 (debate-terminal depth), P3.4 (UX/a11y), P3.5 (as-of + look-ahead fix). Every subphase:
+  parallel recon → my adversarial validation → real-path verification → **fresh-context review** (each
+  returned mergeable) → self-merged to `phase-3`. Cost stayed within boundary (Ollama + the shared Gemini
+  test key only — a couple of depth-2/real-path runs). **Merges to `main` are founder-gated** (doctrine):
+  the `phase-3 → main` PR is yours to review (recommend in slices, not one mega-diff) + approve. Backlog is
+  drained (vendor-provenance → roadmap P7). End-of-phase audit passed (completeness verified, zero scope creep).
+  **Post-close-out CI honesty fix (2026-07-05):** the flutter CI job was actually RED on #29 — `flutter
+  analyze` (fatal-infos) tripped on a `_ollamaCatalog` lint that rode in from P3.2b and, because analyze
+  aborts first, had *skipped* the flutter test step on the P3.3/P3.4 sub-PR merges (they merged red). Fixed
+  in `15c025c`; **the current phase-3 tip is fully green** (ruff + pytest py3.10–3.13 + flutter
+  analyze/test/goldens/build + clean-install smoke). A **fresh-context slice-by-slice verification** (6
+  reviewers, one per slice #23–#28, each reading its golden PNGs) then confirmed all 5 subphases
+  merge-ready. **Two non-blocking concerns to note:** (a) P3.3's "risk-verdict ribbon = risk judge, *not*
+  PM decision" criterion is literally unsatisfiable — the engine sets `risk_debate_state.judge_decision =
+  final_trade_decision` (`portfolio_manager.py:75`), so they're the same value; the ribbon is correct, the
+  criterion was mis-specified and honestly reframed in the close-out (a separate risk-manager node = future
+  engine work); (b) sub-PRs #26/#27 self-merged while flutter CI was red — a verification-gate process gap,
+  now resolved. **The `phase-3 → main` PR is open for you:
+  [#29](https://github.com/blokzdev/quorum/pull/29)** — review it in slices (the 6 sub-PRs #22–#28,
+  linked in the PR body), then approve + merge. I have NOT merged it (founder-gated).
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
@@ -25,6 +46,23 @@ boundary** — production signing, a real cloud key for release testing, etc. (a
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-05 — **Edge Model Draft Board → roadmap (post-V1), on your ask** ("browse/find applicable edge
+  models"). A research pass (code recon + a **live Ollama 0.30.11 probe**) killed the literal "HuggingFace
+  browser / live catalog" framing — Ollama exposes no machine-readable library or *pre-install*
+  tool-capability API, and generic device-filtered browse is LM Studio/Jan/Msty table-stakes — and reshaped
+  it into a **curated, tool-capable, device-fit draft board** with the on-brand **roster-fit** differentiator
+  ("can this machine run my *whole* Dream Team?") + a Track-Record-ranked defensibility north star. Scoped in
+  [roadmap.md](docs/roadmap.md) Band C with a hard "**not** a generic browser" wall; **not Phase 4** (that's
+  hardening/GA). Docs-only capture (capture ≠ commit); building it still pays the full four-check wall.
+- 2026-07-05 — **Phase 3 (Depth & Refinement) plan-locked** (your themes + calls): 5 boxed subphases —
+  P3.1 BYO-key vendors + asset-type, P3.2 local-model discovery + live capability gate, P3.3 debate depth,
+  P3.4 UI/UX + a11y, **P3.5 historical as-of** (split out per your call — it carries a correctness fix).
+  Open-core line locked → [ADR 0006](docs/decisions/0006-open-core-signal-boundary.md) (BYO-key raw = free,
+  hosted-curated = paid). **Real crypto pipeline** → a dedicated future phase (roadmap), NOT P3 — today
+  `asset_type` only relabels prompts. **Correctness item (noted, scheduled P3.5b):** the raw OHLCV *tool*
+  (`get_YFin_data_online`) doesn't clamp `end_date` to `trade_date`, so a past-date run could leak future
+  rows into the model's tool calls (the deterministic snapshot path is already honest). No live impact yet
+  (no date picker ships until P3.5); the clamp is a P3.5b exit criterion.
 - 2026-07-05 — **Phase 2 SHIPPED (merged to `main`, you approved).** P2.6c added a windows-latest Flutter
   CI gate — verified green on the real runner, and it caught a real bug on its first run (`runner.exe.manifest`
   was untracked via a stray `*.manifest` ignore, which would break any clean clone). P2.7 close-out: the
@@ -76,6 +114,74 @@ boundary** — production signing, a real cloud key for release testing, etc. (a
   the `dev` extra so CI actually tests the sidecar.
 
 ## 4 · 📦 What shipped — *per-session digest; skim, not a changelog (CHANGELOG.md is canonical)*
+
+### 2026-07-05 — **P3.4 UI/UX + a11y** (merged to `phase-3`) — *Phase 3 implementation COMPLETE*
+- **Keyboard operability**: every custom control (nav tabs, depth toggles, analyst chips, disclosures,
+  buttons…) is now Tab-focusable + activates on Enter/Space, via a reusable `Focusable` wrapper whose
+  focus ring paints only on focus — so **not a single golden changed** from the wrapping.
+- **Contrast (WCAG AA)**: the "Run analysis" (and every filled-accent) button label was white-on-blue at
+  3.77:1 (an AA-normal fail); a new `onAccent` ink lifts it to 4.97:1 — proved by a pure-Dart contrast test.
+- **Error surfacing**: a failed run now shows its reason + a **Retry** button in the terminal (it used to
+  silently revert to the idle prompt).
+- Fresh-context review: all criteria met; it caught that the hand-rolled filled buttons still failed
+  contrast — fixed. 146 flutter tests + contrast math green.
+
+### 2026-07-05 — **P3.3 Debate-terminal depth** (merged to `phase-3`) — *signature bet #2*
+- The debate now **reads as a debate**: an alternating **Bull R1 → Bear R1 → Bull R2 → …** turn thread
+  that grows with research depth (instead of two static blobs), a balance bar driven by the Research
+  Manager's real 5-tier rating (not prose keyword-guessing), and **structured signal chips** on the cards
+  (sentiment Bullish/7.4/High-confidence; trader Buy/Entry/Stop). The risk debate gets its own RISK VERDICT
+  ribbon.
+- **Zero new backend** — the structured signals were already on the wire; P3.3 is a runtime-event +
+  reducer + UI job. One genuine runtime addition (per-turn events); the dead `agent_done.confidence` seam
+  removed.
+- The one rabbit-hole risk (are per-turn boundaries recoverable?) was de-risked cleanly + confirmed on a
+  **real Gemini depth-2 debate** (4 clean turns, no false splits). Fresh-context review: all criteria MET.
+  139 flutter + 384 pytest + ruff green; depth-1/depth-2 golden pair. **No paid spend beyond the shared
+  Gemini test key** (one depth-2 de-risk run).
+
+### 2026-07-05 — **P3.2 Local & edge model UX** (merged to `phase-3`)
+- **The direct answer to your question** (Gemma/Qwen/GLM/… local models): the app now **discovers the
+  device's actually-installed Ollama models** with real per-model tool-capability and folds them into the
+  picker — no more hand-typing an id or guessing from a static list. Verified on *your* machine: it found
+  `llama3.2:latest` (tool-capable) + `dolphin-llama3`/`lexi-llama-3` (no tools).
+- The **capability gate is now live**: a non-tool local model is a disabled "· no tools" item on the
+  analyst roles, and a **launch backstop** refuses a run whose effective analyst model can't call tools
+  (even the global quick model) — so a local model that would produce empty reports can't silently run.
+- **Real-path proof:** a live `llama3.2:latest` analyst run fired `tool_calls` end-to-end (a real report
+  with live OHLCV) — confirming tool-capable local models genuinely work, so blocking non-tool ones is right.
+- Recon wins: Ollama's `/api/tags` carries capabilities inline (one round-trip) and `httpx` was already a
+  dep (zero bundle cost). Fresh-context review = mergeable; 136 flutter + 381 pytest + ruff green; new
+  `hub_capability_gate` golden. **No paid spend** (Ollama-only).
+
+### 2026-07-05 — **P3.5 Historical as-of analysis** (merged to `phase-3`)
+- **As-of date picker** on the Hub launch card ("Today" ↔ a warning "As-of DATE" for a historical run;
+  future dates unpickable), a deterministic "as-of DATE" terminal indicator, and a **Polymarket
+  live-source caveat** (it always reflects *now*; FRED honours the date). `tradeDate` binds the existing
+  `RunConfig.tradeDate` — no wire change — and is a per-run input, deliberately **not persisted**.
+- **Look-ahead correctness fix (P3.5b):** the raw OHLCV tool trusted the LLM's chosen `end_date`, so a
+  past-date run could pull **future** rows into the model. Now clamped engine-side to the run's as-of
+  date (LLM-independent), verified through the real `plan_run → isolation → tool` path (zero future rows).
+- **Correctness item found + fixed in-session** (doctrine surface): the fresh-context review caught a
+  **sibling look-ahead leak in `get_news`** (future *articles* on a historical run) — closed by the same
+  shared guard. It was the only sibling; every other date-bounded tool is already as-of-aware.
+- Verified: fresh-context review = **ship** (all 5 criteria MET, clamp test falsified-red when neutered).
+  119 flutter + 376 pytest + ruff green. New `hub_as_of` golden + 4 re-baselined (Read + justified).
+
+### 2026-07-05 — **P3.1 Data sources** (merged to `phase-3`)
+- **BYO-key data vendors + asset-type**, the first Phase-3 subphase: a per-category **Data sources**
+  picker in Model Studio (Yahoo Finance default; **Alpha Vantage** as a keyed alternative), a **FRED**
+  macro key (optional; enables macro signals, never blocks a launch), a Polymarket keyless default-on
+  note, and an honest **stock/crypto** toggle. Driven by a new engine-derived `GET /catalog/vendors`.
+- **Your action (optional, non-blocking):** free **FRED** and **Alpha Vantage** keys unlock those
+  vendors — yfinance (keyless) is the default and works without any key. Store them in Model Studio →
+  Data sources like the LLM keys; they inject per-run and never touch disk.
+- **Honest scope (as agreed):** the crypto toggle only *reframes the agents' prompts* — a crypto run
+  still pulls yfinance data (verified live: BTC-USD returned real OHLCV through the default vendor). A
+  **real crypto pipeline stays a dedicated future phase**.
+- Verified: fresh-context pre-merge review (mergeable, no HIGH/MED, all 5 exit criteria falsification-
+  tested), keys-never-on-disk byte scan, write-only keystore golden, real spawned-sidecar `/catalog/
+  vendors`. 112 flutter + 368 pytest + ruff green. 3 LOW findings → 1 fixed, 2 backlogged.
 
 ### 2026-07-05 — **Phase 2 complete → merged to `main`**
 - **P2.5c1/c2** Dream Team roster UI + capability/key gate; **P2.6a** bundled-sidecar spawn path + full-

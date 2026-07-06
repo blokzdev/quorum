@@ -5,6 +5,8 @@ import 'package:quorum_core/quorum_core.dart';
 
 import '../dream_team_roster.dart';
 import '../provider_meta.dart'; // providerNeedsKey (+ the shared provider->key-env mirror)
+import '../vendor_meta.dart' show macroVendor; // data-vendor key metadata (mirrors VENDOR_API_KEY_ENV)
+import 'focusable.dart';
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
@@ -66,17 +68,34 @@ String _providerLabel(String p) => _providerLabels[p] ?? p;
 List<String> _rosterProviders(Catalog c) =>
     c.providerNames.where((p) => p != 'openai_compatible').toList(growable: false);
 
+/// P3.2: the Ollama picker replaces its static curated guesses with the DEVICE's DISCOVERED models
+/// (real `toolCapable`) once discovery succeeds — those are ground truth for what's installed. A `custom`
+/// sentinel always trails so a hand-typed id stays possible. Non-Ollama providers (and Ollama before
+/// discovery loads / when Ollama is down) keep [base] unchanged, so the picker never regresses.
+List<ModelOption> _foldLocalModels(
+    String? provider, List<ModelOption> base, List<LocalModel> localModels) {
+  if (provider != 'ollama' || localModels.isEmpty) return base;
+  final seen = <String>{};
+  final out = <ModelOption>[];
+  for (final m in localModels) {
+    if (seen.add(m.name)) out.add(m.toOption());
+  }
+  if (seen.add('custom')) out.add(const ModelOption('Custom model id…', 'custom'));
+  return out;
+}
+
 /// A role's full model set = the dedup-by-value union of the provider's quick + deep options, plus
 /// exactly one trailing `custom` sentinel (deduped, so a catalog that already lists `custom` doesn't
-/// double it). Prevents DropdownButton duplicate-value asserts when a model appears in both tiers.
-List<ModelOption> _unionModels(Catalog c, String provider) {
+/// double it). Prevents DropdownButton duplicate-value asserts when a model appears in both tiers. For
+/// Ollama, discovered local models (P3.2) replace the static list — so the gate sees their real capability.
+List<ModelOption> _unionModels(Catalog c, String provider, List<LocalModel> localModels) {
   final seen = <String>{};
   final out = <ModelOption>[];
   for (final o in [...c.optionsFor(provider, 'quick'), ...c.optionsFor(provider, 'deep')]) {
     if (seen.add(o.value)) out.add(o);
   }
   if (seen.add('custom')) out.add(const ModelOption('Custom model id…', 'custom'));
-  return out;
+  return _foldLocalModels(provider, out, localModels);
 }
 
 /// A role is *assigned* iff it carries a provider AND a non-blank model. The single predicate the wire
@@ -84,15 +103,12 @@ List<ModelOption> _unionModels(Catalog c, String provider) {
 /// (which drops a blank-model spec) runs the fallback.
 bool _roleAssigned(AgentModel? m) => m != null && m.model.trim().isNotEmpty;
 
-/// The catalog's `tool_capable` flag for a (provider, model), or null when the model isn't a catalog
-/// option — a custom/retired id we can't classify. null = UNKNOWN, which WARNS (never blocks).
-bool? _toolCapableOf(Catalog catalog, String? provider, String? model) {
-  if (provider == null || model == null || model.trim().isEmpty) return null;
-  for (final o in _unionModels(catalog, provider)) {
-    if (o.value == model) return o.toolCapable;
-  }
-  return null;
-}
+/// The gate's capability lookup — delegates to the shared [toolCapabilityOf] (quorum_core) so the picker
+/// gate and the launch-time backstop can never disagree. null = UNKNOWN → WARNS, never blocks. For
+/// Ollama this reads the DISCOVERED model's real capability, so a device's non-tool model (e.g. a plain
+/// llama3 8B) is correctly blocked on tool roles.
+bool? _toolCapableOf(Catalog catalog, String? provider, String? model, List<LocalModel> localModels) =>
+    toolCapabilityOf(catalog, provider, model, localModels);
 
 enum _GateOutcome { ok, warn, block }
 
@@ -157,6 +173,15 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
   Widget build(BuildContext context) {
     final brand = context.brand;
     final catalog = ref.watch(catalogProvider);
+    // The vendor catalog is a progressive enhancement: if it hasn't loaded (or failed), the Data
+    // sources section simply stays hidden rather than blocking the whole screen. Resolved to a plain
+    // value here so SettingsBody stays async-free (the golden target).
+    final vendorCatalog =
+        ref.watch(vendorCatalogProvider).maybeWhen(data: (v) => v, orElse: () => null);
+    // Discovered local models — likewise a progressive enhancement; empty until loaded / if Ollama is
+    // down, so the picker keeps its static Ollama option.
+    final localModels =
+        ref.watch(localModelsProvider).maybeWhen(data: (m) => m, orElse: () => const <LocalModel>[]);
     return Container(
       color: brand.bg,
       child: catalog.when(
@@ -165,7 +190,7 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
                 title: 'No providers available',
                 subtitle: 'The engine returned an empty catalog.',
                 onRetry: _retry)
-            : SettingsBody(catalog: c),
+            : SettingsBody(catalog: c, vendorCatalog: vendorCatalog, localModels: localModels),
         loading: () =>
             const _CenterNotice(title: 'Connecting to the engine…', spinner: true),
         error: (e, _) => _CenterNotice(
@@ -184,7 +209,22 @@ class SettingsBody extends ConsumerWidget {
   /// all-default state is render-to-PNG testable. Production never sets it; a configured roster
   /// (non-null agentModels) auto-expands regardless.
   final bool forceExpandDreamTeam;
-  const SettingsBody({super.key, required this.catalog, this.forceExpandDreamTeam = false});
+
+  /// The per-category data-vendor catalog (`GET /catalog/vendors`, P3.1). Null → the Data sources
+  /// section is hidden (catalog not yet loaded / unavailable); the rest of Settings is unaffected.
+  final VendorCatalog? vendorCatalog;
+
+  /// The device's discovered Ollama models (`GET /catalog/local-models`, P3.2). Empty → the Ollama
+  /// picker keeps its static list + custom-id path (discovery not loaded / Ollama down); non-empty →
+  /// real installed models replace the static guesses, each carrying its true tool-capability.
+  final List<LocalModel> localModels;
+  const SettingsBody({
+    super.key,
+    required this.catalog,
+    this.forceExpandDreamTeam = false,
+    this.vendorCatalog,
+    this.localModels = const [],
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -219,6 +259,24 @@ class SettingsBody extends ConsumerWidget {
                     _FieldLabel('Ticker', help: 'Moves to the Hub launcher in a later release.'),
                     const SizedBox(height: 6),
                     _TickerField(value: s.ticker, onChanged: ctrl.setTicker),
+                    const SizedBox(height: 16),
+                    _FieldLabel(
+                      'Asset type',
+                      // Honest: asset_type only frames the agents' prompts (crypto vs equity). It does
+                      // NOT switch data vendors — price still flows through the vendors below (yfinance
+                      // serves crypto via `-USD` tickers; fundamentals won't exist). A dedicated crypto
+                      // data pipeline is a future phase.
+                      help: 'Frames the debate. Crypto (e.g. BTC-USD) still uses the data vendors below.',
+                    ),
+                    const SizedBox(height: 6),
+                    _Dropdown<String>(
+                      value: s.assetType,
+                      items: const [
+                        (label: 'Stock / equity', value: 'stock'),
+                        (label: 'Crypto', value: 'crypto'),
+                      ],
+                      onChanged: (v) => ctrl.setAssetType(v ?? 'stock'),
+                    ),
                     const SizedBox(height: 16),
                     _FieldLabel('Research depth', help: 'Debate rounds — higher is deeper but costs more.'),
                     const SizedBox(height: 6),
@@ -263,7 +321,7 @@ class SettingsBody extends ConsumerWidget {
                       _ModelPicker(
                         label: 'Deep model',
                         help: 'The heavy reasoning model (managers, debate).',
-                        options: catalog.optionsFor(provider, 'deep'),
+                        options: _foldLocalModels(provider, catalog.optionsFor(provider, 'deep'), localModels),
                         value: s.deepModel,
                         customValue: s.customDeepModel,
                         onSelected: ctrl.setDeepModel,
@@ -273,7 +331,7 @@ class SettingsBody extends ConsumerWidget {
                       _ModelPicker(
                         label: 'Quick model',
                         help: 'The fast model (analysts, tool calls).',
-                        options: catalog.optionsFor(provider, 'quick'),
+                        options: _foldLocalModels(provider, catalog.optionsFor(provider, 'quick'), localModels),
                         value: s.quickModel,
                         customValue: s.customQuickModel,
                         onSelected: ctrl.setQuickModel,
@@ -318,8 +376,12 @@ class SettingsBody extends ConsumerWidget {
                 // --- Dream Team (per-role overrides) -------------------------------------------------
                 _DreamTeamRoster(
                   catalog: catalog,
+                  localModels: localModels,
                   initiallyExpanded: forceExpandDreamTeam || s.agentModels != null,
                 ),
+
+                // --- Data sources (per-category vendor picker, P3.1) ---------------------------------
+                if (vendorCatalog != null) _DataSourcesSection(vendorCatalog: vendorCatalog!),
 
                 // --- Benches -------------------------------------------------------------------------
                 _Section(
@@ -809,22 +871,26 @@ class _SquareToggle extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 34,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: selected ? brand.accent : brand.border),
+      child: Focusable(
+        onActivate: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 38,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: selected ? brand.accent : brand.border),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    color: selected ? brand.textHi : brand.textMid,
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
           ),
-          child: Text(label,
-              style: TextStyle(
-                  color: selected ? brand.textHi : brand.textMid,
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
         ),
       ),
     );
@@ -881,27 +947,31 @@ class _Chip extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: selected ? brand.accent : brand.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(selected ? Icons.check : Icons.add,
-                  size: 13, color: selected ? brand.accent : brand.textLo),
-              const SizedBox(width: 5),
-              Text(label,
-                  style: TextStyle(
-                      color: selected ? brand.textHi : brand.textMid,
-                      fontSize: 12.5,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500)),
-            ],
+      child: Focusable(
+        onActivate: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? brand.accent.withValues(alpha: 0.18) : brand.surface2,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: selected ? brand.accent : brand.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? Icons.check : Icons.add,
+                    size: 13, color: selected ? brand.accent : brand.textLo),
+                const SizedBox(width: 5),
+                Text(label,
+                    style: TextStyle(
+                        color: selected ? brand.textHi : brand.textMid,
+                        fontSize: 12.5,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500)),
+              ],
+            ),
           ),
         ),
       ),
@@ -911,8 +981,14 @@ class _Chip extends StatelessWidget {
 
 // --- API-key field (write-only: never reads or displays a stored key) ------------------------------
 class _ApiKeyField extends ConsumerStatefulWidget {
+  /// The vault key this field reads/writes — a provider id (e.g. `anthropic`) or a data-vendor id
+  /// (e.g. `alpha_vantage`, `fred`). Both live in the same OS keystore under their own name.
   final String provider;
-  const _ApiKeyField({required this.provider});
+
+  /// Display name for the paste hint. Defaults to the provider label; data vendors pass their own
+  /// (e.g. 'Alpha Vantage') since they aren't in the provider-label map.
+  final String? label;
+  const _ApiKeyField({required this.provider, this.label});
   @override
   ConsumerState<_ApiKeyField> createState() => _ApiKeyFieldState();
 }
@@ -996,7 +1072,9 @@ class _ApiKeyFieldState extends ConsumerState<_ApiKeyField> {
                 style: TextStyle(color: brand.textHi, fontSize: 13, fontFamily: brand.fontMono),
                 decoration: _inputDecoration(
                   brand,
-                  hint: _stored ? 'Replace stored key…' : 'Paste ${_providerLabel(widget.provider)} key',
+                  hint: _stored
+                      ? 'Replace stored key…'
+                      : 'Paste ${widget.label ?? _providerLabel(widget.provider)} key',
                 ).copyWith(
                   suffixIcon: IconButton(
                     icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
@@ -1015,6 +1093,99 @@ class _ApiKeyFieldState extends ConsumerState<_ApiKeyField> {
             ],
           ],
         ),
+      ],
+    );
+  }
+}
+
+// --- Data sources (per-category vendor picker) -----------------------------------------------------
+
+/// Display names for data vendors (the catalog carries only the vendor `value`). Falls back to the raw
+/// id for any vendor added engine-side but not yet mirrored here.
+const _vendorLabels = <String, String>{
+  'yfinance': 'Yahoo Finance',
+  'alpha_vantage': 'Alpha Vantage',
+  'fred': 'FRED',
+  'polymarket': 'Polymarket',
+};
+String _vendorLabel(String v) => _vendorLabels[v] ?? v;
+
+/// The per-category data-vendor picker (P3.1). Core (non-optional) categories get a vendor dropdown;
+/// a keyed vendor selected there surfaces a required BYO-key field. The two optional categories are
+/// handled honestly: macro (FRED) is a store-a-key-to-enable field that never blocks a launch, and
+/// prediction markets (Polymarket, keyless) is a default-on note.
+class _DataSourcesSection extends ConsumerWidget {
+  final VendorCatalog vendorCatalog;
+  const _DataSourcesSection({required this.vendorCatalog});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final s = ref.watch(settingsControllerProvider);
+    final ctrl = ref.read(settingsControllerProvider.notifier);
+    final selected = s.dataVendors ?? const <String, String>{};
+
+    final core = vendorCatalog.categories.where((c) => !c.optional).toList(growable: false);
+    final macro = vendorCatalog.categoryFor('macro_data');
+    final predictionMarkets = vendorCatalog.categoryFor('prediction_markets');
+
+    // Keyed vendors currently selected in a core category — these are REQUIRED before a real run
+    // (the engine hard-raises when a core category's vendor can't authenticate). Dedup by vendor id.
+    final requiredKeyed = <String>{};
+    for (final c in core) {
+      final chosen = selected[c.key] ?? c.defaultVendor;
+      final opt = c.vendors.where((v) => v.value == chosen);
+      if (opt.isNotEmpty && opt.first.needsKey) requiredKeyed.add(chosen!);
+    }
+
+    return _Section(
+      title: 'Data sources',
+      subtitle: 'Which vendor feeds each category. Defaults are free (Yahoo Finance); a keyed vendor '
+          'needs its own BYO key stored below.',
+      children: [
+        for (final c in core) ...[
+          _FieldLabel(c.label),
+          const SizedBox(height: 6),
+          _Dropdown<String>(
+            value: selected[c.key] ?? c.defaultVendor,
+            items: [for (final v in c.vendors) (label: _vendorLabel(v.value), value: v.value)],
+            // Collapse a pick that equals the engine default back to "no override", keeping the wire
+            // body minimal (only genuine overrides ride along).
+            onChanged: (v) => ctrl.setDataVendor(c.key, v == c.defaultVendor ? null : v),
+          ),
+          const SizedBox(height: 16),
+        ],
+        // Required key(s) for the keyed vendors chosen above.
+        for (final vendor in requiredKeyed) ...[
+          _ApiKeyField(provider: vendor, label: _vendorLabel(vendor)),
+          const SizedBox(height: 16),
+        ],
+        // Optional macro signals (FRED) — store a free key to enable; never blocks a launch.
+        if (macro != null) ...[
+          _FieldLabel(
+            macro.label,
+            help: 'Optional. Store a free FRED key to add macro-economic signals; runs work without it.',
+          ),
+          const SizedBox(height: 6),
+          _ApiKeyField(provider: macroVendor, label: _vendorLabel(macroVendor)),
+          const SizedBox(height: 16),
+        ],
+        // Prediction markets (Polymarket) — keyless and on by default. Lead with the honest keyless
+        // statement; the engine's (verbose) category description trails as parenthetical context.
+        if (predictionMarkets != null)
+          Row(
+            children: [
+              Icon(Icons.insights_outlined, size: 16, color: brand.textLo),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Polymarket signals are on by default — no key needed. '
+                  '(${predictionMarkets.label})',
+                  style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.4),
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -1121,8 +1292,10 @@ class _BenchManagerState extends ConsumerState<_BenchManager> {
 /// pick (shown as a muted chip). Binds [settingsControllerProvider] for the live lineup.
 class _DreamTeamRoster extends ConsumerStatefulWidget {
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final bool initiallyExpanded;
-  const _DreamTeamRoster({required this.catalog, this.initiallyExpanded = false});
+  const _DreamTeamRoster(
+      {required this.catalog, this.localModels = const [], this.initiallyExpanded = false});
   @override
   ConsumerState<_DreamTeamRoster> createState() => _DreamTeamRosterState();
 }
@@ -1157,13 +1330,16 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
             button: true,
             expanded: _expanded,
             label: 'Dream Team, $assigned of 12 roles assigned',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
+            child: Focusable(
+              onActivate: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(8),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1186,6 +1362,7 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                       size: 20, color: brand.textMid),
                 ],
               ),
+              ),
             ),
           ),
           if (_expanded) ...[
@@ -1206,6 +1383,7 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                   const SizedBox(height: 8),
                   _ModelAssignmentPicker(
                     catalog: widget.catalog,
+                    localModels: widget.localModels,
                     initial: null,
                     onChanged: (m) => setState(() => _applyTarget = m),
                     // Apply-to-all can land on the tool roles, so use the strict block gate.
@@ -1239,6 +1417,7 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
                 stageLabel: stageLabel,
                 roleKeys: keys,
                 catalog: widget.catalog,
+                localModels: widget.localModels,
                 models: models,
                 applyTarget: _applyTarget,
                 onAssign: ctrl.setAgentModel,
@@ -1284,6 +1463,7 @@ class _RosterStage extends StatelessWidget {
   final String stageLabel;
   final List<String> roleKeys;
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final Map<String, AgentModel>? models;
   final AgentModel? applyTarget;
   final void Function(String role, AgentModel? model) onAssign;
@@ -1292,6 +1472,7 @@ class _RosterStage extends StatelessWidget {
     required this.stageLabel,
     required this.roleKeys,
     required this.catalog,
+    required this.localModels,
     required this.models,
     required this.applyTarget,
     required this.onAssign,
@@ -1328,6 +1509,7 @@ class _RosterStage extends StatelessWidget {
           _RoleRow(
             roleKey: role,
             catalog: catalog,
+            localModels: localModels,
             current: models?[role],
             onAssign: (m) => onAssign(role, m),
           ),
@@ -1350,10 +1532,14 @@ class _SetStageButton extends StatelessWidget {
         button: true,
         enabled: enabled,
         label: 'Set stage',
-        child: GestureDetector(
-          onTap: enabled ? onTap : null,
-          child: Text('Set stage',
-              style: TextStyle(color: brand.accent, fontSize: 10.5, fontWeight: FontWeight.w700)),
+        child: Focusable(
+          onActivate: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(4),
+          child: GestureDetector(
+            onTap: enabled ? onTap : null,
+            child: Text('Set stage',
+                style: TextStyle(color: brand.accent, fontSize: 10.5, fontWeight: FontWeight.w700)),
+          ),
         ),
       ),
     );
@@ -1366,11 +1552,13 @@ class _SetStageButton extends StatelessWidget {
 class _RoleRow extends StatefulWidget {
   final String roleKey;
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final AgentModel? current;
   final ValueChanged<AgentModel?> onAssign;
   const _RoleRow(
       {required this.roleKey,
       required this.catalog,
+      required this.localModels,
       required this.current,
       required this.onAssign});
   @override
@@ -1397,12 +1585,14 @@ class _RoleRowState extends State<_RoleRow> {
             button: true,
             expanded: _open,
             label: '${dreamTeamRoleLabel(widget.roleKey)} model',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _open = !_open),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
-                child: Row(
+            child: Focusable(
+              onActivate: () => setState(() => _open = !_open),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _open = !_open),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+                  child: Row(
                   children: [
                     Expanded(
                       child: Text(dreamTeamRoleLabel(widget.roleKey),
@@ -1414,12 +1604,14 @@ class _RoleRowState extends State<_RoleRow> {
                         child: _RoleChip(
                             roleKey: widget.roleKey,
                             model: widget.current,
-                            catalog: widget.catalog)),
+                            catalog: widget.catalog,
+                            localModels: widget.localModels)),
                     const SizedBox(width: 6),
                     Icon(_open ? Icons.expand_less : Icons.expand_more,
                         size: 18, color: brand.textLo),
                   ],
                 ),
+              ),
               ),
             ),
           ),
@@ -1428,6 +1620,7 @@ class _RoleRowState extends State<_RoleRow> {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: _ModelAssignmentPicker(
                 catalog: widget.catalog,
+                localModels: widget.localModels,
                 initial: widget.current,
                 onChanged: widget.onAssign,
                 gate: roleGateClass(widget.roleKey),
@@ -1448,14 +1641,20 @@ class _RoleChip extends StatelessWidget {
   final String roleKey;
   final AgentModel? model;
   final Catalog catalog;
-  const _RoleChip({required this.roleKey, required this.model, required this.catalog});
+  final List<LocalModel> localModels;
+  const _RoleChip(
+      {required this.roleKey,
+      required this.model,
+      required this.catalog,
+      this.localModels = const []});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final assigned = _roleAssigned(model);
     final outcome = assigned
-        ? _gateOutcome(roleGateClass(roleKey), _toolCapableOf(catalog, model!.provider, model!.model))
+        ? _gateOutcome(
+            roleGateClass(roleKey), _toolCapableOf(catalog, model!.provider, model!.model, localModels))
         : _GateOutcome.ok;
     final label = assigned
         ? '${_providerLabel(model!.provider)} · ${model!.model}'
@@ -1505,6 +1704,7 @@ class _RoleChip extends StatelessWidget {
 /// the wire (where the engine and the manifest both silently drop it, making the roster lie).
 class _ModelAssignmentPicker extends StatefulWidget {
   final Catalog catalog;
+  final List<LocalModel> localModels;
   final AgentModel? initial;
   final ValueChanged<AgentModel?> onChanged;
 
@@ -1512,7 +1712,11 @@ class _ModelAssignmentPicker extends StatefulWidget {
   /// warn (structured roles), or none. The apply-to-all picker uses the strict [RoleGate.block].
   final RoleGate gate;
   const _ModelAssignmentPicker(
-      {required this.catalog, required this.initial, required this.onChanged, required this.gate});
+      {required this.catalog,
+      this.localModels = const [],
+      required this.initial,
+      required this.onChanged,
+      required this.gate});
   @override
   State<_ModelAssignmentPicker> createState() => _ModelAssignmentPickerState();
 }
@@ -1534,7 +1738,7 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
     _provider = m?.provider;
     final model = m?.model;
     if (_provider != null && model != null && model.isNotEmpty) {
-      final known = _unionModels(widget.catalog, _provider!)
+      final known = _unionModels(widget.catalog, _provider!, widget.localModels)
           .any((o) => o.value == model && o.value != 'custom');
       if (known) {
         _modelSelection = model;
@@ -1587,13 +1791,15 @@ class _ModelAssignmentPickerState extends State<_ModelAssignmentPicker> {
     final provider = _provider;
     // Block gate: a known-non-tool model is disabled (un-pickable) on a tool role; its label gets a
     // "· no tools" tag. Unknown (null) stays enabled — it warns, never blocks.
-    final models = provider == null ? const <ModelOption>[] : _unionModels(widget.catalog, provider);
+    final models =
+        provider == null ? const <ModelOption>[] : _unionModels(widget.catalog, provider, widget.localModels);
     final blocked = <String>{
       if (widget.gate == RoleGate.block)
         for (final o in models)
           if (o.toolCapable == false) o.value,
     };
-    final outcome = _gateOutcome(widget.gate, _toolCapableOf(widget.catalog, provider, _effectiveModel()));
+    final outcome = _gateOutcome(
+        widget.gate, _toolCapableOf(widget.catalog, provider, _effectiveModel(), widget.localModels));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1727,7 +1933,8 @@ class _SmallButton extends StatelessWidget {
       this.enabled = true});
   @override
   Widget build(BuildContext context) {
-    final fg = danger ? brand.down : (filled ? Colors.white : brand.textHi);
+    // P3.4b: a filled button's label uses onAccent (AA-normal 4.97:1) — white was 3.77:1 on the accent fill.
+    final fg = danger ? brand.down : (filled ? brand.onAccent : brand.textHi);
     final bg = filled ? brand.accent : Colors.transparent;
     return Opacity(
       opacity: enabled ? 1 : 0.4,
@@ -1735,19 +1942,23 @@ class _SmallButton extends StatelessWidget {
         button: true,
         enabled: enabled,
         label: label,
-        child: GestureDetector(
-          onTap: enabled ? onTap : null,
-          child: Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: filled ? brand.accent : brand.border),
+        child: Focusable(
+          onActivate: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(8),
+          child: GestureDetector(
+            onTap: enabled ? onTap : null,
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: filled ? brand.accent : brand.border),
+              ),
+              child: Text(label,
+                  style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
             ),
-            child: Text(label,
-                style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ),
       ),

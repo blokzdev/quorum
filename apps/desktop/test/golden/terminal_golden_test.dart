@@ -16,7 +16,8 @@ const _analystReports = {
       'fresh MACD bullish crossover. Key support 118, resistance 135.', null),
   'sentiment_report': ReportSection('sentiment_report',
       'Social sentiment skews bullish (7.4/10). StockTwits mentions +22% w/w and constructive '
-      'Reddit threads on the product cycle.', null),
+      'Reddit threads on the product cycle.',
+      {'overall_band': 'Bullish', 'overall_score': 7.4, 'confidence': 'high'}), // P3.3b chips
   'news_report': ReportSection('news_report',
       'Macro backdrop supportive: soft-landing narrative intact, sector tailwinds from new orders.', null),
   'fundamentals_report': ReportSection('fundamentals_report',
@@ -48,7 +49,8 @@ final _completed = RunViewState(
         'On balance the bull thesis on NVDA is better supported this quarter; lean constructive '
         'with sizing discipline.', null),
     'trader_investment_plan': const ReportSection('trader_investment_plan',
-        'Buy a starter position in NVDA: entry ~124, stop 113, target 152, size 5% of book.', null),
+        'Buy a starter position in NVDA: entry ~124, stop 113, target 152, size 5% of book.',
+        {'action': 'Buy', 'entry_price': 124.0, 'stop_loss': 113.0}), // P3.3b chips
     'aggressive': const ReportSection('aggressive',
         'Press the long on confirmation above 135 — momentum and rising estimates favor continuation.', null),
     'neutral': const ReportSection('neutral',
@@ -96,14 +98,119 @@ final _midRun = RunViewState(
   },
 );
 
+/// P3.3a: a running debate decomposed into ordered turns, with the Research Manager's structured 5-tier
+/// [recommendation] driving the balance bar. [rounds] turns × 2 (bull+bear) prove the decomposition
+/// scales with research_depth.
+RunViewState _debateState({required int rounds, required String recommendation}) => RunViewState(
+      phase: RunPhase.running,
+      ticker: 'NVDA',
+      tradeDate: '2024-05-10',
+      lastSeq: 40,
+      stages: const {Stage.analysts: NodeStatus.done, Stage.researchDebate: NodeStatus.running},
+      agents: const {AgentId.bull: NodeStatus.done, AgentId.bear: NodeStatus.done},
+      debateTurns: [
+        for (var r = 1; r <= rounds; r++) ...[
+          DebateTurnView(r, 'bull',
+              'Round $r bull: the backlog and 71% gross margin compound through the cycle; buyers '
+              'defended the reclaimed 50-day MA on volume.'),
+          DebateTurnView(r, 'bear',
+              'Round $r bear: at ~38x forward there is no margin for error — any data-center '
+              'normalization compresses estimates and the multiple together.'),
+        ],
+      ],
+      reports: {
+        'investment_plan': ReportSection('investment_plan',
+            'On balance the debate resolves $recommendation with sizing discipline.',
+            {'recommendation': recommendation}),
+      },
+    );
+
+final _errored = RunViewState(
+  phase: RunPhase.error,
+  ticker: 'NVDA',
+  tradeDate: '2024-05-10',
+  error: 'Provider request failed: 401 Unauthorized — check the Anthropic key in Settings.',
+);
+
 void main() {
   setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
+
+  testWidgets('terminal — error state shows the failure reason + a Retry CTA', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1320, 820));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var retried = false;
+    await tester.pumpWidget(_wrap(TerminalBody(state: _errored, onRun: () => retried = true)));
+    await tester.pumpAndSettle();
+    expect(find.text('The run stopped'), findsOneWidget);
+    expect(find.textContaining('401 Unauthorized'), findsOneWidget); // the reason, not the idle prompt
+    expect(find.text('Run an analysis to watch the council deliberate.'), findsNothing);
+    expect(find.text('Retry'), findsOneWidget);
+    await expectLater(find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_error.png'));
+    await tester.tap(find.text('Retry'));
+    expect(retried, isTrue); // Retry re-invokes the run
+  });
+
+  testWidgets('terminal — debate turn thread scales with depth (depth-1 vs depth-2)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1320, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // depth-1 → 1 round: exactly 2 turn blocks (bull + bear, round 1), no round 2.
+    await tester.pumpWidget(_wrap(TerminalBody(
+        state: _debateState(rounds: 1, recommendation: 'Overweight'),
+        elapsedOverride: const Duration(seconds: 30))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('· ROUND 1'), findsNWidgets(2)); // bull + bear headers
+    expect(find.textContaining('· ROUND 2'), findsNothing);
+    await expectLater(
+        find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_debate_depth1.png'));
+
+    // depth-2 → 2 rounds: ≥4 distinct turn blocks in speaking order (proves the decomposition is real).
+    await tester.pumpWidget(_wrap(TerminalBody(
+        state: _debateState(rounds: 2, recommendation: 'Overweight'),
+        elapsedOverride: const Duration(seconds: 30))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('· ROUND 1'), findsNWidgets(2));
+    expect(find.textContaining('· ROUND 2'), findsNWidgets(2)); // 4 turn blocks total
+    await expectLater(
+        find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_debate_depth2.png'));
+  });
+
+  test('structured recommendation drives the balance lean — Buy vs Sell flip it (P3.3a)', () {
+    // Two plans differing ONLY in the structured recommendation flip the lean across the 0.5 midpoint.
+    ReportSection plan(String rec) => ReportSection('investment_plan', 'resolves $rec', {'recommendation': rec});
+    expect(debateLean(plan('Buy')), greaterThan(0.5), reason: 'Buy leans bull');
+    expect(debateLean(plan('Sell')), lessThan(0.5), reason: 'Sell leans bear');
+    expect(debateLean(plan('Overweight')), greaterThan(0.5));
+    expect(debateLean(plan('Underweight')), lessThan(0.5));
+    expect(debateLean(plan('Hold')), 0.5);
+    // No structured recommendation → falls back to keyword-scoring on the prose (unchanged legacy path).
+    expect(debateLean(const ReportSection('investment_plan', 'lean constructive, accumulate', null)),
+        greaterThan(0.5));
+    expect(debateLean(null), 0.5);
+  });
 
   testWidgets('terminal — completed verdict', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1320, 820));
     await tester.pumpWidget(_wrap(TerminalBody(state: _completed)));
     await tester.pumpAndSettle();
+    // P3.3b trader chips render on the (visible) trade-plan card.
+    expect(find.text('Buy'), findsWidgets); // trader action chip (verdict rail is uppercase 'BUY')
+    expect(find.text('Entry 124'), findsOneWidget);
+    expect(find.text('Stop 113'), findsOneWidget);
     await expectLater(find.byType(TerminalBody), matchesGoldenFile('goldens/terminal_completed.png'));
+  });
+
+  testWidgets('terminal — P3.3b sentiment chips + risk-judge ribbon render (below the golden fold)',
+      (tester) async {
+    // A tall surface builds the whole ListView so the lower sections' chips/ribbon are in the tree.
+    await tester.binding.setSurfaceSize(const Size(1320, 1700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(TerminalBody(state: _completed)));
+    await tester.pumpAndSettle();
+    expect(find.text('Bullish'), findsOneWidget); // sentiment band chip
+    expect(find.text('7.4/10'), findsOneWidget); // sentiment score chip
+    expect(find.text('High confidence'), findsOneWidget); // sentiment confidence chip
+    expect(find.text('RISK VERDICT'), findsOneWidget); // the risk debate's own conclusion ribbon
   });
 
   testWidgets('terminal — mid-run streaming', (tester) async {

@@ -45,27 +45,56 @@ the original `P#` IDs from the first roadmap draft, for continuity.
 - **Phase 2** ✅ *(complete, merged to `main` 2026-07-05)* — Hub & navigation, Settings/Model Studio,
   the **Dream Team** per-agent roster + capability/key gates, applied brand, a validated debug-signed
   Windows installer, and a Flutter CI gate. Detail: [phase-2-plan.md](phase-2-plan.md).
-- **Phase 3 — V1 Release & Hardening** *(next; ≈ old P6)* — security sweep, secret/key rotation
-  (incl. the shared Gemini test key), production keystore code-signing, release CI (+ end-to-end
-  `packaging.yml` verification, a clean-VM install smoke, a per-provider freeze regression test), GA.
-  May coordinate with the macOS port for a multi-platform signed launch.
+- **Phase 3 — Depth & Refinement** ✅ *(implementation complete on `phase-3` 2026-07-05; `phase-3 → main` founder-gated)* — surfaced the untapped TradingAgents
+  engine + deepen the product: **P3.1** BYO-key data-vendor selection + asset-type toggle, **P3.2**
+  local/edge model discovery (Ollama `/api/tags`) + a live capability gate, **P3.3** debate-terminal depth
+  (turn-structured debate + risk synthesis — bet #2), **P3.4** UI/UX + a11y (keyboard, AA contrast, error
+  surface), **P3.5** historical as-of analysis + the look-ahead clamp. Open-core line locked:
+  **BYO-key raw = free, hosted-curated = paid** ([ADR 0006](decisions/0006-open-core-signal-boundary.md)).
+  Detail: [phase-3-plan.md](phase-3-plan.md).
+- **Phase 4 — V1 Release & Hardening** *(≈ old P6)* — security sweep, secret/key rotation (incl. the
+  shared Gemini test key), production keystore code-signing, release CI (+ end-to-end `packaging.yml`
+  verification, a clean-VM install smoke, a per-provider freeze regression test), GA. May coordinate with
+  the macOS port for a multi-platform signed launch.
 
 > **Business model:** open-core (local client free + open; paid value server-side) —
-> [monetization.md](monetization.md), [ADR 0003](decisions/0003-open-source-and-open-core-monetization.md).
+> [monetization.md](monetization.md), [ADR 0003](decisions/0003-open-source-and-open-core-monetization.md),
+> and the raw-vs-curated boundary in [ADR 0006](decisions/0006-open-core-signal-boundary.md).
 
 ### Band C — Post-V1 platform *(the maximality)*
 - **Track Record & intelligence** *(P7)* — decision log + reflection/memory surfaced; realized alpha;
-  cost/usage analytics. (Signature bet #1; P2.4 seeds the data.)
-- **Macro + prediction-market signal layer** — structured FRED + Polymarket signals in the terminal /
-  Hub. (Part of signature bet #3.)
-- **Backtesting & historical replay** *(P8)* — run/replay analysis on past dates; performance
-  attribution.
+  cost/usage analytics. (Signature bet #1; P2.4 seeds the manifest, **P3.1 seeds vendor provenance** —
+  record which data source served each category so the scorecard can attribute a verdict to its inputs
+  [drained from `docs/backlog.md`].)
+- **Hosted signal layer** — the **curated/aggregated/synced** FRED + Polymarket signal intelligence
+  (no-key hosted, cross-run history) — the **paid** half of signature bet #3, per
+  [ADR 0006](decisions/0006-open-core-signal-boundary.md). (The *raw BYO-key* half ships free in Phase 3.)
+- **Real crypto pipeline** — crypto-specific data vendors / tools / routing (not just the Phase-3 prompt
+  relabel): a genuine crypto data path so a crypto ticker gets crypto-native analysis. A **dedicated future
+  phase** (surfaced by the P3 planning fan-out; today `asset_type` only relabels agent prompts).
+- **Backtesting & historical replay** *(P8)* — timeline scrub + performance attribution (Phase 3 ships
+  as-of-date analysis + the look-ahead clamp; this is the full replay/attribution layer on top).
 - **Automation & alerts** *(P9)* — scheduled runs; verdict-change & price alerts; notifications.
 - **Paper trading & portfolio** *(P10)* — simulated P&L; the bridge toward real trading.
 - **Real brokerage execution** *(P11)* — Alpaca/SnapTrade + the compliance work. **Far future,
   compliance-gated**; keeps the "not financial advice / no early real-money" posture intact.
 - **Advanced AI & extensibility** *(P12)* — custom agents/prompts, add analysts, MCP tools/data
   sources, ensemble debate.
+- **Edge Model Draft Board** *(post-V1; extends Model Studio + Dream Team — signature bet #2)* — a
+  **curated** in-app shortlist of *tool-capable, trading-relevant* local/edge models (Qwen, Gemma,
+  Llama, …): one-click `ollama pull` with streamed `completed/total` progress, a **three-tier
+  device-fit badge** (Fits / Will-be-slow / Won't-fit) from detected RAM + GGUF sizing, and the P3.2
+  **post-pull capability gate** so every listed model is guaranteed tool-capable before it reaches an
+  agent. **Hard scope wall: a curated *draft board*, NOT a generic HuggingFace/Ollama model browser** —
+  the tool-calling requirement (analyst roles need it) forces curation, and Ollama exposes no
+  machine-readable library or pre-install-capability API, so an exhaustive live catalog is out (that's
+  LM Studio / Jan / Msty table-stakes, not our wedge). The differentiator no incumbent has:
+  **roster-aware fit** — *"can this machine run my whole Dream Team?"* — with KV-cache-honest sizing at
+  the configured context length. **Defensibility north star (beyond onboarding polish):** rank edge
+  models by their **realized Track Record** on the trading task (needs P7) — a "which local models
+  actually made good calls" list only Quorum can produce. *(Provenance: the P3.2 local-model discovery
+  fan-out + a 2026-07-05 research pass live-probed against Ollama 0.30.11; productionizes the P3.2
+  backlog seed "in-app `ollama pull`; LM Studio/vLLM discovery".)*
 - **macOS release** *(P13)* · **Mobile remote** *(P14, Android→iOS over LAN/WAN, same SSE API)* ·
   **Auto-update & distribution maturity** *(P15)*.
 

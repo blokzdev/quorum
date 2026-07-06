@@ -317,6 +317,162 @@ void main() {
     });
   });
 
+  group('data sources (P3.1 vendors + asset type)', () {
+    test('setDataVendor stores an override; null/empty removes it; last removal collapses to null', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setDataVendor('core_stock_apis', 'alpha_vantage');
+      ctrl.setDataVendor('news_data', 'alpha_vantage');
+      expect(c.read(settingsControllerProvider).dataVendors,
+          {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'});
+      ctrl.setDataVendor('news_data', null); // remove one
+      expect(c.read(settingsControllerProvider).dataVendors, {'core_stock_apis': 'alpha_vantage'});
+      ctrl.setDataVendor('core_stock_apis', ''); // empty also removes; map now empty -> null
+      expect(c.read(settingsControllerProvider).dataVendors, isNull);
+    });
+
+    test('setAssetType flips the framing; default is stock', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      expect(c.read(settingsControllerProvider).assetType, 'stock');
+      ctrl.setAssetType('crypto');
+      expect(c.read(settingsControllerProvider).assetType, 'crypto');
+    });
+
+    test('referencedVendorKeys always includes macro (fred); requiredVendorKeys never does', () {
+      // The gate asymmetry: fred is MERGED whenever stored (enables macro) but never BLOCKS a launch.
+      expect(referencedVendorKeys(null), {'fred'});
+      expect(referencedVendorKeys({'core_stock_apis': 'alpha_vantage'}), {'fred', 'alpha_vantage'});
+      expect(referencedVendorKeys({'news_data': 'yfinance'}), {'fred'}); // keyless vendor omitted
+
+      expect(requiredVendorKeys(null), isEmpty);
+      expect(requiredVendorKeys({'core_stock_apis': 'alpha_vantage'}), {'alpha_vantage'});
+      // Even if fred somehow lands in dataVendors (stale bench), it is NOT required.
+      expect(requiredVendorKeys({'macro_data': 'fred'}), isEmpty);
+    });
+
+    test('SettingsState + Bench round-trip dataVendors; assetType round-trips on state', () {
+      const s = SettingsState(
+        assetType: 'crypto',
+        dataVendors: {'core_stock_apis': 'alpha_vantage', 'fundamental_data': 'alpha_vantage'},
+      );
+      final back = SettingsState.fromJson(s.toJson());
+      expect(back.assetType, 'crypto');
+      expect(back.dataVendors, {'core_stock_apis': 'alpha_vantage', 'fundamental_data': 'alpha_vantage'});
+      // Bench carries the vendor preset (but not assetType — that's per-run framing, like ticker).
+      final bench = s.toBench('AV');
+      expect(Bench.fromJson(bench.toJson()).dataVendors,
+          {'core_stock_apis': 'alpha_vantage', 'fundamental_data': 'alpha_vantage'});
+    });
+
+    test('applyBench restores a vendor preset; a bench with no vendors CLEARS the current one', () {
+      final c = _container(const SettingsState(dataVendors: {'core_stock_apis': 'alpha_vantage'}));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.applyBench(const Bench(name: 'plain', provider: 'openai')); // no vendors -> clears
+      expect(c.read(settingsControllerProvider).dataVendors, isNull);
+      ctrl.applyBench(const Bench(name: 'AV', provider: 'openai', dataVendors: {'news_data': 'alpha_vantage'}));
+      expect(c.read(settingsControllerProvider).dataVendors, {'news_data': 'alpha_vantage'});
+    });
+
+    test('buildLaunchConfig merges vendor keys (core + macro), passes dataVendors + assetType', () async {
+      final c = _container(const SettingsState(
+        demoMode: false,
+        provider: 'ollama', // keyless LLM so only vendor keys show up in api_keys
+        deepModel: 'custom',
+        customDeepModel: 'llama3.2:latest',
+        assetType: 'crypto',
+        dataVendors: {'core_stock_apis': 'alpha_vantage'},
+      ));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      await ctrl.saveKey('alpha_vantage', 'av-key'); // core vendor (required)
+      await ctrl.saveKey('fred', 'fred-key'); // macro vendor (enables macro; always merged)
+      final cfg = await ctrl.buildLaunchConfig();
+      expect(cfg.mode, 'pro');
+      expect(cfg.assetType, 'crypto');
+      expect(cfg.dataVendors, {'core_stock_apis': 'alpha_vantage'});
+      expect(cfg.apiKeys, {'alpha_vantage': 'av-key', 'fred': 'fred-key'});
+    });
+
+    test('buildLaunchConfig omits an unstored vendor key; macro key merged only when stored', () async {
+      final c = _container(const SettingsState(
+        demoMode: false,
+        provider: 'ollama',
+        deepModel: 'custom',
+        customDeepModel: 'llama3.2:latest',
+        dataVendors: {'core_stock_apis': 'alpha_vantage'},
+      ));
+      // No keys stored at all.
+      final cfg = await c.read(settingsControllerProvider.notifier).buildLaunchConfig();
+      expect(cfg.apiKeys, isNull); // alpha_vantage + fred both unstored -> nothing merged
+      expect(cfg.assetType, 'stock'); // default still sent
+      expect(cfg.dataVendors, {'core_stock_apis': 'alpha_vantage'});
+    });
+
+    test('missingKeysProvider gates a keyed core vendor but never the macro vendor; empty in demo', () async {
+      final c = _container(const SettingsState(
+        demoMode: false,
+        provider: 'ollama', // keyless LLM -> isolates vendor gating
+        dataVendors: {'core_stock_apis': 'alpha_vantage'},
+      ));
+      // fred stored (macro), alpha_vantage NOT stored.
+      await c.read(settingsControllerProvider.notifier).saveKey('fred', 'fred-key');
+      final missing = await c.read(missingKeysProvider.future);
+      expect(missing, ['alpha_vantage']); // core keyed vendor gated; fred never gated
+    });
+
+    test('missingKeysProvider is empty in demo mode even with a keyed vendor selected', () async {
+      final c = _container(const SettingsState(
+        demoMode: true,
+        dataVendors: {'core_stock_apis': 'alpha_vantage'},
+      ));
+      expect(await c.read(missingKeysProvider.future), isEmpty);
+    });
+  });
+
+  group('as-of date (P3.5)', () {
+    test('setTradeDate sets a past date; empty/null clears back to a live (today) run', () {
+      final c = _container(const SettingsState());
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      expect(c.read(settingsControllerProvider).tradeDate, isNull); // default = live
+      ctrl.setTradeDate('2024-05-10');
+      expect(c.read(settingsControllerProvider).tradeDate, '2024-05-10');
+      ctrl.setTradeDate(null);
+      expect(c.read(settingsControllerProvider).tradeDate, isNull);
+      ctrl.setTradeDate('2024-05-10');
+      ctrl.setTradeDate(''); // empty also clears
+      expect(c.read(settingsControllerProvider).tradeDate, isNull);
+    });
+
+    test('buildLaunchConfig passes a set tradeDate; omits it (sidecar defaults to today) when null',
+        () async {
+      final c = _container(const SettingsState(
+        demoMode: false, provider: 'ollama', deepModel: 'custom', customDeepModel: 'llama3.2:latest',
+        tradeDate: '2024-05-10'));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      expect((await ctrl.buildLaunchConfig()).tradeDate, '2024-05-10');
+      ctrl.setTradeDate(null);
+      final live = await ctrl.buildLaunchConfig();
+      expect(live.tradeDate, isNull);
+      expect(live.toJson().containsKey('trade_date'), isFalse); // omitted -> engine defaults to today
+    });
+
+    test('tradeDate is TRANSIENT — never persisted to settings.json (no stale as-of on restart)', () {
+      const s = SettingsState(tradeDate: '2024-05-10', ticker: 'TSLA');
+      expect(s.toJson().containsKey('trade_date'), isFalse); // not written
+      // A settings.json that somehow carried it is ignored on load; a fresh session is always live.
+      expect(SettingsState.fromJson(s.toJson()).tradeDate, isNull);
+    });
+
+    test('explicit setters preserve tradeDate (provider switch / vendor change keep the as-of date)', () {
+      final c = _container(const SettingsState(tradeDate: '2024-05-10', provider: 'google'));
+      final ctrl = c.read(settingsControllerProvider.notifier);
+      ctrl.setProvider('openai');
+      expect(c.read(settingsControllerProvider).tradeDate, '2024-05-10');
+      ctrl.setDataVendor('core_stock_apis', 'alpha_vantage');
+      expect(c.read(settingsControllerProvider).tradeDate, '2024-05-10');
+    });
+  });
+
   group('watchlist', () {
     test('toggleWatch adds (uppercased) then toggles off; removeWatch deletes', () {
       final c = _container(const SettingsState());

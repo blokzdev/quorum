@@ -116,5 +116,119 @@ void main() {
       expect(back.backendUrl, 'https://x');
       expect(back.apiKeys, {'google': 'k'});
     });
+
+    test('data_vendors round-trips (P3.1); empty map is omitted', () {
+      const cfg = RunConfig(
+        mode: 'pro',
+        ticker: 'AAPL',
+        dataVendors: {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'},
+      );
+      final json = cfg.toJson();
+      expect(json['data_vendors'], {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'});
+      expect(RunConfig.fromJson(json).dataVendors,
+          {'core_stock_apis': 'alpha_vantage', 'news_data': 'alpha_vantage'});
+      // Empty/absent → omitted from the wire (keeps the body clean; engine uses defaults).
+      expect(const RunConfig(mode: 'pro').toJson().containsKey('data_vendors'), isFalse);
+      expect(const RunConfig(mode: 'pro', dataVendors: {}).toJson().containsKey('data_vendors'), isFalse);
+    });
+  });
+
+  group('VendorCatalog.fromJson (P3.1 /catalog/vendors)', () {
+    test('parses categories, optional flag, default, and per-vendor key needs', () {
+      final vc = VendorCatalog.fromJson({
+        'contract_version': 1,
+        'categories': [
+          {
+            'key': 'core_stock_apis',
+            'label': 'OHLCV stock price data',
+            'optional': false,
+            'default': 'yfinance',
+            'vendors': [
+              {'value': 'yfinance', 'needs_key': false, 'key_env': null},
+              {'value': 'alpha_vantage', 'needs_key': true, 'key_env': 'ALPHA_VANTAGE_API_KEY'},
+            ],
+          },
+          {'key': 'macro_data', 'label': 'Macro', 'optional': true, 'default': 'fred', 'vendors': []},
+        ],
+      });
+      final core = vc.categoryFor('core_stock_apis')!;
+      expect(core.optional, isFalse);
+      expect(core.defaultVendor, 'yfinance');
+      final av = core.vendors.firstWhere((v) => v.value == 'alpha_vantage');
+      expect(av.needsKey, isTrue);
+      expect(av.keyEnv, 'ALPHA_VANTAGE_API_KEY');
+      expect(vc.categoryFor('macro_data')!.optional, isTrue);
+      expect(vc.categoryFor('nope'), isNull);
+    });
+  });
+
+  group('LocalModel.fromJson (P3.2 /catalog/local-models)', () {
+    test('parses name/tool_capable/size/family; missing tool_capable → null (unknown)', () {
+      final models = LocalModel.listFromJson({
+        'contract_version': 1,
+        'local_models': [
+          {'name': 'llama3.2:latest', 'tool_capable': true, 'size': 2019393189, 'family': 'llama'},
+          {'name': 'dolphin-llama3:latest', 'tool_capable': false, 'size': 4, 'family': 'llama'},
+          {'name': 'mystery:latest', 'size': 1}, // no tool_capable → null (unknown), NOT false
+        ],
+      });
+      expect(models.map((m) => m.name),
+          ['llama3.2:latest', 'dolphin-llama3:latest', 'mystery:latest']);
+      expect(models[0].toolCapable, isTrue);
+      expect(models[1].toolCapable, isFalse);
+      expect(models[2].toolCapable, isNull); // absent field = unknown → the gate WARNS, never blocks
+      expect(models[0].size, 2019393189);
+      expect(models[0].family, 'llama');
+    });
+
+    test('toOption() carries name + toolCapable so the gate treats it like a catalog option', () {
+      const lm = LocalModel('llama3.2:latest', toolCapable: true, family: 'llama');
+      final opt = lm.toOption();
+      expect(opt.value, 'llama3.2:latest');
+      expect(opt.label, 'llama3.2:latest');
+      expect(opt.toolCapable, isTrue);
+    });
+
+    test('empty / absent local_models → empty list (clean fallback)', () {
+      expect(LocalModel.listFromJson({'local_models': []}), isEmpty);
+      expect(LocalModel.listFromJson({}), isEmpty);
+    });
+  });
+
+  group('toolCapabilityOf (P3.2 — shared picker-gate + launch-backstop lookup)', () {
+    final catalog = Catalog(contractVersion: 1, providers: {
+      'ollama': const ProviderCatalog('ollama', {
+        'quick': [ModelOption('Qwen3', 'qwen3:latest')], // a static catalog id, no tool_capable
+        'deep': [ModelOption('Qwen3', 'qwen3:latest')],
+      }),
+      'anthropic': const ProviderCatalog('anthropic', {
+        'quick': [ModelOption('Sonnet', 'claude-sonnet-4-6', toolCapable: true)],
+        'deep': [ModelOption('Opus', 'claude-opus-4-8', toolCapable: true)],
+      }),
+    });
+    const discovered = [
+      LocalModel('llama3.2:latest', toolCapable: true),
+      LocalModel('dolphin-llama3:latest', toolCapable: false),
+    ];
+
+    test('ollama reads the DISCOVERED model capability first', () {
+      expect(toolCapabilityOf(catalog, 'ollama', 'llama3.2:latest', discovered), isTrue);
+      expect(toolCapabilityOf(catalog, 'ollama', 'dolphin-llama3:latest', discovered), isFalse);
+    });
+
+    test('a non-discovered ollama id (custom/undiscovered) → null (unknown → warn, never block)', () {
+      expect(toolCapabilityOf(catalog, 'ollama', 'some-custom:latest', discovered), isNull);
+      expect(toolCapabilityOf(catalog, 'ollama', 'llama3.2:latest', const []), isNull); // no discovery
+    });
+
+    test('non-ollama providers read the catalog option flag', () {
+      expect(toolCapabilityOf(catalog, 'anthropic', 'claude-opus-4-8', discovered), isTrue);
+      expect(toolCapabilityOf(catalog, 'anthropic', 'nope', discovered), isNull);
+    });
+
+    test('null/blank provider or model → null', () {
+      expect(toolCapabilityOf(catalog, null, 'x', discovered), isNull);
+      expect(toolCapabilityOf(catalog, 'ollama', '  ', discovered), isNull);
+    });
   });
 }

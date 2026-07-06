@@ -5,6 +5,7 @@ import 'package:quorum_core/quorum_core.dart';
 
 import '../dream_team_roster.dart';
 import '../state/app_surface.dart';
+import '../state/capability_gate.dart';
 import '../state/hub_provider.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
@@ -173,6 +174,23 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
     super.dispose();
   }
 
+  /// Open the as-of date picker (bounded firstDate..today, so a future date can never be chosen — that
+  /// would make FRED leak forward data). Picking today = a live run → clear to null.
+  Future<void> _pickDate(BuildContext context, String? current) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _parseIsoDate(current) ?? today,
+      firstDate: DateTime(2015),
+      lastDate: today,
+      helpText: 'As-of date (historical run)',
+    );
+    if (picked == null || !context.mounted) return;
+    final ctrl = ref.read(settingsControllerProvider.notifier);
+    ctrl.setTradeDate(_isSameDay(picked, today) ? null : _fmtIsoDate(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
     // Keep the field in sync when the ticker is set elsewhere (a watchlist/history re-run), without
@@ -189,7 +207,16 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
     final missingAsync = ref.watch(missingKeysProvider);
     final missing = missingAsync.value ?? const <String>[];
     final missingKeys = !s.demoMode && missing.isNotEmpty;
-    final gated = needsProvider || (!s.demoMode && (missingAsync.isLoading || missing.isNotEmpty));
+    // P3.2b capability backstop: tool-analyst roles whose EFFECTIVE model is known-non-tool (a discovered
+    // local model with no tools, or a bench/global combo the picker never gated) — such a run silently
+    // produces empty analyst reports, so refuse it before POST /runs.
+    final capViolations = !s.demoMode
+        ? (ref.watch(capabilityGateProvider).value ?? const <String>[])
+        : const <String>[];
+    final capBlocked = capViolations.isNotEmpty;
+    final gated = needsProvider ||
+        (!s.demoMode && (missingAsync.isLoading || missing.isNotEmpty)) ||
+        capBlocked;
     final config = s.demoMode
         ? 'Demo mode · cost-free synthetic run'
         : [
@@ -223,6 +250,8 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
                 ),
               ),
               const SizedBox(width: 14),
+              _AsOfChip(tradeDate: s.tradeDate, onPick: () => _pickDate(context, s.tradeDate)),
+              const SizedBox(width: 14),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -236,12 +265,32 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
               FilledButton.icon(
                 onPressed: (running || gated) ? null : () => widget.onRun(),
                 style: FilledButton.styleFrom(
-                    backgroundColor: QC.accent, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
+                    backgroundColor: QC.accent,
+                    foregroundColor: QC.onAccent, // P3.4b: AA-normal label contrast (was white 3.77:1)
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
                 icon: const Icon(Icons.play_arrow, size: 18),
                 label: Text(running ? 'Running…' : 'Run analysis'),
               ),
             ],
           ),
+          // P3.5: a past as-of run is historical — warn that live-only sources (Polymarket) can't be
+          // time-travelled, so their signals reflect now, not the as-of date. (FRED honours the date.)
+          if (s.tradeDate != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.history_toggle_off, size: 15, color: QC.textLo),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Historical as-of run. Prediction-market (Polymarket) signals always reflect live '
+                    'markets, not ${s.tradeDate}.',
+                    style: const TextStyle(color: QC.textLo, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (missingKeys) ...[
             const SizedBox(height: 10),
             Row(
@@ -264,7 +313,65 @@ class _LaunchCardState extends ConsumerState<_LaunchCard> {
               ],
             ),
           ],
+          if (capBlocked) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.build_circle_outlined, size: 15, color: QC.warning),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: "No tool support: ${capViolations.join(', ')}. ",
+                          style: const TextStyle(
+                              color: QC.warning, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const TextSpan(
+                          text: 'Pick a tool-capable model for these roles in Settings to launch.',
+                          style: TextStyle(color: QC.textLo, fontSize: 12)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+// --- As-of date chip -------------------------------------------------------------------------------
+DateTime? _parseIsoDate(String? s) {
+  if (s == null) return null;
+  final d = DateTime.tryParse(s);
+  return d == null ? null : DateTime(d.year, d.month, d.day);
+}
+
+String _fmtIsoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// The launch-card date control. "Today" (a live run) when no as-of is set; a warning-tinted
+/// "As-of DATE" when a historical date is chosen, so the run's nature is unmistakable before launch.
+class _AsOfChip extends StatelessWidget {
+  final String? tradeDate;
+  final VoidCallback onPick;
+  const _AsOfChip({required this.tradeDate, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final historical = tradeDate != null;
+    final color = historical ? QC.warning : QC.textMid;
+    return OutlinedButton.icon(
+      onPressed: onPick,
+      icon: Icon(historical ? Icons.history : Icons.today_outlined, size: 15, color: color),
+      label: Text(historical ? 'As-of $tradeDate' : 'Today',
+          style: TextStyle(color: color, fontSize: 12.5)),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: historical ? QC.warning : QC.border),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
       ),
     );
   }

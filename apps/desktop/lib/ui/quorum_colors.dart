@@ -17,6 +17,9 @@ class QC {
   // Lifted from #5B6473 (~2.4:1, failed WCAG) to a readable-but-recessive grey for structural labels.
   static const textLo = Color(0xFF7C8694);
   static const accent = Color(0xFF3D7DFF);
+  // On-accent label ink (P3.4b). White-on-accent was 3.77:1 (WCAG AA-normal fail); this near-black reads
+  // 4.97:1 on the accent fill — used for filled-accent button labels (e.g. "Run analysis").
+  static const onAccent = Color(0xFF0B1220);
   static const up = Color(0xFF26C281);
   static const down = Color(0xFFFF5C5C);
   static const warning = Color(0xFFFFB02E);

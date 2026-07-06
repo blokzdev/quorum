@@ -115,6 +115,20 @@ def plan_run(req: dict[str, Any]) -> dict[str, Any]:
         if req.get(knob):
             config[knob] = req[knob]
 
+    # P3.1: per-category data-vendor overrides. Build a FRESH dict — `config = dict(DEFAULT_CONFIG)` is a
+    # SHALLOW copy, so `config["data_vendors"]` IS the module-global dict; an in-place mutation would leak
+    # a vendor choice into every subsequent run in this sidecar process. Unspecified/blank categories keep
+    # the engine default.
+    vendor_override = {k: v for k, v in (req.get("data_vendors") or {}).items() if v}
+    if vendor_override:
+        config["data_vendors"] = {**config["data_vendors"], **vendor_override}
+
+    # P3.5b look-ahead guard: record the run's as-of date on the config so the raw OHLCV tool
+    # (get_stock_data) can clamp end_date to it engine-side — the deterministic indicator path already
+    # clamps via load_ohlcv, but the raw tool trusted the LLM's freely-chosen end_date. Set for every run
+    # (a live run's as_of == today makes the clamp a no-op); read back inside JobIsolationContext.
+    config["as_of_date"] = trade_date
+
     # "Dream Team" (P2.5): per-role model overrides the graph resolves per role. When present, also
     # record the RESOLVED per-role map (effective provider/model after quick/deep fallback) as run
     # provenance for the manifest. Absent on a plain quick/deep run → no provenance recorded.

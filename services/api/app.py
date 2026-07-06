@@ -53,6 +53,9 @@ class RunRequest(BaseModel):
     # effort?}}). Inner type stays permissive so a forward-compat field never 422s the request; the
     # engine reads keys defensively. Unset -> the shared quick/deep split runs every role.
     agent_models: dict[str, dict[str, Any]] | None = None
+    # P3.1: per-category data-vendor selection ({category: vendor}), partial — unspecified categories
+    # keep the engine default. Permissive (like agent_models) so a forward-compat category never 422s.
+    data_vendors: dict[str, str] | None = None
     # BYO provider/vendor keys for this run ({provider: key}); never persisted server-side.
     api_keys: dict[str, str] | None = None
     # demo mode only: per-step delay in seconds (0 = instant, for tests).
@@ -96,6 +99,97 @@ async def catalog():
         "providers": providers,
         "analysts": ["market", "social", "news", "fundamentals"],
     }
+
+
+@app.get("/catalog/vendors")
+async def catalog_vendors():
+    # P3.1: the per-category data-vendor catalog for Model Studio's "Data sources" picker. Derived
+    # ENTIRELY from engine constants + the single-source vendor->key map, so `needs_key`/`key_env` can
+    # never drift from what build_api_keys_dict actually injects. Lazy-imported: the vendor taxonomy lives
+    # in the heavy dataflows package — keep it off the app-boot/demo path (ADR 0002).
+    from tradingagents.dataflows.interface import (
+        OPTIONAL_CATEGORIES,
+        TOOLS_CATEGORIES,
+        VENDOR_METHODS,
+    )
+    from tradingagents.default_config import DEFAULT_CONFIG
+    from tradingagents.runtime.isolation import VENDOR_API_KEY_ENV
+
+    defaults = DEFAULT_CONFIG.get("data_vendors", {})
+    categories = []
+    for cat, info in TOOLS_CATEGORIES.items():
+        vendors = sorted({v for tool in info["tools"] for v in VENDOR_METHODS.get(tool, {})})
+        categories.append({
+            "key": cat,
+            "label": info.get("description", cat),
+            "optional": cat in OPTIONAL_CATEGORIES,
+            "default": defaults.get(cat),
+            "vendors": [
+                {"value": v, "needs_key": v in VENDOR_API_KEY_ENV, "key_env": VENDOR_API_KEY_ENV.get(v)}
+                for v in vendors
+            ],
+        })
+    return {"contract_version": CONTRACT_VERSION, "categories": categories}
+
+
+def _resolve_ollama_native_base() -> str:
+    """The Ollama HOST root for the native REST API (/api/tags). The engine's Ollama base is the
+    OpenAI-compat endpoint (``…/v1``, overridable via ``OLLAMA_BASE_URL``); the native API lives at the
+    host root, so strip a trailing ``/v1``."""
+    base = (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1").rstrip("/")
+    if base.endswith("/v1"):
+        base = base[: -len("/v1")]
+    return base
+
+
+def _parse_ollama_models(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Map Ollama ``/api/tags`` JSON → the picker's ``{name, tool_capable, size, family}`` rows.
+
+    ``tool_capable`` is ``"tools" in capabilities`` — but a MISSING ``capabilities`` field (older Ollama)
+    yields ``None`` (UNKNOWN), which the desktop gate WARNS on and never blocks, so a stale-Ollama user is
+    never falsely locked out. Sorted (tool-capable first, then name) so the useful models surface on top.
+    """
+    out: list[dict[str, Any]] = []
+    for m in data.get("models", []) or []:
+        name = m.get("name") or m.get("model")
+        if not name:
+            continue
+        caps = m.get("capabilities")
+        tool_capable = ("tools" in caps) if isinstance(caps, list) else None
+        details = m.get("details") or {}
+        out.append({
+            "name": name,
+            "tool_capable": tool_capable,
+            "size": m.get("size"),
+            "family": details.get("family"),
+        })
+    # tool-capable (True) first, unknown (None) last, then alphabetical — a stable, useful ordering.
+    out.sort(key=lambda r: (r["tool_capable"] is not True, r["tool_capable"] is None, r["name"]))
+    return out
+
+
+async def _fetch_ollama_tags(base_url: str) -> dict[str, Any]:
+    # httpx is already an [api] dep + bundled (PyInstaller hiddenimports); import lazily to keep it off
+    # the demo path (ADR 0002). Short timeout so a slow/absent Ollama never hangs the picker.
+    import httpx
+
+    async with httpx.AsyncClient(timeout=2.5) as client:
+        resp = await client.get(f"{base_url}/api/tags")
+        resp.raise_for_status()
+        return resp.json()
+
+
+@app.get("/catalog/local-models")
+async def catalog_local_models():
+    """P3.2a: the DEVICE's installed Ollama models + per-model tool-capability, so the picker surfaces
+    real local models (Gemma/Qwen/GLM/…) instead of a hand-typed id. Bearer-gated. Degrades to an empty
+    list when Ollama is unreachable/slow — the desktop then keeps its static Ollama option."""
+    try:
+        data = await _fetch_ollama_tags(_resolve_ollama_native_base())
+        models = _parse_ollama_models(data)
+    except Exception:
+        models = []  # Ollama down / slow / malformed → empty; the desktop falls back cleanly.
+    return {"contract_version": CONTRACT_VERSION, "local_models": models}
 
 
 @app.get("/env-keys")

@@ -5,17 +5,22 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 2 complete** (merged to `main` 2026-07-05; Phase 1 vertical slice + de-fork 2026-06-26).
-> Phase 2 shipped the Hub + navigation, Settings/**Model Studio**, the **Dream Team** per-agent model
-> roster + capability/key gates, applied brand, and a validated Windows installer + Flutter CI gate —
-> all locked in **[docs/phase-2-plan.md](docs/phase-2-plan.md)** (subphases P2.0–P2.7, exit criteria,
-> decisions e.g. BYO key storage [docs/decisions/0001](docs/decisions/0001-byo-api-key-storage.md),
-> sidecar bundling [0002](docs/decisions/0002-sidecar-bundling.md), per-agent routing
-> [0004](docs/decisions/0004-per-agent-model-routing.md), installer format
-> [0005](docs/decisions/0005-installer-format.md)). Next is **Phase 3 (V1 Release & Hardening)** —
-> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + macOS are
-> post-V1. Product vision + the 3 signature bets (Track Record, Dream Team, debate terminal +
-> FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
+> Status: **Phase 3 implementation complete** — P3.1–P3.5 all self-merged to the `phase-3` integration
+> branch (2026-07-05); the **`phase-3 → main` merge is founder-gated and pending** (see [HUMAN.md](HUMAN.md)
+> §1). Phase 3 (Depth & Refinement) surfaced the untapped engine — **BYO-key data vendors** (P3.1),
+> **local-model discovery + a live capability gate** (P3.2), **debate-terminal depth** (P3.3), **UI/UX +
+> a11y** (P3.4), and **historical as-of + a look-ahead correctness fix** (P3.5) — all locked in
+> **[docs/phase-3-plan.md](docs/phase-3-plan.md)** with the open-core raw-vs-curated line in
+> [0006](docs/decisions/0006-open-core-signal-boundary.md); every subphase went recon → adversarial-validate
+> → real-path verify → fresh-context review → self-merge, full CI suite green (ruff + pytest + flutter analyze/test/goldens/build + clean-install smoke).
+> (Phase 2 complete, merged to `main` 2026-07-05; Phase 1 vertical slice + de-fork 2026-06-26 — Phase 2
+> shipped the Hub + nav, Settings/**Model Studio**, the **Dream Team** roster + gates, brand, and a
+> validated Windows installer + Flutter CI gate, per [docs/phase-2-plan.md](docs/phase-2-plan.md) + ADRs
+> [0001](docs/decisions/0001-byo-api-key-storage.md)/[0002](docs/decisions/0002-sidecar-bundling.md)/[0004](docs/decisions/0004-per-agent-model-routing.md)/[0005](docs/decisions/0005-installer-format.md).)
+> Next is **Phase 4 (V1 Release & Hardening)** —
+> production keystore signing, security sweep, release CI, GA; mobile remote + paper-trading + a real crypto
+> pipeline + macOS are post-V1/future phases. Product vision + the 3 signature bets (Track Record, Dream
+> Team, debate terminal + FRED/Polymarket signals) live in **[docs/roadmap.md](docs/roadmap.md)**.
 > The engine package stays named `tradingagents` to preserve merge-ability with upstream
 > `TauricResearch/TradingAgents`.
 
