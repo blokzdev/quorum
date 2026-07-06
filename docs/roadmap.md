@@ -45,7 +45,7 @@ the original `P#` IDs from the first roadmap draft, for continuity.
 - **Phase 2** ✅ *(complete, merged to `main` 2026-07-05)* — Hub & navigation, Settings/Model Studio,
   the **Dream Team** per-agent roster + capability/key gates, applied brand, a validated debug-signed
   Windows installer, and a Flutter CI gate. Detail: [phase-2-plan.md](phase-2-plan.md).
-- **Phase 3 — Depth & Refinement** ✅ *(implementation complete on `phase-3` 2026-07-05; `phase-3 → main` founder-gated)* — surfaced the untapped TradingAgents
+- **Phase 3 — Depth & Refinement** ✅ *(complete, merged to `main` 2026-07-06 — PR #29)* — surfaced the untapped TradingAgents
   engine + deepen the product: **P3.1** BYO-key data-vendor selection + asset-type toggle, **P3.2**
   local/edge model discovery (Ollama `/api/tags`) + a live capability gate, **P3.3** debate-terminal depth
   (turn-structured debate + risk synthesis — bet #2), **P3.4** UI/UX + a11y (keyboard, AA contrast, error
