@@ -95,7 +95,7 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
 
 ### P5.1 — Curated catalog + device tiers + fit badges *(read-only foundation)*
 
-- [ ] **P5.1a Catalog data + contract** — the curated catalog as versioned data served by the sidecar
+- [x] **P5.1a Catalog data + contract** — the curated catalog as versioned data served by the sidecar
   (`GET /catalog/edge-models`, mirroring `/catalog/vendors` precedent): per-entry tag, bytes, min-RAM,
   role-capability, license, blurb, verification status. The response also carries the **detected Ollama
   version** (from `/api/version`; null when Ollama is absent) — the P5.1d version gate needs it and no
@@ -104,9 +104,9 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
   (named):** unlike `/catalog/vendors` (derived from engine constants, can't drift), this catalog is
   hand-curated against a mutable registry — Ollama tags are repointable post-ship, so P5.2c cross-checks
   pull bytes against catalog bytes as the drift tripwire.
-- [ ] **P5.1b Device capability detection** — total RAM via `device_info_plus` on Windows (VRAM
+- [x] **P5.1b Device capability detection** — total RAM via `device_info_plus` on Windows (VRAM
   refinement is a backlog line, not V1); pure tier-assignment function (RAM → Lite/Core/Max), unit-tested.
-- [ ] **P5.1c Fit badges** — per-model **Fits / Tight / Won't-fit** from exact model bytes + the KV-cache
+- [x] **P5.1c Fit badges** — per-model **Fits / Tight / Won't-fit** from exact model bytes + the KV-cache
   formula **at Ollama's default context** (the honest v1 input — the engine sets no `num_ctx` on its
   OpenAI-compat path, so Ollama's default *is* the effective context; A6. *Corrected 2026-07-16: the
   default was MEASURED at **8192** on Ollama 0.32.0 — the 4096 this plan initially cited was stale
@@ -114,14 +114,18 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
   headroom constant** for OS + app + sidecar (A7 — bytes-vs-RAM alone would badge a 7.2GB model "Fits" on
   an 8GB machine and thrash). Pure Dart, unit-tested against the live-verified llama3.2 worked example
   (1.9GB file + 0.44GiB KV @4K ctx) **and** the gemma4-e2b-on-8GB case (must badge Won't-fit).
-- [ ] **P5.1d Draft Board UI** — a new curated section (Settings/Model Studio) rendering the tiered
+- [x] **P5.1d Draft Board UI** — a new curated section (Settings/Model Studio) rendering the tiered
   catalog with fit badges + installed-state (already-pulled models detected via existing discovery);
   **Ollama version check** surfaced (qwen3.5 needs ≥ 0.17.6; warn + block those entries on older).
   Golden-tested (Read the PNG).
-  *Exit (falsifiable):* `/catalog/edge-models` serves the seed catalog (contract-tested); the tier
-  function and fit-badge math are unit-tested incl. the llama3.2 anchor case; the Draft Board golden
-  shows tiers + badges + an installed marker; a too-old Ollama version visibly gates qwen3.5 entries;
-  **no free-text model input exists anywhere in the new surface** (scope-wall test).
+  *Exit (falsifiable — ALL MET, 2026-07-16):* `/catalog/edge-models` serves the seed catalog
+  (contract-tested + verified on a real spawned sidecar with live Ollama 0.32.0, bearer gate 401);
+  tier + fit-badge math unit-tested incl. BOTH anchors (llama3.2 fits 16GB; gemma4:e2b won't-fit on
+  8GB — also EMPIRICALLY anchored: 7,346MiB CPU RSS measured); Draft Board goldens show tiers +
+  badges + installed marker (`draft_board_tiers.png`, Read-verified); a too-old Ollama visibly gates
+  versioned entries per-entry (`draft_board_old_ollama.png`); **no free-text model input exists in
+  the new surface** — a widget test asserts no EditableText descendant across all three states.
+  *(Post-lock corrections folded in: KV_CTX 8192 measured; gemma4 /api/show geometry; e4b → Core.)*
 
 ### P5.2 — One-click pull *(the install path)*
 
