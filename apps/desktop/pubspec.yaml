@@ -45,6 +45,7 @@ dependencies:
   # BYO API-key vault (OS credential store) + app-data dir for settings/seed-flag. See ADR 0001.
   flutter_secure_storage: ^10.0.0
   path_provider: ^2.1.0
+  device_info_plus: ^13.2.0
 
 dev_dependencies:
   flutter_test:
