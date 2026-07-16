@@ -501,6 +501,51 @@ def test_local_models_endpoint_is_bearer_gated(monkeypatch):
     assert "/catalog/local-models" not in app_module._PUBLIC_PATHS
 
 
+def test_edge_models_endpoint_serves_catalog_with_ollama_version(monkeypatch):
+    # P5.1a: the Draft Board catalog rides with the detected Ollama version (the P5.1d version-gate +
+    # P5.3c absent-state input).
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+
+    async def fake_version(_base):
+        return "0.32.0"
+
+    monkeypatch.setattr(app_module, "_fetch_ollama_version", fake_version)
+    body = TestClient(app_module.app).get("/catalog/edge-models").json()
+    assert body["contract_version"]
+    assert body["ollama_version"] == "0.32.0"
+    assert body["catalog_version"] >= 1
+    assert body["kv_ctx"] == 4096
+    tiers = {t["tier"]: t for t in body["tiers"]}
+    assert set(tiers) == {"lite", "core", "max"}
+    # Spot-check one curated row survives the wire intact (exact bytes — the P5.2c drift tripwire input).
+    core_default = next(m for m in tiers["core"]["models"] if m["default"])
+    assert core_default["ollama_tag"] == "qwen3.5:9b"
+    assert core_default["bytes"] == 6_594_462_816
+    assert core_default["kv_params"]["block_count"] == 32
+    assert core_default["min_ollama_version"] == "0.17.6"
+
+
+def test_edge_models_endpoint_serves_catalog_when_ollama_absent(monkeypatch):
+    # The CATALOG is static engine data — Ollama being down/absent must only null the version field,
+    # never 500 or empty the board (the desktop's absent-state signal is exactly ollama_version=null).
+    monkeypatch.delenv("QUORUM_API_TOKEN", raising=False)
+
+    async def absent(_base):
+        return None
+
+    monkeypatch.setattr(app_module, "_fetch_ollama_version", absent)
+    body = TestClient(app_module.app).get("/catalog/edge-models").json()
+    assert body["ollama_version"] is None
+    assert len(body["tiers"]) == 3 and all(t["models"] for t in body["tiers"])
+
+
+def test_edge_models_endpoint_is_bearer_gated(monkeypatch):
+    monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
+    client = TestClient(app_module.app)
+    assert client.get("/catalog/edge-models").status_code == 401
+    assert "/catalog/edge-models" not in app_module._PUBLIC_PATHS
+
+
 def test_bearer_auth_enforced(monkeypatch):
     monkeypatch.setenv("QUORUM_API_TOKEN", "s3cret")
     client = TestClient(app_module.app)

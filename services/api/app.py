@@ -192,6 +192,40 @@ async def catalog_local_models():
     return {"contract_version": CONTRACT_VERSION, "local_models": models}
 
 
+async def _fetch_ollama_version(base_url: str) -> str | None:
+    """The device's Ollama version (``GET /api/version``) — or ``None`` when Ollama is absent/slow.
+    Module-level (like ``_fetch_ollama_tags``) so endpoint tests can monkeypatch it. ``None`` is the
+    discriminator the desktop uses for BOTH the per-entry version gate (a too-old Ollama visibly gates
+    entries whose ``min_ollama_version`` exceeds it) and the Ollama-absent onboarding state (P5.3c/A4)."""
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            resp = await client.get(f"{base_url}/api/version")
+            resp.raise_for_status()
+            version = resp.json().get("version")
+            return version if isinstance(version, str) and version else None
+    except Exception:
+        return None  # Ollama down / slow / malformed -> absent; the catalog is still served.
+
+
+@app.get("/catalog/edge-models")
+async def catalog_edge_models():
+    """P5.1a: the curated Edge Model Draft Board — versioned frozen seed data (tiers + per-model exact
+    bytes / KV params / capability / verification status) + the detected Ollama version. Bearer-gated
+    (not in ``_PUBLIC_PATHS``). The CATALOG is static engine data and is ALWAYS served — only
+    ``ollama_version`` degrades to null when Ollama is unreachable (the desktop's absent-state signal).
+    Lazy-imported like the other catalog routes (ADR 0002)."""
+    from tradingagents.llm_clients.edge_catalog import get_edge_catalog
+
+    version = await _fetch_ollama_version(_resolve_ollama_native_base())
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "ollama_version": version,
+        **get_edge_catalog(),
+    }
+
+
 @app.get("/env-keys")
 async def env_keys():
     """Host-only: surface provider keys from the local gitignored ``.env`` so the desktop can offer a
