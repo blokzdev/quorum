@@ -514,7 +514,7 @@ def test_edge_models_endpoint_serves_catalog_with_ollama_version(monkeypatch):
     assert body["contract_version"]
     assert body["ollama_version"] == "0.32.0"
     assert body["catalog_version"] >= 1
-    assert body["kv_ctx"] == 4096
+    assert body["kv_ctx"] == 8192
     tiers = {t["tier"]: t for t in body["tiers"]}
     assert set(tiers) == {"lite", "core", "max"}
     # Spot-check one curated row survives the wire intact (exact bytes — the P5.2c drift tripwire input).

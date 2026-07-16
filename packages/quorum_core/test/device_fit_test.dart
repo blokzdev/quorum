@@ -28,10 +28,15 @@ void main() {
   });
 
   group('kvBytes', () {
-    test('reproduces the live-verified llama3.2 anchor (28×8×256×4096×2)', () {
+    test('reproduces the live-verified llama3.2 anchor (28×8×256×4096×2) — ctx-explicit', () {
+      expect(
+        kvBytes(blockCount: 28, headCountKv: 8, keyLength: 128, valueLength: 128, ctx: 4096),
+        469762048,
+      );
+      // The same anchor at the current default ctx (8192, measured on Ollama 0.32).
       expect(
         kvBytes(blockCount: 28, headCountKv: 8, keyLength: 128, valueLength: 128),
-        469762048,
+        939524096,
       );
     });
   });
@@ -45,20 +50,23 @@ void main() {
     });
 
     test('plan anchor 2: gemma4:e2b (7.2GB) WON\'T FIT an 8GB machine — even at realistic reported RAM', () {
+      // KV at the corrected /api/show geometry (35×1×1024×8192×2); the badge verdict is also
+      // empirically anchored: CPU-only RSS measured 7,346 MiB on 2026-07-16 — a real 8GB machine
+      // pages per-token (the cited field report's multi-minute responses corroborate).
       expect(
-        fitBadge(modelBytes: 7162394016, kvBytes: 146800640, deviceRamMb: 8192),
+        fitBadge(modelBytes: 7162394016, kvBytes: 587202560, deviceRamMb: 8192),
         FitBadge.wontFit,
       );
       // A real "8GB" machine reports less than nominal — still wontFit.
       expect(
-        fitBadge(modelBytes: 7162394016, kvBytes: 146800640, deviceRamMb: 8062),
+        fitBadge(modelBytes: 7162394016, kvBytes: 587202560, deviceRamMb: 8062),
         FitBadge.wontFit,
       );
     });
 
     test('the tight band exists: a 14B-class model on a 12GiB device loads but is under pressure', () {
       expect(
-        fitBadge(modelBytes: 9300000000, kvBytes: 700000000, deviceRamMb: 12288),
+        fitBadge(modelBytes: 9300000000, kvBytes: 1342177280, deviceRamMb: 12288),
         FitBadge.tight,
       );
     });
@@ -76,19 +84,19 @@ void main() {
 
     test('A2 regression tripwire: each tier default fits at its own tier floor', () {
       // Goes red if a future headroom bump silently breaks the tier table's internal consistency.
-      // lite default (qwen3.5:2b) on the tier audience's nominal 8GB device:
+      // KV values at the served KV_CTX (8192). lite default (qwen3.5:2b) on a nominal 8GB device:
       expect(
-        fitBadge(modelBytes: 2741180928, kvBytes: 201326592, deviceRamMb: 8192),
+        fitBadge(modelBytes: 2741180928, kvBytes: 402653184, deviceRamMb: 8192),
         FitBadge.fits,
       );
       // core default (qwen3.5:9b) at the core floor:
       expect(
-        fitBadge(modelBytes: 6594462816, kvBytes: 536870912, deviceRamMb: kCoreTierFloorMb),
+        fitBadge(modelBytes: 6594462816, kvBytes: 1073741824, deviceRamMb: kCoreTierFloorMb),
         FitBadge.fits,
       );
       // max default (qwen3.6:35b) at the max floor:
       expect(
-        fitBadge(modelBytes: 23938321664, kvBytes: 335544320, deviceRamMb: kMaxTierFloorMb),
+        fitBadge(modelBytes: 23938321664, kvBytes: 671088640, deviceRamMb: kMaxTierFloorMb),
         FitBadge.fits,
       );
     });

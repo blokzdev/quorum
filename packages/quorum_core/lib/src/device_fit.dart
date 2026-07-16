@@ -9,11 +9,12 @@ enum DeviceTier { lite, core, max }
 /// Will a model fit this machine? [tight] = loads, but the OS is under memory pressure (swap risk).
 enum FitBadge { fits, tight, wontFit }
 
-/// Ollama's server-default context length. The engine sets no `num_ctx` anywhere on its OpenAI-compat
-/// path (verified by grep — plan A6), so this IS the effective context the KV term is computed at.
-/// If P5.4a hits context-truncation failures, the raised value lands HERE (one constant; the catalog
-/// ships raw kv_params precisely so re-badging is this change, not a catalog regen).
-const int kDefaultOllamaCtx = 4096;
+/// Ollama's server-default context length — MEASURED 8192 on Ollama 0.32.0 (`ollama ps` CONTEXT
+/// column, 2026-07-16; the 4096 in older docs is stale). The engine sets no `num_ctx` anywhere on its
+/// OpenAI-compat path (verified by grep — plan A6), so this IS the effective context the KV term is
+/// computed at. If P5.4a hits context-truncation failures, the raised value lands HERE (one constant;
+/// the catalog ships raw kv_params precisely so re-badging is this change, not a catalog regen).
+const int kDefaultOllamaCtx = 8192;
 
 /// Tier floors in MiB — DECIMAL-thousand values deliberately below the binary GiB marks (12288/32768):
 /// device RAM reads report *usable* physical memory, which on Windows runs ~0.3–1 GiB under nominal

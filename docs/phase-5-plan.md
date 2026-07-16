@@ -107,8 +107,10 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
 - [ ] **P5.1b Device capability detection** — total RAM via `device_info_plus` on Windows (VRAM
   refinement is a backlog line, not V1); pure tier-assignment function (RAM → Lite/Core/Max), unit-tested.
 - [ ] **P5.1c Fit badges** — per-model **Fits / Tight / Won't-fit** from exact model bytes + the KV-cache
-  formula **at Ollama's default 4096 context** (the honest v1 input — the engine sets no `num_ctx` on its
-  OpenAI-compat path, so Ollama's default *is* the effective context; A6) **+ an explicit, unit-tested
+  formula **at Ollama's default context** (the honest v1 input — the engine sets no `num_ctx` on its
+  OpenAI-compat path, so Ollama's default *is* the effective context; A6. *Corrected 2026-07-16: the
+  default was MEASURED at **8192** on Ollama 0.32.0 — the 4096 this plan initially cited was stale
+  docs; the constant + served `kv_ctx` moved accordingly, exactly the one-constant change A6 designed*) **+ an explicit, unit-tested
   headroom constant** for OS + app + sidecar (A7 — bytes-vs-RAM alone would badge a 7.2GB model "Fits" on
   an 8GB machine and thrash). Pure Dart, unit-tested against the live-verified llama3.2 worked example
   (1.9GB file + 0.44GiB KV @4K ctx) **and** the gemma4-e2b-on-8GB case (must badge Won't-fit).

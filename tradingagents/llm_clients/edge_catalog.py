@@ -32,10 +32,11 @@ The scope wall (phase-5-plan.md): this is a CURATED list — additions are produ
 
 CATALOG_VERSION = 1
 
-# The context length the client's fit-badge math assumes (Ollama's server default; the engine sets no
-# num_ctx on its OpenAI-compat path — verified by grep, plan A6). Served as data so the assumption is
-# visible client-side and a future raised-ctx re-tier is a data change.
-KV_CTX = 4096
+# The context length the client's fit-badge math assumes = Ollama's server default (the engine sets no
+# num_ctx on its OpenAI-compat path — verified by grep, plan A6). MEASURED live on Ollama 0.32.0
+# (2026-07-16: `ollama ps` CONTEXT column shows 8192 for a default load — the docs' 4096 figure is
+# stale). Served as data so the assumption is visible client-side and a re-tier is a data change.
+KV_CTX = 8192
 
 
 def _model(
@@ -121,7 +122,11 @@ EDGE_MODEL_TIERS: list[dict] = [
                 min_ollama_version="0.17.6",
             ),
             _model(
-                "gemma4-e2b", "gemma4:e2b", "Gemma 4 E2B", 7_162_394_016, (35, 1, 256, 256),
+                # kv geometry from a live /api/show on the installed model (key_length 512 — double
+                # the HF config's head_dim; Ollama's numbers govern its own runtime, and this is the
+                # conservative direction). CPU-only RSS measured 7,346 MiB (2026-07-16) — the blob is
+                # fully resident on CPU (no PLE savings); with a GPU it loads at ~1.8GB (PLE offload).
+                "gemma4-e2b", "gemma4:e2b", "Gemma 4 E2B", 7_162_394_016, (35, 1, 512, 512),
                 "analyst", "Apache-2.0",
                 "Google's on-device family with a thinking mode; bigger on disk than its name suggests.",
                 min_ollama_version="0.20.0",
@@ -130,6 +135,14 @@ EDGE_MODEL_TIERS: list[dict] = [
                 "qwen3-14b", "qwen3:14b", "Qwen3 14B", 9_276_184_896, (40, 8, 128, 128),
                 "analyst", "Apache-2.0",
                 "Previous-gen 14B — the biggest dense option that fits a 16GB machine.",
+            ),
+            _model(
+                # Core, not Max (2026-07-16 founder challenge + measurement): at 9.6GB it fits a 16GB
+                # machine like qwen3:14b — its old Max slot undersold it. kv geometry per /api/show.
+                "gemma4-e4b", "gemma4:e4b", "Gemma 4 E4B", 9_608_338_848, (42, 2, 512, 512),
+                "analyst", "Apache-2.0",
+                "Gemma's larger on-device tier — fits 16GB machines; thinking + vision included.",
+                min_ollama_version="0.20.0",
             ),
         ],
     },
@@ -148,12 +161,6 @@ EDGE_MODEL_TIERS: list[dict] = [
                 "analyst", "Apache-2.0",
                 "The dense fallback if the MoE underperforms on your hardware.",
                 min_ollama_version="0.17.6",
-            ),
-            _model(
-                "gemma4-e4b", "gemma4:e4b", "Gemma 4 E4B", 9_608_338_848, (42, 2, 256, 256),
-                "analyst", "Apache-2.0",
-                "Gemma's larger on-device tier — a lighter Max alternative with thinking + vision.",
-                min_ollama_version="0.20.0",
             ),
         ],
     },

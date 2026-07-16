@@ -36,7 +36,7 @@ def _all_models(catalog: dict):
 def test_catalog_shape_and_versions():
     cat = get_edge_catalog()
     assert cat["catalog_version"] == CATALOG_VERSION >= 1
-    assert cat["kv_ctx"] == 4096  # A6: the engine sets no num_ctx, so Ollama's default IS the ctx
+    assert cat["kv_ctx"] == 8192  # A6: Ollama 0.32's measured default (ollama ps CONTEXT; docs' 4096 is stale)
     assert [t["tier"] for t in cat["tiers"]] == ["lite", "core", "max"]  # A5: one triple; "pro" banned
 
 
@@ -81,15 +81,17 @@ def test_entry_field_integrity():
 
 
 def test_llama32_kv_anchor():
-    # The live-verified worked example (Ollama /api/show, plan P5.1c): 28 x 8 x 256 x 4096 x 2.
+    # The live-verified worked example (Ollama /api/show, plan P5.1c) is pinned AT 4096 — the formula
+    # anchor is ctx-explicit so the KV_CTX default (8192 on Ollama 0.32) can move without faking it.
     cat = get_edge_catalog()
     llama = next(m for _t, m in _all_models(cat) if m["id"] == "llama3.2-3b")
-    assert _kv_bytes(llama) == 469_762_048
+    assert _kv_bytes(llama, ctx=4096) == 469_762_048
+    assert _kv_bytes(llama) == 939_524_096  # the same anchor at the served KV_CTX (8192)
     assert llama["verified"] == "real-run"  # P3.2's live gate run seeds the one real-run row
 
 
 def test_a2_every_default_fits_at_its_own_tier_floor():
-    # A2: bytes + KV@4096 + full headroom must fit the tier's own floor (lite's floor is 0 -> check
+    # A2: bytes + KV@KV_CTX + full headroom must fit the tier's own floor (lite's floor is 0 -> check
     # against a nominal 8GB device, the tier's stated audience). A default that badges won't-fit at
     # its own floor is the exact contradiction the plan amendment removed.
     for tier in get_edge_catalog()["tiers"]:

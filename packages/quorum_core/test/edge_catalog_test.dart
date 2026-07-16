@@ -6,7 +6,7 @@ Map<String, dynamic> _payload() => {
       'contract_version': 1,
       'catalog_version': 1,
       'ollama_version': '0.32.0',
-      'kv_ctx': 4096,
+      'kv_ctx': 8192,
       'tiers': [
         {
           'tier': 'lite',
@@ -51,7 +51,7 @@ void main() {
       expect(c.contractVersion, 1);
       expect(c.catalogVersion, 1);
       expect(c.ollamaVersion, '0.32.0');
-      expect(c.kvCtx, 4096);
+      expect(c.kvCtx, 8192);
       expect(c.tiers, hasLength(2));
       final lite = c.forTier(DeviceTier.lite)!;
       expect(lite.minDeviceRamMb, 0);
@@ -62,8 +62,8 @@ void main() {
       expect(m.capability, EdgeRoleCapability.analyst);
       expect(m.verified, 'tag-only');
       expect(m.minOllamaVersion, '0.17.6');
-      // KV from served params at the default ctx: 24×2×512×4096×2.
-      expect(m.kvBytesAt(), 201326592);
+      // KV from served params at the default ctx (8192): 24×2×512×8192×2.
+      expect(m.kvBytesAt(), 402653184);
       // And the badge composes: the lite default fits a 16GB device.
       expect(m.fitBadgeFor(16384), FitBadge.fits);
     });
