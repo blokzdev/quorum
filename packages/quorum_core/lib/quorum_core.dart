@@ -4,6 +4,8 @@ library;
 export 'src/agent_model.dart';
 export 'src/api_client.dart';
 export 'src/catalog.dart';
+export 'src/device_fit.dart';
+export 'src/edge_catalog.dart';
 export 'src/engine_endpoint.dart';
 export 'src/events.dart';
 export 'src/reducer.dart';

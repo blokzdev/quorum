@@ -52,3 +52,17 @@ final localModelsProvider = FutureProvider<List<LocalModel>>((ref) async {
     return const <LocalModel>[];
   }
 });
+
+/// The curated Edge Model Draft Board (`GET /catalog/edge-models`, P5.1a) — tiers + per-model exact
+/// bytes/KV params/verification + the detected Ollama version (null = Ollama absent, the P5.3c
+/// onboarding discriminator). Degrades to an EMPTY catalog on any error (sidecar unreachable) so the
+/// Draft Board renders a clean empty/absent state — a catalog failure must never break Settings.
+final edgeModelCatalogProvider = FutureProvider<EdgeModelCatalog>((ref) async {
+  try {
+    final conn = await ref.watch(engineConnectionProvider.future);
+    final api = ApiClient(conn, client: ref.read(httpClientProvider));
+    return EdgeModelCatalog.fromJson(await api.edgeModels());
+  } catch (_) {
+    return const EdgeModelCatalog();
+  }
+});

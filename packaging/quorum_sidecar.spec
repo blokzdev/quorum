@@ -20,7 +20,8 @@ _repo = os.path.abspath(os.path.join(_here, os.pardir))
 hiddenimports = [
     "services.api.app", "services.api.jobs", "services.api.demo", "services.api.event_log",
     "tradingagents.runtime.events", "tradingagents.runtime.runner", "tradingagents.runtime.isolation",
-    "tradingagents.llm_clients.model_catalog", "tradingagents.default_config", "tradingagents.reporting",
+    "tradingagents.llm_clients.model_catalog", "tradingagents.llm_clients.edge_catalog",
+    "tradingagents.default_config", "tradingagents.reporting",
     "tradingagents.graph.trading_graph",
     # Provider client stack — factory.create_llm_client imports these LAZILY (inside function bodies),
     # so PyInstaller's static analysis never follows them. Without forcing them + their heavy provider

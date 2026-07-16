@@ -6,8 +6,10 @@ import 'package:quorum_core/quorum_core.dart';
 import '../dream_team_roster.dart';
 import '../provider_meta.dart'; // providerNeedsKey (+ the shared provider->key-env mirror)
 import '../vendor_meta.dart' show macroVendor; // data-vendor key metadata (mirrors VENDOR_API_KEY_ENV)
+import 'contrast.dart' show accessibleTint;
 import 'focusable.dart';
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
+import '../state/device_ram_provider.dart'; // deviceRamMbProvider (P5.1b)
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
 import 'brand.dart';
@@ -182,6 +184,12 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
     // down, so the picker keeps its static Ollama option.
     final localModels =
         ref.watch(localModelsProvider).maybeWhen(data: (m) => m, orElse: () => const <LocalModel>[]);
+    // The curated Draft Board catalog + the device's RAM (P5.1d) — both progressive enhancements,
+    // resolved to plain values so SettingsBody stays async-free (the golden target). An empty-tiers
+    // catalog (provider degraded) hides the section exactly like a null vendorCatalog hides Data sources.
+    final edgeCatalog =
+        ref.watch(edgeModelCatalogProvider).maybeWhen(data: (e) => e, orElse: () => null);
+    final deviceRamMb = ref.watch(deviceRamMbProvider).maybeWhen(data: (r) => r, orElse: () => null);
     return Container(
       color: brand.bg,
       child: catalog.when(
@@ -190,7 +198,12 @@ class _SettingsSurfaceState extends ConsumerState<SettingsSurface> {
                 title: 'No providers available',
                 subtitle: 'The engine returned an empty catalog.',
                 onRetry: _retry)
-            : SettingsBody(catalog: c, vendorCatalog: vendorCatalog, localModels: localModels),
+            : SettingsBody(
+                catalog: c,
+                vendorCatalog: vendorCatalog,
+                localModels: localModels,
+                edgeCatalog: edgeCatalog,
+                deviceRamMb: deviceRamMb),
         loading: () =>
             const _CenterNotice(title: 'Connecting to the engine…', spinner: true),
         error: (e, _) => _CenterNotice(
@@ -218,12 +231,22 @@ class SettingsBody extends ConsumerWidget {
   /// picker keeps its static list + custom-id path (discovery not loaded / Ollama down); non-empty →
   /// real installed models replace the static guesses, each carrying its true tool-capability.
   final List<LocalModel> localModels;
+
+  /// The curated Edge Model Draft Board (`GET /catalog/edge-models`, P5.1d). Null or empty-tiers →
+  /// the Draft Board section is hidden (not loaded / provider degraded); the rest is unaffected.
+  final EdgeModelCatalog? edgeCatalog;
+
+  /// The device's reported RAM in MiB (P5.1b). Null → fit badges + the tier highlight are suppressed
+  /// (no RAM reading → no fit claims — an unknown never fabricates a verdict).
+  final int? deviceRamMb;
   const SettingsBody({
     super.key,
     required this.catalog,
     this.forceExpandDreamTeam = false,
     this.vendorCatalog,
     this.localModels = const [],
+    this.edgeCatalog,
+    this.deviceRamMb,
   });
 
   @override
@@ -372,6 +395,16 @@ class SettingsBody extends ConsumerWidget {
                     ],
                   ],
                 ),
+
+                // --- Draft Board (curated free local models, P5.1d) ----------------------------------
+                // Sits between Model Studio (where the ollama provider lives) and the Dream Team
+                // roster (where installed models get assigned) — supply directly above demand.
+                if (edgeCatalog != null && edgeCatalog!.tiers.isNotEmpty)
+                  _DraftBoardSection(
+                    edgeCatalog: edgeCatalog!,
+                    deviceRamMb: deviceRamMb,
+                    localModels: localModels,
+                  ),
 
                 // --- Dream Team (per-role overrides) -------------------------------------------------
                 _DreamTeamRoster(
@@ -1293,6 +1326,326 @@ class _BenchManagerState extends ConsumerState<_BenchManager> {
 /// The "Dream Team" section: a collapsible, stage-grouped roster of the 12 agent roles, each with a
 /// per-role provider+model picker. Unassigned roles fall back to the global Model Studio quick/deep
 /// pick (shown as a muted chip). Binds [settingsControllerProvider] for the live lineup.
+// --- Draft Board (P5.1d) -----------------------------------------------------------------------
+// The curated free-local shortlist: tiers by device RAM, per-model fit badges, installed markers,
+// and the per-entry Ollama-version gate. READ-ONLY in P5.1 (the pull affordance is P5.2); the only
+// interactive control is Re-detect. SCOPE WALL: this subtree renders exclusively from the typed
+// EdgeModelCatalog — it must never contain a text-entry widget (enforced by draft_board_test.dart).
+
+/// Is this entry blocked by a too-old detected Ollama? Absent (null) is NOT "older" — the banner owns
+/// the absent story. A malformed detected version gates (fail-closed): garbage never silently unlocks
+/// a known-incompatible model.
+bool _versionGated(EdgeModelCatalog c, EdgeModel e) =>
+    e.minOllamaVersion != null &&
+    c.ollamaVersion != null &&
+    !ollamaVersionAtLeast(c.ollamaVersion, e.minOllamaVersion!);
+
+String _gb(int? bytes) => bytes == null ? '—' : '${(bytes / 1e9).toStringAsFixed(1)} GB';
+
+class _DraftBoardSection extends ConsumerWidget {
+  final EdgeModelCatalog edgeCatalog;
+  final int? deviceRamMb;
+  final List<LocalModel> localModels;
+  const _DraftBoardSection(
+      {required this.edgeCatalog, required this.deviceRamMb, required this.localModels});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final detected = deviceRamMb == null ? null : deviceTier(deviceRamMb!);
+    final anyGated =
+        edgeCatalog.tiers.any((t) => t.models.any((m) => _versionGated(edgeCatalog, m)));
+    return _Section(
+      title: 'Draft Board',
+      subtitle: 'Curated free local models via Ollama, matched to this machine\'s memory. '
+          'No API key needed. A fixed shortlist — not a model browser.',
+      children: [
+        _OllamaStatusBanner(version: edgeCatalog.ollamaVersion, anyGated: anyGated),
+        for (final (i, tier) in edgeCatalog.tiers.indexed) ...[
+          const SizedBox(height: 12),
+          _TierGroup(
+            tier: tier,
+            label: _tierLabel(tier, i + 1 < edgeCatalog.tiers.length
+                ? edgeCatalog.tiers[i + 1].minDeviceRamMb
+                : null),
+            isDetected: detected != null && tier.tier == detected,
+            catalog: edgeCatalog,
+            deviceRamMb: deviceRamMb,
+            localModels: localModels,
+          ),
+        ],
+        const SizedBox(height: 12),
+        Row(children: [
+          Icon(Icons.info_outline, size: 14, color: brand.textLo),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Fit assumes the model plus its context cache and OS headroom. Local models are '
+              'slower and less capable than frontier cloud models.',
+              style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.4),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  static String _tierLabel(EdgeTier t, int? nextFloorMb) {
+    String gb(int mb) => '${(mb / 1000).round()} GB';
+    final name = t.tierRaw.toUpperCase();
+    if (t.minDeviceRamMb <= 0 && nextFloorMb != null) return '$name · UNDER ${gb(nextFloorMb)}';
+    if (nextFloorMb == null) return '$name · ${gb(t.minDeviceRamMb)} +';
+    return '$name · ${gb(t.minDeviceRamMb)}–${gb(nextFloorMb)}';
+  }
+}
+
+class _OllamaStatusBanner extends ConsumerWidget {
+  final String? version;
+  final bool anyGated;
+  const _OllamaStatusBanner({required this.version, required this.anyGated});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    if (version == null) {
+      // Ollama absent: guidance + Re-detect (the P5.1d degraded floor; the full onboarding UX is P5.3c).
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: brand.surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: brand.border),
+        ),
+        child: Row(children: [
+          Icon(Icons.cloud_off_outlined, size: 16, color: brand.warning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Ollama isn\'t installed or isn\'t running. Quorum uses it to run models locally — '
+              'install it from ollama.com/download, then re-detect.',
+              style: TextStyle(color: brand.textMid, fontSize: 12, height: 1.4),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _SmallButton(
+            label: 'Re-detect',
+            brand: brand,
+            filled: true,
+            onTap: () {
+              ref.invalidate(edgeModelCatalogProvider);
+              ref.invalidate(localModelsProvider);
+            },
+          ),
+        ]),
+      );
+    }
+    final warn = anyGated;
+    return Row(children: [
+      Icon(warn ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+          size: 14, color: warn ? brand.warning : brand.textLo),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          warn
+              ? 'Ollama $version detected — some models need a newer version. Update Ollama to unlock them.'
+              : 'Ollama $version detected.',
+          style: TextStyle(color: warn ? brand.warning : brand.textLo, fontSize: 11.5),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _TierGroup extends StatelessWidget {
+  final EdgeTier tier;
+  final String label;
+  final bool isDetected;
+  final EdgeModelCatalog catalog;
+  final int? deviceRamMb;
+  final List<LocalModel> localModels;
+  const _TierGroup(
+      {required this.tier,
+      required this.label,
+      required this.isDetected,
+      required this.catalog,
+      required this.deviceRamMb,
+      required this.localModels});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          Text(label,
+              style: TextStyle(
+                  color: brand.textLo, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+          if (isDetected) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: brand.accent.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: brand.accent),
+              ),
+              child: Text('THIS MACHINE',
+                  style: TextStyle(
+                      color: accessibleTint(brand.accent, brand.surface1),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8)),
+            ),
+          ],
+        ]),
+        const SizedBox(height: 6),
+        for (final m in tier.models) ...[
+          _EdgeModelRow(
+            entry: m,
+            gated: _versionGated(catalog, m),
+            detectedVersion: catalog.ollamaVersion,
+            installed: isInstalled(m, localModels),
+            fit: m.fitBadgeFor(deviceRamMb, ctx: catalog.kvCtx),
+            highlight: isDetected && m.isDefault,
+          ),
+          const SizedBox(height: 6),
+        ],
+      ],
+    );
+  }
+}
+
+class _EdgeModelRow extends StatelessWidget {
+  final EdgeModel entry;
+  final bool gated;
+  final String? detectedVersion;
+  final bool installed;
+  final FitBadge? fit;
+  final bool highlight;
+  const _EdgeModelRow(
+      {required this.entry,
+      required this.gated,
+      required this.detectedVersion,
+      required this.installed,
+      required this.fit,
+      required this.highlight});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Text(entry.display,
+              style: TextStyle(color: brand.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 8),
+          Text(entry.ollamaTag,
+              style: TextStyle(color: brand.textLo, fontSize: 11.5, fontFamily: brand.fontMono)),
+          const Spacer(),
+          Text(_gb(entry.bytes),
+              style: TextStyle(color: brand.textMid, fontSize: 12, fontFamily: brand.fontMono)),
+          if (!gated && fit != null) ...[
+            const SizedBox(width: 10),
+            _FitBadgeChip(fit: fit!),
+          ],
+        ]),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 4, children: [
+          if (entry.isDefault) _MiniChip('Tier default', brand.accent),
+          _MiniChip(
+              entry.capability == EdgeRoleCapability.analyst ? 'tools' : 'text-only',
+              entry.capability == EdgeRoleCapability.analyst ? brand.up : brand.textLo),
+          _MiniChip(entry.license, brand.textLo),
+          if (entry.verified == 'real-run')
+            _MiniChip('Verified ✓', brand.up)
+          else if (entry.verified == 'tag-only')
+            _MiniChip('Unverified', brand.textLo),
+          if (installed) _MiniChip('Installed ✓', brand.accent),
+        ]),
+        const SizedBox(height: 6),
+        Text(entry.blurb, style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.3)),
+      ],
+    );
+    return Semantics(
+      label:
+          '${entry.display}, ${_gb(entry.bytes)}, ${entry.license}, ${entry.capability == EdgeRoleCapability.analyst ? 'tool capable' : 'text only'}'
+          '${installed ? ', installed' : ''}${gated ? ', requires a newer Ollama' : ''}',
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: brand.surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: highlight ? brand.accent : brand.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (gated) Opacity(opacity: 0.45, child: content) else content,
+          if (gated) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              Icon(Icons.warning_amber_rounded, size: 13, color: brand.warning),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Requires Ollama ≥ ${entry.minOllamaVersion} — you have $detectedVersion.',
+                  style: TextStyle(color: brand.warning, fontSize: 11),
+                ),
+              ),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _FitBadgeChip extends StatelessWidget {
+  final FitBadge fit;
+  const _FitBadgeChip({required this.fit});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final (label, hue) = switch (fit) {
+      FitBadge.fits => ('Fits', brand.up),
+      FitBadge.tight => ('Tight', brand.warning),
+      FitBadge.wontFit => ("Won't fit", brand.down),
+    };
+    final ink = accessibleTint(hue, brand.surface2);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: hue.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(label,
+          style: TextStyle(color: ink, fontSize: 10.5, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  final String label;
+  final Color hue;
+  const _MiniChip(this.label, this.hue);
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: hue.withValues(alpha: 0.55)),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              color: accessibleTint(hue, brand.surface2), fontSize: 10, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
 class _DreamTeamRoster extends ConsumerStatefulWidget {
   final Catalog catalog;
   final List<LocalModel> localModels;
