@@ -55,7 +55,7 @@ Three device tiers by detected RAM (the fit badge does fine-grained per-model wo
 | --- | --- | --- | --- |
 | **Lite** | < 12GB | `qwen3.5:2b` (2.7GB) | floor: `qwen3.5:0.8b` (1.0GB); proven fallback: `llama3.2` (2.0GB — live-verified tools on this repo); text-only debater: `minicpm5` Q4 (0.7GB) |
 | **Core** | 12–32GB | `qwen3.5:9b` (6.6GB) | `qwen3.5:4b` (3.4GB) for slower machines; `gemma4:e2b` (7.2GB, thinking) alternate; `qwen3:14b` (9.3GB, prev-gen) upper option |
-| **Max** | ≥ 32GB | `qwen3.6:35b` (35B-A3B MoE, 24GB blob, ~3B active) | fallback `qwen3.5:27b` dense (17GB) if the reported Ollama MoE GPU-utilization issue bites or the 35b fails P5.4a on 32GB; `gemma4:e4b`/`12b` alternates |
+| **Max** | ≥ 32GB | `qwen3.6:35b` (35B-A3B MoE, 24GB blob, ~3B active) | fallback `qwen3.5:27b` dense (17GB) if the reported Ollama MoE GPU-utilization issue bites or the 35b fails P5.4a on 32GB. *(Shipped-seed notes, 2026-07-16: `gemma4:e4b` moved to Core — it fits 16GB machines, founder challenge; `gemma4:12b` NOT seeded in v1 — three Gemma alternates was curation bloat; add later as a product decision if wanted.)* |
 
 **(A2)** The Max floor is ≥ 32GB — set so the tier's own default *passes the tier's own fit math*
 (24GB blob + KV + headroom ≈ 29–30GB): a default that badges Won't-fit at its tier floor is an internal

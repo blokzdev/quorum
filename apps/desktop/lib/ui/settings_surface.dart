@@ -1506,7 +1506,7 @@ class _TierGroup extends StatelessWidget {
             gated: _versionGated(catalog, m),
             detectedVersion: catalog.ollamaVersion,
             installed: isInstalled(m, localModels),
-            fit: m.fitBadgeFor(deviceRamMb),
+            fit: m.fitBadgeFor(deviceRamMb, ctx: catalog.kvCtx),
             highlight: isDetected && m.isDefault,
           ),
           const SizedBox(height: 6),

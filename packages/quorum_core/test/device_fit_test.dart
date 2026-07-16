@@ -84,9 +84,10 @@ void main() {
 
     test('A2 regression tripwire: each tier default fits at its own tier floor', () {
       // Goes red if a future headroom bump silently breaks the tier table's internal consistency.
-      // KV values at the served KV_CTX (8192). lite default (qwen3.5:2b) on a nominal 8GB device:
+      // KV values at the served KV_CTX (8192). lite default (qwen3.5:2b) on a realistic reported
+      // "8GB" device (8062 MiB — real machines report under nominal):
       expect(
-        fitBadge(modelBytes: 2741180928, kvBytes: 402653184, deviceRamMb: 8192),
+        fitBadge(modelBytes: 2741180928, kvBytes: 402653184, deviceRamMb: 8062),
         FitBadge.fits,
       );
       // core default (qwen3.5:9b) at the core floor:

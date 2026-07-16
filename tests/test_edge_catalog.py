@@ -91,12 +91,13 @@ def test_llama32_kv_anchor():
 
 
 def test_a2_every_default_fits_at_its_own_tier_floor():
-    # A2: bytes + KV@KV_CTX + full headroom must fit the tier's own floor (lite's floor is 0 -> check
-    # against a nominal 8GB device, the tier's stated audience). A default that badges won't-fit at
+    # A2: bytes + KV@KV_CTX + full headroom must fit the tier's own floor. A default that badges won't-fit at
     # its own floor is the exact contradiction the plan amendment removed.
     for tier in get_edge_catalog()["tiers"]:
         default = next(m for m in tier["models"] if m["default"])
-        floor_mb = tier["min_device_ram_mb"] or 8_192
+        # lite's floor is 0 -> check at a realistic reported "8GB" (8,062 MiB — real machines
+        # report under nominal; the goldens use the same figure), not nominal 8192.
+        floor_mb = tier["min_device_ram_mb"] or 8_062
         need = default["bytes"] + _kv_bytes(default) + _FITS_HEADROOM
         assert need <= floor_mb * _MIB, (
             f"{tier['tier']} default {default['id']} needs {need} bytes but the tier floor is "

@@ -81,8 +81,11 @@ class EdgeModel {
 
   /// The badge for this entry on a device with [deviceRamMb] reported RAM — null when the catalog
   /// lacks bytes/KV data or RAM is unknown (UI renders an explicit Unknown state, never a guess).
-  FitBadge? fitBadgeFor(int? deviceRamMb) {
-    final b = bytes, kv = kvBytesAt();
+  /// [ctx] should be the CATALOG's served `kv_ctx` (so a hosted re-tier that raises the context is
+  /// honored by old clients too — the review caught that parsing kvCtx without consuming it made the
+  /// drift guard a no-op); defaults to [kDefaultOllamaCtx].
+  FitBadge? fitBadgeFor(int? deviceRamMb, {int ctx = kDefaultOllamaCtx}) {
+    final b = bytes, kv = kvBytesAt(ctx: ctx);
     if (b == null || kv == null || deviceRamMb == null) return null;
     return fitBadge(modelBytes: b, kvBytes: kv, deviceRamMb: deviceRamMb);
   }
