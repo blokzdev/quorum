@@ -6,7 +6,7 @@ trading-analysis engine, with a mobile remote planned post-V1. This file orients
 here. Keep it current; it is loaded into context each session.
 
 > Status: **Phase 5 (The Free Local Tier) — current, plan-locked ([docs/phase-5-plan.md](docs/phase-5-plan.md), founder call 2026-07-16: complete before GA so V1 ships the full free-local story). Phase 4 is ✅ (P4.1–P4.4 + P4.5a/audit); the founder-gated 1.0.0 GA publish + optional Defender pre-submission now follow Phase 5.**
-> Phase 5 = the **Edge Model Draft Board core in V1**: device-tiered (Lite/Core/Pro by RAM) **curated**
+> Phase 5 = the **Edge Model Draft Board core in V1**: device-tiered (Lite/Core/Max by RAM) **curated**
 > local models (Qwen3.5 anchor; Gemma 4 alternates; MiniCPM5 text-only; VibeThinker excluded — all
 > live-verified 2026-07-16), fit badges (exact bytes + KV-cache math), one-click `ollama pull`
 > (progress + verified resume), tiered "Free local team" preset Benches, roster-fit (max-not-sum), and

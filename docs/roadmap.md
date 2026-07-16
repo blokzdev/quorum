@@ -65,7 +65,7 @@ the original `P#` IDs from the first roadmap draft, for continuity.
 - **Phase 5 — The Free Local Tier** *(current; pulled forward from Band C by founder call 2026-07-16;
   plan-locked → [phase-5-plan.md](phase-5-plan.md))* — the **Edge Model Draft Board core, in V1**: use
   Quorum **completely free + locally** with on-device edge models, **tier-matched to the device**
-  (Lite/Core/Pro by detected RAM). A **curated** tool-capable shortlist (Qwen3.5 anchor family; Gemma 4
+  (Lite/Core/Max by detected RAM). A **curated** tool-capable shortlist (Qwen3.5 anchor family; Gemma 4
   alternates — genuinely Apache-2.0 since Apr 2026; MiniCPM5 text-only; VibeThinker excluded — all
   live-verified 2026-07-16), per-model **fit badges** (exact GGUF bytes + KV-cache-honest sizing),
   **one-click `ollama pull`** (streamed progress + verified resume), tiered **"Free local team" preset
