@@ -110,6 +110,23 @@ void main() {
     });
   });
 
+  group('isInstalled', () {
+    EdgeModel entry(String tag) => EdgeModel.fromJson({'ollama_tag': tag});
+
+    test('exact tag match, and the llama3.2 ⇄ llama3.2:latest normalization both ways', () {
+      expect(isInstalled(entry('qwen3.5:2b'), const [LocalModel('qwen3.5:2b')]), isTrue);
+      expect(isInstalled(entry('llama3.2'), const [LocalModel('llama3.2:latest')]), isTrue);
+      expect(isInstalled(entry('llama3.2:latest'), const [LocalModel('llama3.2')]), isTrue);
+    });
+
+    test('no cross-tag false positives', () {
+      expect(isInstalled(entry('qwen3.5:2b'), const [LocalModel('qwen3.5:0.8b')]), isFalse);
+      expect(isInstalled(entry('llama3.2'), const [LocalModel('llama3.2:1b')]), isFalse);
+      expect(isInstalled(entry('gemma4:e2b'), const []), isFalse);
+      expect(isInstalled(entry(''), const [LocalModel('llama3.2')]), isFalse);
+    });
+  });
+
   group('ollamaVersionAtLeast', () {
     test('the lexicographic trap: 0.9.5 is NOT >= 0.17.6 (string compare says 9 > 1)', () {
       expect(ollamaVersionAtLeast('0.9.5', '0.17.6'), isFalse);

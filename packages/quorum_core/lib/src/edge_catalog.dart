@@ -2,6 +2,7 @@
 /// of missing keys like [Catalog]/[VendorCatalog], so a catalog bump never hard-fails the client.
 library;
 
+import 'catalog.dart' show LocalModel;
 import 'device_fit.dart';
 
 /// Which agent roles a curated model can serve. [analyst] = tool-capable through Ollama;
@@ -154,6 +155,21 @@ class EdgeModelCatalog {
     }
     return null;
   }
+}
+
+/// Whether a curated entry is already pulled, per the device's discovery list. Ollama normalizes
+/// bare tags to `:latest` (`llama3.2` ⇄ `llama3.2:latest`), so match exact OR either side's
+/// `:latest` expansion — but never across genuinely different tags (`qwen3.5:2b` ≠ `qwen3.5:0.8b`).
+bool isInstalled(EdgeModel entry, List<LocalModel> localModels) {
+  final tag = entry.ollamaTag;
+  if (tag.isEmpty) return false;
+  final expanded = tag.contains(':') ? tag : '$tag:latest';
+  for (final m in localModels) {
+    final name = m.name;
+    final nameExpanded = name.contains(':') ? name : '$name:latest';
+    if (nameExpanded == expanded) return true;
+  }
+  return false;
 }
 
 /// Numeric dotted-segment version compare — NOT lexicographic (`'0.9.5' < '0.17.6'`, but string
