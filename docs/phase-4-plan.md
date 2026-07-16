@@ -181,7 +181,9 @@ readiness) needs P4.3's installer to screenshot + submit; **P4.5** closes out. N
   all fixed in P4.5a. Backlog: the 16 `P4-recon` items stay as post-V1 refinements. With **P4.4c (hub-03)**
   now shipped, the audit's top GA-runway item is closed. **Remaining: the 1.0.0 GA publish** (tag + GitHub
   release + distribute) — the one outward-facing act, **founder-gated** (HUMAN.md §1) — plus the optional
-  **P4.4b** Defender pre-submission (founder MS account).
+  **P4.4b** Defender pre-submission (founder MS account). *(2026-07-16 founder call: the GA publish + the
+  Defender submission now follow **Phase 5** ([phase-5-plan.md](phase-5-plan.md)) so V1 ships the complete
+  free-local tier; P5.4b re-confirms this phase's GA-readiness on the post-P5 tree.)*
   *Exit (phase):* an **unsigned** Windows installer installs → launches → runs a real analysis → uninstalls
   cleanly on a fresh machine; the first-run Run-anyway UX is documented + the Defender submission filed;
   release CI is green end-to-end with the freeze + install-smoke + per-provider guards; the 4 UX-integrity

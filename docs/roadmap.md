@@ -1,8 +1,8 @@
 # Quorum — Product Vision & Roadmap
 
-The canonical product roadmap. For the in-flight phase detail, see [phase-4-plan.md](phase-4-plan.md)
-(V1 Release & Hardening → an unsigned 1.0.0 Windows GA); for decisions, see [decisions/](decisions/). This
-doc holds the *why it's world-class* and the long arc.
+The canonical product roadmap. For the in-flight phase detail, see [phase-5-plan.md](phase-5-plan.md)
+(The Free Local Tier → then the unsigned 1.0.0 Windows GA per [phase-4-plan.md](phase-4-plan.md)); for
+decisions, see [decisions/](decisions/). This doc holds the *why it's world-class* and the long arc.
 
 ## What Quorum is
 
@@ -53,14 +53,25 @@ the original `P#` IDs from the first roadmap draft, for continuity.
   surface), **P3.5** historical as-of analysis + the look-ahead clamp. Open-core line locked:
   **BYO-key raw = free, hosted-curated = paid** ([ADR 0006](decisions/0006-open-core-signal-boundary.md)).
   Detail: [phase-3-plan.md](phase-3-plan.md).
-- **Phase 4 — V1 Release & Hardening** *(≈ old P6; plan-locked → [phase-4-plan.md](phase-4-plan.md))* —
+- **Phase 4 — V1 Release & Hardening** ✅ *(≈ old P6; complete except the publish → [phase-4-plan.md](phase-4-plan.md))* —
   security sweep + a secret-scan CI gate (the shared Gemini test-key rotation is **post-V1** — a dev/CI-only
   credential that never ships), release CI (+ end-to-end
   `packaging.yml` verification, a clean-VM install smoke, a per-provider freeze regression test), a bounded
   **UX-integrity** pass (the 4 V1-blocking defects from the Phase-4 recon audit), unsigned-release readiness,
   and an **unsigned 1.0.0 Windows GA**. **Production code-signing is deferred to a 1.x/V2 fast-follow**
   ([ADR 0007](decisions/0007-defer-code-signing-to-v2.md)) — the `-Sign` seam is retained. macOS is a
-  **separate post-V1 port (P13)** — Windows-first GA.
+  **separate post-V1 port (P13)** — Windows-first GA. *(2026-07-16 founder call: the **GA publish now
+  follows Phase 5** so V1 ships the complete free-local story; hardening itself is done.)*
+- **Phase 5 — The Free Local Tier** *(current; pulled forward from Band C by founder call 2026-07-16;
+  plan-locked → [phase-5-plan.md](phase-5-plan.md))* — the **Edge Model Draft Board core, in V1**: use
+  Quorum **completely free + locally** with on-device edge models, **tier-matched to the device**
+  (Lite/Core/Pro by detected RAM). A **curated** tool-capable shortlist (Qwen3.5 anchor family; Gemma 4
+  alternates — genuinely Apache-2.0 since Apr 2026; MiniCPM5 text-only; VibeThinker excluded — all
+  live-verified 2026-07-16), per-model **fit badges** (exact GGUF bytes + KV-cache-honest sizing),
+  **one-click `ollama pull`** (streamed progress + verified resume), tiered **"Free local team" preset
+  Benches**, **roster-fit** ("can this machine run my whole Dream Team?" — max-not-sum), and **zero-key
+  onboarding**. Every analyst default is **real-run verified** through the live capability gate before it
+  ships. Hard scope wall: curated draft board, **NOT a model browser**.
 
 > **Business model:** open-core (local client free + open; paid value server-side) —
 > [monetization.md](monetization.md), [ADR 0003](decisions/0003-open-source-and-open-core-monetization.md),
@@ -85,21 +96,15 @@ the original `P#` IDs from the first roadmap draft, for continuity.
   compliance-gated**; keeps the "not financial advice / no early real-money" posture intact.
 - **Advanced AI & extensibility** *(P12)* — custom agents/prompts, add analysts, MCP tools/data
   sources, ensemble debate.
-- **Edge Model Draft Board** *(post-V1; extends Model Studio + Dream Team — signature bet #2)* — a
-  **curated** in-app shortlist of *tool-capable, trading-relevant* local/edge models (Qwen, Gemma,
-  Llama, …): one-click `ollama pull` with streamed `completed/total` progress, a **three-tier
-  device-fit badge** (Fits / Will-be-slow / Won't-fit) from detected RAM + GGUF sizing, and the P3.2
-  **post-pull capability gate** so every listed model is guaranteed tool-capable before it reaches an
-  agent. **Hard scope wall: a curated *draft board*, NOT a generic HuggingFace/Ollama model browser** —
-  the tool-calling requirement (analyst roles need it) forces curation, and Ollama exposes no
-  machine-readable library or pre-install-capability API, so an exhaustive live catalog is out (that's
-  LM Studio / Jan / Msty table-stakes, not our wedge). The differentiator no incumbent has:
-  **roster-aware fit** — *"can this machine run my whole Dream Team?"* — with KV-cache-honest sizing at
-  the configured context length. **Defensibility north star (beyond onboarding polish):** rank edge
-  models by their **realized Track Record** on the trading task (needs P7) — a "which local models
-  actually made good calls" list only Quorum can produce. *(Provenance: the P3.2 local-model discovery
-  fan-out + a 2026-07-05 research pass live-probed against Ollama 0.30.11; productionizes the P3.2
-  backlog seed "in-app `ollama pull`; LM Studio/vLLM discovery".)*
+- **Edge Model Draft Board — post-V1 remainder** *(the core shipped in **Phase 5** → [phase-5-plan.md](phase-5-plan.md);
+  this line holds what stays post-V1)* — **(a)** the defensibility north star: rank edge models by their
+  **realized Track Record** on the trading task (needs P7) — a "which local models actually made good
+  calls" list only Quorum can produce; **(b)** LM Studio / vLLM / llama.cpp discovery beyond Ollama;
+  **(c)** VRAM-aware fit refinement (dxgi FFI or sidecar-side) on top of the shipped RAM tiers;
+  **(d)** hosted/curated catalog updates decoupled from app releases (the open-core seam P5.1a's
+  engine-served catalog deliberately keeps open). *(Provenance: the P3.2 local-model discovery fan-out;
+  a 2026-07-05 research pass on Ollama 0.30.11; the 2026-07-16 five-agent live-verified model/mechanics
+  fan-out that seeded the Phase-5 catalog.)*
 - **macOS release** *(P13)* · **Mobile remote** *(P14, Android→iOS over LAN/WAN, same SSE API)* ·
   **Auto-update & distribution maturity** *(P15)*.
 
