@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-06 (**Phase 4: P4.1 ✅ P4.2 ✅ P4.3 ✅ + hub-03 disclaimer ✅ — every AI-ownable Phase-4 task is done.** 15 self-merged PRs (#31–#47), each CI-green + fresh-reviewed. **The only Phase-4 work left is founder-gated: (1) Defender submission (optional), (2) the 1.0.0 GA publish — both in §1.** §3/§4)
+**Last AI update:** 2026-07-16 (**Phase 5 (The Free Local Tier) plan-locked on your call — "complete this before GA so V1 has the complete world-class implementation."** The GA publish + Defender submission now follow Phase 5 (§1). Phase-5 plan: [docs/phase-5-plan.md](docs/phase-5-plan.md), seeded by a 5-agent live-verified model/mechanics research pass. §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -19,13 +19,13 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 - _(nothing blocking my current work)_ — merge authority delegated + `main` branch-protected, so I self-merge
   verified work (full CI green + fresh review). Gemini rotation → post-V1, signing → V2 (both §3). **The
-  GA-path items below need you, but don't block the P4.4/P4.5 *docs* work I can do now.**
-- **The GA runway now needs just 2 human steps (hub-03 is done)** — **full walkthrough in
-  [`SETUP.md`](SETUP.md) §3:** (1) **submit the built installer to Microsoft Defender**
-  ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission)) pre-launch to cut PyInstaller AV
-  false-positives (needs your MS account) — or we skip it and accept the risk; (2) the **1.0.0 GA publish
-  itself** (tag + GitHub release + distribute) — the one outward-facing act I never self-approve. I'll tee
-  these up so they're one-click when you're ready.
+  GA-path items below need you, but they're queued behind Phase 5 — nothing blocks the Phase-5 build.**
+- **The GA runway's 2 human steps are now queued BEHIND Phase 5 (your 2026-07-16 call)** — **full
+  walkthrough in [`SETUP.md`](SETUP.md) §3:** (1) **submit the built installer to Microsoft Defender**
+  ([file submission](https://www.microsoft.com/en-us/wdsi/filesubmission)) — now on the **post-Phase-5
+  binaries** (the sidecar/app change, so submitting the current build would be wasted); (2) the **1.0.0 GA
+  publish itself** (tag + GitHub release + distribute) — the one outward-facing act I never self-approve.
+  Nothing for you to do until Phase 5 lands; I'll tee both up one-click then.
 - **New: [`SETUP.md`](SETUP.md) answers your setup questions** — the credential map (short version: **you need
   no API keys/accounts to ship or run**; BYOK + local-first; the only optional adds are free FRED/Alpha Vantage
   keys), the installer-build + Defender-submission walkthrough, and the analytics call (§2 below).
@@ -48,6 +48,15 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-16 — **Phase 5 (The Free Local Tier) plan-locked — YOUR call: complete before GA, so V1 ships
+  the world-class free-local implementation.** The Edge Model Draft Board core pulls forward from post-V1
+  into V1: device-tiered (Lite/Core/Pro) curated local models, fit badges, one-click `ollama pull`,
+  tiered free-team presets, roster-fit, zero-key onboarding. Seeded by a 5-agent **live-verified**
+  research pass (your model picks checked: **Gemma 4 = genuinely Apache-2.0 ✓**, Qwen3.5 = the anchor
+  family ✓, MiniCPM5-1B = text-only roles only (Ollama can't reach its tool-calling), VibeThinker-3B =
+  excluded (its own card disclaims tool-calling)). Hard walls: **curated draft board, NOT a model
+  browser**; no analyst default ships without a **real gated run** (tag ≠ reliability). GA publish +
+  Defender submission re-sequenced after P5. Plan: [docs/phase-5-plan.md](docs/phase-5-plan.md).
 - 2026-07-06 — **hub-03 disclaimer: you said "proceed with inapp shell footer" → shipped** (PR #46). A
   persistent, always-visible `DisclaimerBar` in the shell chrome (below every surface): *"Research &
   educational tool — not financial advice. No real-money execution."* textMid on surface1 = **7.24:1** (passes

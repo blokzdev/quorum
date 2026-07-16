@@ -5,8 +5,15 @@ This repo is a de-forked descendant of **TradingAgents**, evolved into **Quorum*
 trading-analysis engine, with a mobile remote planned post-V1. This file orients any agent working
 here. Keep it current; it is loaded into context each session.
 
-> Status: **Phase 4 (V1 Release & Hardening) — P4.1–P4.4 ✅ + P4.5a/audit ✅; only the founder-gated 1.0.0 GA publish (P4.5b) + optional Defender pre-submission (P4.4b) remain.**
-> Plan-locked + merged (**[docs/phase-4-plan.md](docs/phase-4-plan.md)**, PR #32). Heading to an **unsigned
+> Status: **Phase 5 (The Free Local Tier) — current, plan-locked ([docs/phase-5-plan.md](docs/phase-5-plan.md), founder call 2026-07-16: complete before GA so V1 ships the full free-local story). Phase 4 is ✅ (P4.1–P4.4 + P4.5a/audit); the founder-gated 1.0.0 GA publish + optional Defender pre-submission now follow Phase 5.**
+> Phase 5 = the **Edge Model Draft Board core in V1**: device-tiered (Lite/Core/Max by RAM) **curated**
+> local models (Qwen3.5 anchor; Gemma 4 alternates; MiniCPM5 text-only; VibeThinker excluded — all
+> live-verified 2026-07-16), fit badges (exact bytes + KV-cache math), one-click `ollama pull`
+> (progress + verified resume), tiered "Free local team" preset Benches, roster-fit (max-not-sum), and
+> zero-key onboarding. **Every analyst default is real-run verified through the live capability gate
+> before it ships; hard scope wall: curated draft board, NOT a model browser.** Subphases P5.1 catalog +
+> tiers + badges · P5.2 one-click pull · P5.3 presets + onboarding · P5.4 verification sweep + close-out.
+> (Phase-4 record: plan-locked + merged (**[docs/phase-4-plan.md](docs/phase-4-plan.md)**, PR #32), heading to an **unsigned
 > 1.0.0 Windows GA** (**zero paid spend** — production code-signing **deferred to V2**,
 > [ADR 0007](docs/decisions/0007-defer-code-signing-to-v2.md)). Done: **P4.1** security + CI-hardening
 > (gitleaks secret-scan gate, SECURITY.md + threat model, required-flutter merge gate); **P4.2** UX-integrity
@@ -14,9 +21,10 @@ here. Keep it current; it is loaded into context each session.
 > vendor-attributed key labels); **P4.3** release CI (packaging build **proven e2e** + clean-install smoke +
 > a frozen-bundle per-provider freeze check); **P4.4a** Run-anyway first-run docs; **P4.4c** the in-product
 > **hub-03 disclaimer** (a persistent shell footer — founder-approved, PR #46); and **P4.5a** version/docs
-> reconciliation + **P4.5b** the GA-readiness audit. **Every AI-ownable Phase-4 task is done** — the only
-> remaining work is founder-gated: **P4.4b** the optional Defender pre-submission (founder MS account) and
-> **P4.5b** the outward-facing **1.0.0 GA publish** (tag + release + distribute — never self-approved). Merge model:
+> reconciliation + **P4.5b** the GA-readiness audit. **Every AI-ownable Phase-4 task is done**; the
+> founder-gated remainder — **P4.4b** the optional Defender pre-submission (founder MS account) and
+> **P4.5b** the outward-facing **1.0.0 GA publish** (tag + release + distribute — never self-approved) —
+> now runs **after Phase 5**.) Merge model:
 > subphases self-merged as-you-go (founder-delegated) gated on full CI green + fresh-context review; the GA
 > publish stays founder-surfaced. Phases 1–3 shipped to `main` (Phase 3 = PR #29 `0a7ad57`). Phase 3 (Depth & Refinement)
 > surfaced the untapped engine — **BYO-key data vendors** (P3.1),
