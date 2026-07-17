@@ -198,7 +198,9 @@ class PullRegistry:
             # Do not re-raise: the task's job is to record the terminal state; Ollama resumes later.
         except Exception as exc:  # connect refused / timeout / HTTP error → Ollama unreachable
             state.status = "error"
-            state.error = str(exc)
+            # Some transport exceptions (httpx.ConnectError) stringify EMPTY — surfaced by the real
+            # kill-Ollama proof; fall back to the class name so the UI never renders a blank error.
+            state.error = str(exc) or exc.__class__.__name__
             state.error_kind = "ollama_unreachable"
         finally:
             state.finished_at = time.time()
