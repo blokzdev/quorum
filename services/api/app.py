@@ -20,12 +20,14 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from services.api.jobs import JobRegistry
+from services.api.pulls import PullRegistry
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
 from tradingagents.llm_clients.tool_capability import model_supports_tools
 from tradingagents.runtime.events import CONTRACT_VERSION, EventType
 
 app = FastAPI(title="Quorum API", version=str(CONTRACT_VERSION))
 registry = JobRegistry()
+pull_registry = PullRegistry()  # P5.2a: the concurrent pull lane — NEVER the serialized run worker
 
 _PUBLIC_PATHS = {"/healthz"}
 _SSE_IDLE_TIMEOUT = 15  # seconds between heartbeats when no events are flowing
@@ -207,6 +209,80 @@ async def _fetch_ollama_version(base_url: str) -> str | None:
             return version if isinstance(version, str) and version else None
     except Exception:
         return None  # Ollama down / slow / malformed -> absent; the catalog is still served.
+
+
+class PullRequest(BaseModel):
+    tag: str
+
+
+def _curated_entry(tag: str) -> dict[str, Any] | None:
+    """The curated catalog entry for ``tag`` — or None. The sidecar-side scope wall (P5.2a): pulls
+    are refused for any tag outside the curated Draft Board, so no client bug (or crafted request)
+    can turn the pull lane into a generic model downloader."""
+    from tradingagents.llm_clients.edge_catalog import get_edge_catalog
+
+    for tier in get_edge_catalog()["tiers"]:
+        for m in tier["models"]:
+            if m["ollama_tag"] == tag:
+                return m
+    return None
+
+
+@app.post("/pulls")
+async def start_pull(req: PullRequest):
+    """P5.2a: start (or idempotently join) a curated-model pull on the concurrent lane. 422 for a
+    non-catalog tag (validated input the sidecar refuses by contract); 202 fresh start; 200 join."""
+    entry = _curated_entry(req.tag)
+    if entry is None:
+        return JSONResponse(
+            {"error": "tag not in the curated catalog", "tag": req.tag}, status_code=422
+        )
+    state, created = pull_registry.start(req.tag, entry["bytes"], _resolve_ollama_native_base())
+    return JSONResponse(state.snapshot(), status_code=202 if created else 200)
+
+
+@app.get("/pulls")
+async def list_pulls():
+    """All known pulls, active AND terminal (the reconnect bootstrap — a UI that reattaches after a
+    disk-full error still sees why the pull died). In-memory: a sidecar restart forgets history,
+    not progress (Ollama owns the blobs; re-pull resumes)."""
+    return {"pulls": pull_registry.snapshots()}
+
+
+@app.get("/pulls/events")
+async def stream_pulls(request: Request):
+    """ONE shared SSE stream for the whole board (not per-pull): snapshots are idempotent
+    (latest-wins), so reconnects need no Last-Event-ID — on connect the current snapshot of every
+    known pull is emitted, then live updates. Board-lifetime stream; the client closes it."""
+
+    async def generator():
+        q = pull_registry.subscribe()  # subscribe BEFORE the snapshot sweep so nothing is missed
+        try:
+            for snap in pull_registry.snapshots():
+                yield {"event": "pull", "data": json.dumps(snap)}
+            while True:
+                if await request.is_disconnected():
+                    return
+                try:
+                    snap = await asyncio.wait_for(q.get(), timeout=_SSE_IDLE_TIMEOUT)
+                except asyncio.TimeoutError:
+                    yield {"event": "heartbeat", "data": "{}"}
+                    continue
+                yield {"event": "pull", "data": json.dumps(snap)}
+        finally:
+            pull_registry.unsubscribe(q)
+
+    return EventSourceResponse(generator())
+
+
+@app.post("/pulls/cancel")
+async def cancel_pull(req: PullRequest):
+    """Cancel an active pull (tag in the BODY — curated tags contain '/' and ':'). Aborting the
+    stream stops Ollama's download; the next pull of the tag resumes from the layers on disk."""
+    state = pull_registry.cancel(req.tag)
+    if state is None:
+        raise HTTPException(404, "no active pull for that tag")
+    return {"tag": req.tag, "status": "cancelling"}
 
 
 @app.get("/catalog/edge-models")
