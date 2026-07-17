@@ -9,6 +9,7 @@ export 'src/edge_catalog.dart';
 export 'src/engine_endpoint.dart';
 export 'src/pull_state.dart';
 export 'src/pull_transport.dart';
+export 'src/roster_fit.dart';
 export 'src/events.dart';
 export 'src/reducer.dart';
 export 'src/run_config.dart';

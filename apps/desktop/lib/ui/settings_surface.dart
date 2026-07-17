@@ -11,6 +11,8 @@ import 'focusable.dart';
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/device_ram_provider.dart'; // deviceRamMbProvider (P5.1b)
 import '../state/pull_controller.dart'; // pullControllerProvider (P5.2)
+import '../state/roster_fit_provider.dart'; // rosterFitProvider (P5.3b)
+import '../state/tier_presets.dart'; // TierPreset + buildTierPresets (P5.3a)
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
 import 'brand.dart';
@@ -422,6 +424,21 @@ class SettingsBody extends ConsumerWidget {
                   title: 'Benches',
                   subtitle: 'Save the current model config (incl. the Dream Team lineup) as a preset.',
                   children: [
+                    // P5.3a: the "Free local team" tier presets — synthesized from the served
+                    // catalog at render time, never persisted (save/delete only ever see user
+                    // Benches below). One click = a complete valid all-local config.
+                    if (edgeCatalog != null && edgeCatalog!.tiers.isNotEmpty) ...[
+                      for (final p in buildTierPresets(edgeCatalog!)) ...[
+                        _TierPresetRow(
+                          preset: p,
+                          catalog: edgeCatalog!,
+                          localModels: localModels,
+                          deviceRamMb: deviceRamMb,
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      const SizedBox(height: 8),
+                    ],
                     _BenchManager(benches: s.benches),
                   ],
                 ),
@@ -1812,6 +1829,133 @@ class _MiniChip extends StatelessWidget {
   }
 }
 
+/// P5.3a — one "Free local team" preset row. Apply is gated only on INSTALLED (the "installed-only
+/// or routes through the P5.2 pull affordances" clause); the fit badge warns, never blocks — a Max
+/// preset stays pullable on a Lite machine (the user may know better). Renders inside the Benches
+/// section, above the user Benches it deliberately never joins.
+class _TierPresetRow extends ConsumerWidget {
+  final TierPreset preset;
+  final EdgeModelCatalog catalog;
+  final List<LocalModel> localModels;
+  final int? deviceRamMb;
+  const _TierPresetRow(
+      {required this.preset,
+      required this.catalog,
+      required this.localModels,
+      required this.deviceRamMb});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final m = preset.model;
+    final installed = isInstalled(m, localModels);
+    final fit = m.fitBadgeFor(deviceRamMb, ctx: catalog.kvCtx);
+    final detected = deviceRamMb == null ? null : deviceTier(deviceRamMb!);
+    final recommended = detected != null && preset.tier == detected;
+    final gated = _versionGated(catalog, m);
+    return Semantics(
+      label: '${preset.name}, all 12 roles on ${m.display}'
+          '${installed ? ', ready to apply' : ', requires a pull first'}',
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: brand.surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: recommended ? brand.accent : brand.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Text(preset.name,
+                style: TextStyle(color: brand.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            Text(m.ollamaTag,
+                style: TextStyle(color: brand.textLo, fontSize: 11.5, fontFamily: brand.fontMono)),
+            const Spacer(),
+            if (recommended) _MiniChip('Your tier', brand.accent),
+            if (fit != null) ...[const SizedBox(width: 8), _FitBadgeChip(fit: fit)],
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            'All 12 Dream Team roles on ${m.display} — no API keys needed. Local models are '
+            'slower and less capable than frontier cloud models; this is the free way to run '
+            'the full workflow.',
+            style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.3),
+          ),
+          if (installed) ...[
+            const SizedBox(height: 8),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              _SmallButton(
+                label: 'Apply — switches to real local runs',
+                brand: brand,
+                filled: true,
+                onTap: () =>
+                    ref.read(settingsControllerProvider.notifier).applyTierPreset(preset),
+              ),
+            ]),
+          ] else if (!gated && catalog.ollamaVersion != null && m.bytes != null) ...[
+            const SizedBox(height: 8),
+            Text('Pull ${m.ollamaTag} first — Apply unlocks once it is installed.',
+                style: TextStyle(color: brand.textMid, fontSize: 11.5)),
+            _PullAffordance(entry: m, fit: fit, installed: installed),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              catalog.ollamaVersion == null
+                  ? 'Ollama not detected — install it to use the free local team.'
+                  : 'Requires Ollama ≥ ${m.minOllamaVersion} — you have ${catalog.ollamaVersion}.',
+              style: TextStyle(color: brand.warning, fontSize: 11),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// P5.3b — the roster-wide fit line under the Dream Team header. Nothing renders for an all-cloud
+/// roster; an unknown never fabricates a verdict (it names the tags it has no numbers for).
+class _RosterFitLine extends ConsumerWidget {
+  const _RosterFitLine();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final r = ref.watch(rosterFitProvider);
+    if (r == null || r.distinctLocalModels == 0) return const SizedBox.shrink();
+    final String text;
+    final Color color;
+    final v = r.verdict;
+    if (v == null) {
+      text = 'Local fit unknown — no size data for ${r.unknownTags.join(', ')}.';
+      color = brand.textLo;
+    } else {
+      final label = switch (v) {
+        FitBadge.fits => 'Whole team fits this machine',
+        FitBadge.tight => 'Whole team is a tight fit on this machine',
+        FitBadge.wontFit => "The team's largest model won't fit this machine",
+      };
+      color = switch (v) {
+        FitBadge.fits => brand.up,
+        FitBadge.tight => brand.warning,
+        FitBadge.wontFit => brand.down,
+      };
+      // Max-not-sum: Ollama keeps ONE model resident and swaps per-request, so the largest model
+      // (weights + context memory) is the machine's real requirement, not the sum.
+      text = '$label — largest local model ${r.limitingTag} (${_gb(r.limitingBytes)} incl. '
+          'context memory).'
+          '${r.swapLatencyNote ? ' ${r.distinctLocalModels} distinct local models — swapping between them adds latency per hand-off.' : ''}';
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        Icon(Icons.memory, size: 13, color: color),
+        const SizedBox(width: 6),
+        Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 11))),
+      ]),
+    );
+  }
+}
+
 class _DreamTeamRoster extends ConsumerStatefulWidget {
   final Catalog catalog;
   final List<LocalModel> localModels;
@@ -1887,6 +2031,9 @@ class _DreamTeamRosterState extends ConsumerState<_DreamTeamRoster> {
               ),
             ),
           ),
+          // P5.3b: the whole-roster local fit — max-not-sum (Ollama swaps models per-request),
+          // an honest swap-latency note, and never a fabricated verdict for unknown tags.
+          const _RosterFitLine(),
           if (_expanded) ...[
             const SizedBox(height: 12),
             // Apply-to-all / per-stage source picker.

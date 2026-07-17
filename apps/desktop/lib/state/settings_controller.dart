@@ -9,6 +9,7 @@ import '../dream_team_roster.dart' show dreamTeamRoleKeys;
 import '../provider_meta.dart' show providerRequiresKeyForLaunch;
 import '../services/key_vault.dart';
 import '../vendor_meta.dart' show macroVendor, vendorNeedsKey;
+import 'tier_presets.dart' show TierPreset;
 
 /// The persisted model-config subset of [SettingsState] — a named, reusable "Bench" (preset) the user
 /// can save and re-apply. Deliberately excludes API keys (those live in the OS vault, never on disk),
@@ -453,6 +454,15 @@ final missingKeysProvider = FutureProvider<List<String>>((ref) async {
   return missing;
 });
 
+/// Whether ANY provider API key is stored in the OS vault — the P5.3c zero-key onboarding
+/// discriminator (a keyless install gets the free-local Hub affordance; the first stored key
+/// retires it). Watches [keyVaultRevisionProvider] so a key write/delete re-checks immediately.
+final anyKeysStoredProvider = FutureProvider<bool>((ref) async {
+  ref.watch(keyVaultRevisionProvider);
+  final all = await ref.read(keyVaultProvider).readAll();
+  return all.values.any((v) => v.isNotEmpty);
+});
+
 class SettingsController extends Notifier<SettingsState> {
   @override
   SettingsState build() => ref.read(initialSettingsProvider);
@@ -522,6 +532,23 @@ class SettingsController extends Notifier<SettingsState> {
 
   void deleteBench(String name) =>
       _set(state.copyWith(benches: state.benches.where((b) => b.name != name).toList()));
+
+  /// Apply a "Free local team" tier preset (P5.3a) — one click to a complete, valid all-local
+  /// config. Deliberately NOT [applyBench]: its copyWith merge keeps a stale `backendUrl`/effort
+  /// (the engine applies the global backend_url to ollama roles when the global provider is
+  /// ollama — a leftover cloud-relay URL would poison the whole all-local run), so this routes
+  /// through [SettingsState.withProvider]'s explicit reset. Also clears the data-vendor selection
+  /// (a stored keyed vendor like alpha_vantage would re-block the keyless Run button) and turns
+  /// demo mode OFF — the preset's whole point is a REAL free local run, and the button copy says
+  /// so (Decided-FYI in HUMAN.md; demo-preserving semantics is a one-line revert).
+  void applyTierPreset(TierPreset preset) {
+    final tag = preset.model.ollamaTag;
+    var s = state.withProvider('ollama'); // clears model/custom/effort/backendUrl
+    s = s.copyWith(quickModel: tag, deepModel: tag, demoMode: false);
+    s = s.withAgentModels(Map.of(preset.agentModels)); // full 12-role replace
+    s = s.withDataVendors(null); // back to the keyless engine defaults (yfinance)
+    _set(s);
+  }
 
   // --- Dream Team (per-role model overrides) -------------------------------------------------------
   /// Assign (or, with a null [model], unassign) a role's model. A blank-model [model] also unassigns —
