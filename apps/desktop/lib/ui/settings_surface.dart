@@ -1730,6 +1730,9 @@ class _PullAffordanceState extends ConsumerState<_PullAffordance> {
               label: 'Pull anyway · ${_gb(entry.bytes)}',
               brand: brand,
               filled: true,
+              // Same one-download gate as the idle button: a strip opened BEFORE another pull
+              // started must not become a second concurrent multi-GB download (#52 review).
+              enabled: !blocked,
               onTap: () {
                 setState(() => _confirming = false);
                 ctrl.start(entry);

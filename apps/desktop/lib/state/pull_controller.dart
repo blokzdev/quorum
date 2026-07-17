@@ -20,6 +20,8 @@ final pullControllerProvider =
 class PullController extends Notifier<Map<String, PullSnapshot>> {
   StreamSubscription<PullSnapshot>? _sub;
   PullTransport? _transport;
+  Future<void>? _subscribing;
+  Timer? _retry;
   bool _disposed = false;
 
   @override
@@ -72,26 +74,46 @@ class PullController extends Notifier<Map<String, PullSnapshot>> {
     }
   }
 
-  /// Subscribe to the shared snapshot stream (idempotent). Connecting IS the bootstrap: the server
-  /// sweeps every known pull's snapshot on connect, so an app that restarts mid-session recovers
-  /// terminal states without a separate GET. On stream loss the subscription self-clears; the next
-  /// start() reattaches (snapshots are idempotent — a gap costs staleness, never correctness).
-  Future<void> _ensureSubscribed() async {
-    if (_sub != null) return;
+  /// Subscribe to the shared snapshot stream (idempotent; concurrent callers share ONE in-flight
+  /// attempt — the awaits inside made the bare `_sub != null` check a check-then-act race where two
+  /// quick start()s opened two sockets and leaked the first, #52 review). Connecting IS the
+  /// bootstrap: the server sweeps every known pull's snapshot on connect, so an app that restarts
+  /// mid-session recovers terminal states without a separate GET.
+  Future<void> _ensureSubscribed() {
+    if (_sub != null) return Future.value();
+    return _subscribing ??= _subscribe().whenComplete(() => _subscribing = null);
+  }
+
+  Future<void> _subscribe() async {
     try {
       final conn =
           await ref.read(engineConnectionProvider.future).timeout(const Duration(seconds: 8));
+      if (_disposed) return;
       final transport = PullTransport(conn, client: ref.read(httpClientProvider));
       _transport = transport;
       _sub = transport.events().listen(
         _fold,
-        onError: (_) => _clearSub(),
-        onDone: _clearSub,
+        onError: (_) => _onStreamLoss(),
+        onDone: _onStreamLoss,
         cancelOnError: true,
       );
     } catch (_) {
-      _clearSub(); // sidecar not up — the start() call will surface the actual error
+      _onStreamLoss(); // sidecar not up — the start() call will surface the actual error
     }
+  }
+
+  /// Stream loss ≠ pull loss: the pull keeps running server-side, so a dropped board stream must
+  /// reattach or the rows freeze mid-progress and a finishing pull never folds into discovery
+  /// (#52 review). Retry on a short timer while any pull is active — the on-connect sweep makes
+  /// recovery complete regardless of what was missed. With nothing active, the next start()
+  /// reattaches (snapshots are idempotent — a gap costs staleness, never correctness).
+  void _onStreamLoss() {
+    _clearSub();
+    if (_disposed || !anyActive) return;
+    _retry ??= Timer(const Duration(seconds: 3), () {
+      _retry = null;
+      if (!_disposed && anyActive) _ensureSubscribed();
+    });
   }
 
   void _fold(PullSnapshot snap) {
@@ -105,11 +127,13 @@ class PullController extends Notifier<Map<String, PullSnapshot>> {
         snap.startedAt <= existing.startedAt) {
       return;
     }
+    final wasSuccess = existing != null && existing.phase == PullPhase.success;
     state = {...state, snap.tag: snap};
-    if (snap.phase == PullPhase.success) {
+    if (snap.phase == PullPhase.success && !wasSuccess) {
       // P5.2c: a completed pull folds into the EXISTING discovery + capability gate without an app
       // restart — the Installed chip and role-assignability come from the real /catalog paths,
-      // never a synthetic client-side flag.
+      // never a synthetic client-side flag. Transition-gated: reconnect sweeps redeliver terminal
+      // snapshots, and each redelivery must not refetch the catalogs again (#52 review).
       ref.invalidate(localModelsProvider);
       ref.invalidate(edgeModelCatalogProvider);
     }
@@ -124,6 +148,8 @@ class PullController extends Notifier<Map<String, PullSnapshot>> {
 
   void _teardown() {
     _disposed = true;
+    _retry?.cancel();
+    _retry = null;
     _clearSub();
   }
 }

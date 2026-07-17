@@ -12,8 +12,11 @@ import 'sse_frames.dart';
 class SseTransport {
   final EngineConnection conn;
   final http.Client _client;
+  final bool _ownsClient;
 
-  SseTransport(this.conn, {http.Client? client}) : _client = client ?? http.Client();
+  SseTransport(this.conn, {http.Client? client})
+      : _client = client ?? http.Client(),
+        _ownsClient = client == null;
 
   /// Streams typed events for [runId]. [fromSeq] >= 0 resumes after that seq (Last-Event-ID);
   /// -1 replays from the beginning. Heartbeats and unparsable frames are skipped.
@@ -34,5 +37,9 @@ class SseTransport {
     }
   }
 
-  void close() => _client.close();
+  /// Closes the HTTP client ONLY when this instance constructed it — an injected (shared) client
+  /// is the injector's to close (see [ApiClient.close]).
+  void close() {
+    if (_ownsClient) _client.close();
+  }
 }
