@@ -1633,6 +1633,10 @@ class _PullAffordanceState extends ConsumerState<_PullAffordance> {
     final pulls = ref.watch(pullControllerProvider);
     final ctrl = ref.read(pullControllerProvider.notifier);
     final snap = pulls[entry.ollamaTag];
+    // V1 policy: one download at a time — computed up front so EVERY start affordance in every
+    // branch (idle Pull, error Retry, Won't-fit "Pull anyway") carries the same gate (#53 review:
+    // gating only the idle button left Retry able to start a second concurrent multi-GB pull).
+    final blocked = ctrl.anyActive;
 
     // --- in flight: progress bar + honest byte counts + Cancel --------------------------------
     if (snap != null && snap.isActive) {
@@ -1682,7 +1686,8 @@ class _PullAffordanceState extends ConsumerState<_PullAffordance> {
                 style: TextStyle(color: brand.down, fontSize: 11)),
           ),
           const SizedBox(width: 8),
-          _SmallButton(label: 'Retry', brand: brand, onTap: () => ctrl.start(entry)),
+          _SmallButton(
+              label: 'Retry', brand: brand, enabled: !blocked, onTap: () => ctrl.start(entry)),
         ]),
       );
     }
@@ -1709,7 +1714,6 @@ class _PullAffordanceState extends ConsumerState<_PullAffordance> {
     if (widget.installed) return const SizedBox.shrink();
     final cancelled = snap != null && snap.phase == PullPhase.cancelled;
     final label = '${cancelled ? 'Resume' : 'Pull'} · ${_gb(entry.bytes)}';
-    final blocked = ctrl.anyActive; // V1 policy: one download at a time
 
     if (_confirming) {
       // The Won't-fit two-tap: the badge is advisory (the user may know better), but intent is

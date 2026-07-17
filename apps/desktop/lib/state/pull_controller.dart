@@ -17,11 +17,19 @@ import 'run_controller.dart' show httpClientProvider;
 final pullControllerProvider =
     NotifierProvider<PullController, Map<String, PullSnapshot>>(PullController.new);
 
+/// Consecutive stream losses (with no snapshot in between) before active pulls are declared dead.
+const int _kMaxLossStreak = 3;
+
 class PullController extends Notifier<Map<String, PullSnapshot>> {
+  /// The reconnect backoff. Static so tests can shrink it (the provider constructs this notifier —
+  /// there is no constructor seam); production never mutates it.
+  static Duration retryDelay = const Duration(seconds: 3);
+
   StreamSubscription<PullSnapshot>? _sub;
   PullTransport? _transport;
   Future<void>? _subscribing;
   Timer? _retry;
+  int _lossStreak = 0;
   bool _disposed = false;
 
   @override
@@ -107,17 +115,41 @@ class PullController extends Notifier<Map<String, PullSnapshot>> {
   /// (#52 review). Retry on a short timer while any pull is active — the on-connect sweep makes
   /// recovery complete regardless of what was missed. With nothing active, the next start()
   /// reattaches (snapshots are idempotent — a gap costs staleness, never correctness).
+  ///
+  /// But a DEAD sidecar can never send a terminal snapshot, so an unbounded silent retry loop
+  /// would leave live-looking frozen rows blocking every Pull button all session (#53 review):
+  /// after [_kMaxLossStreak] straight losses with no snapshot in between, the active pulls are
+  /// declared dead honestly — the sidecar drives the pull (Ollama aborts when its socket closes),
+  /// so no sidecar means no download either.
   void _onStreamLoss() {
     _clearSub();
     if (_disposed || !anyActive) return;
-    _retry ??= Timer(const Duration(seconds: 3), () {
+    _lossStreak++;
+    if (_lossStreak >= _kMaxLossStreak) {
+      _failActivePulls();
+      return;
+    }
+    _retry ??= Timer(retryDelay, () {
       _retry = null;
       if (!_disposed && anyActive) _ensureSubscribed();
     });
   }
 
+  void _failActivePulls() {
+    for (final s in state.values.where((s) => s.isActive).toList()) {
+      _fold(PullSnapshot.fromJson({
+        'tag': s.tag,
+        'status': 'error',
+        'error': 'Lost contact with the engine — the pull stopped. Pull again to resume.',
+        'error_kind': 'ollama_unreachable',
+        'started_at': s.startedAt,
+      }));
+    }
+  }
+
   void _fold(PullSnapshot snap) {
     if (_disposed) return; // a late stream event after teardown must not touch dead state
+    _lossStreak = 0; // a snapshot arriving proves the pipe is alive — reset the dead-sidecar count
     final existing = state[snap.tag];
     // Anti-clobber: never let a stale echo of the SAME pull (same or older started_at) demote a
     // terminal snapshot back to active. A genuine re-pull carries a LATER started_at and folds.
