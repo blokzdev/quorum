@@ -30,6 +30,10 @@ class PullSnapshot {
   final String? error;
   final String? errorKind; // 'ollama_unreachable' | 'ollama_error' (raw; forward-tolerant)
 
+  /// Server-side pull start time (epoch seconds) — distinguishes a NEW pull of the same tag from a
+  /// stale echo of the previous one (the client's anti-clobber guard input). 0 when unserved.
+  final double startedAt;
+
   const PullSnapshot({
     required this.tag,
     this.phase = PullPhase.unknown,
@@ -41,6 +45,7 @@ class PullSnapshot {
     this.driftReason,
     this.error,
     this.errorKind,
+    this.startedAt = 0,
   });
 
   factory PullSnapshot.fromJson(Map<String, dynamic> j) {
@@ -63,6 +68,7 @@ class PullSnapshot {
       driftReason: j['drift_reason'] as String?,
       error: j['error'] as String?,
       errorKind: j['error_kind'] as String?,
+      startedAt: (j['started_at'] as num?)?.toDouble() ?? 0,
     );
   }
 

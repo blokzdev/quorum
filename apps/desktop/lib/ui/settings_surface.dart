@@ -10,6 +10,7 @@ import 'contrast.dart' show accessibleTint;
 import 'focusable.dart';
 import '../state/catalog_provider.dart'; // catalogProvider, engineConnectionProvider
 import '../state/device_ram_provider.dart'; // deviceRamMbProvider (P5.1b)
+import '../state/pull_controller.dart'; // pullControllerProvider (P5.2)
 import '../state/run_controller.dart' show httpClientProvider;
 import '../state/settings_controller.dart';
 import 'brand.dart';
@@ -1508,6 +1509,7 @@ class _TierGroup extends StatelessWidget {
             installed: isInstalled(m, localModels),
             fit: m.fitBadgeFor(deviceRamMb, ctx: catalog.kvCtx),
             highlight: isDetected && m.isDefault,
+            ollamaPresent: catalog.ollamaVersion != null,
           ),
           const SizedBox(height: 6),
         ],
@@ -1523,13 +1525,15 @@ class _EdgeModelRow extends StatelessWidget {
   final bool installed;
   final FitBadge? fit;
   final bool highlight;
+  final bool ollamaPresent;
   const _EdgeModelRow(
       {required this.entry,
       required this.gated,
       required this.detectedVersion,
       required this.installed,
       required this.fit,
-      required this.highlight});
+      required this.highlight,
+      this.ollamaPresent = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1594,8 +1598,170 @@ class _EdgeModelRow extends StatelessWidget {
               ),
             ]),
           ],
+          // P5.2: the pull affordance (button / progress / error / drift). Hidden — not disabled —
+          // when version-gated, Ollama absent, or the size is unknown ("every pull is an explicit
+          // user click with visible size" is a locked constraint). `installed` hides only the idle
+          // BUTTON inside — progress/error/drift must survive the installed flip (a drifted pull's
+          // warning persists after discovery marks the row installed).
+          if (!gated && ollamaPresent && entry.bytes != null)
+            _PullAffordance(entry: entry, fit: fit, installed: installed),
         ]),
       ),
+    );
+  }
+}
+
+/// The per-row pull control (P5.2b/c), dispatched off the tag's latest snapshot. SCOPE WALL: this
+/// subtree renders buttons/progress only — no text input exists in any state, and the wire request
+/// is built from the TYPED catalog entry inside the controller (no string seam).
+class _PullAffordance extends ConsumerStatefulWidget {
+  final EdgeModel entry;
+  final FitBadge? fit;
+  final bool installed;
+  const _PullAffordance({required this.entry, required this.fit, required this.installed});
+  @override
+  ConsumerState<_PullAffordance> createState() => _PullAffordanceState();
+}
+
+class _PullAffordanceState extends ConsumerState<_PullAffordance> {
+  bool _confirming = false; // the two-tap Won't-fit confirm (inline, never a modal)
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final entry = widget.entry;
+    final pulls = ref.watch(pullControllerProvider);
+    final ctrl = ref.read(pullControllerProvider.notifier);
+    final snap = pulls[entry.ollamaTag];
+
+    // --- in flight: progress bar + honest byte counts + Cancel --------------------------------
+    if (snap != null && snap.isActive) {
+      final progress = snap.progress;
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              // A static zero bar + the verbatim status beats a fake indeterminate animation
+              // (honest, and golden-deterministic).
+              child: LinearProgressIndicator(
+                value: progress ?? 0.0,
+                minHeight: 5,
+                backgroundColor: brand.surface1,
+                valueColor: AlwaysStoppedAnimation(brand.accent),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            snap.phase == PullPhase.verifying
+                ? 'verifying…'
+                : progress == null
+                    ? snap.statusRaw
+                    : '${_gb(snap.completed)} / ${_gb(snap.total)}',
+            style: TextStyle(color: brand.textMid, fontSize: 11, fontFamily: brand.fontMono),
+          ),
+          const SizedBox(width: 10),
+          _SmallButton(label: 'Cancel', brand: brand, onTap: () => ctrl.cancel(entry.ollamaTag)),
+        ]),
+      );
+    }
+
+    // --- terminal error: the server's message verbatim + Retry --------------------------------
+    if (snap != null && snap.phase == PullPhase.error) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Icon(Icons.error_outline, size: 13, color: brand.down),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(snap.error ?? 'the pull failed',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: brand.down, fontSize: 11)),
+          ),
+          const SizedBox(width: 8),
+          _SmallButton(label: 'Retry', brand: brand, onTap: () => ctrl.start(entry)),
+        ]),
+      );
+    }
+
+    // --- drift after success: the tag changed upstream — surface it, don't hide it ------------
+    if (snap != null && snap.phase == PullPhase.success && snap.drift) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Icon(Icons.warning_amber_rounded, size: 13, color: brand.warning),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Downloaded size differs from the curated catalog — the tag may have changed upstream.',
+              style: TextStyle(color: brand.warning, fontSize: 11),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    // --- idle / cancelled: the Pull (or Resume) button. Installed rows get no button (nothing
+    // to do — no re-pull affordance in V1), but the branches above still render for them. --------
+    if (widget.installed) return const SizedBox.shrink();
+    final cancelled = snap != null && snap.phase == PullPhase.cancelled;
+    final label = '${cancelled ? 'Resume' : 'Pull'} · ${_gb(entry.bytes)}';
+    final blocked = ctrl.anyActive; // V1 policy: one download at a time
+
+    if (_confirming) {
+      // The Won't-fit two-tap: the badge is advisory (the user may know better), but intent is
+      // confirmed inline before a multi-GB download that the fit math says exceeds this machine.
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Icon(Icons.warning_amber_rounded, size: 13, color: brand.warning),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'May not run on this machine — the fit estimate says it exceeds available memory.',
+              style: TextStyle(color: brand.warning, fontSize: 11),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _SmallButton(
+              label: 'Pull anyway · ${_gb(entry.bytes)}',
+              brand: brand,
+              filled: true,
+              onTap: () {
+                setState(() => _confirming = false);
+                ctrl.start(entry);
+              }),
+          const SizedBox(width: 6),
+          _SmallButton(
+              label: 'Keep browsing',
+              brand: brand,
+              onTap: () => setState(() => _confirming = false)),
+        ]),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      // Row(min), not Align: _SmallButton's Container has an alignment, which expands to the max
+      // width under Align's bounded-loose constraints — a min Row gives it unbounded width, so the
+      // button shrink-wraps to its label (the compact chip the design calls for).
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        _SmallButton(
+          label: label,
+          brand: brand,
+          filled: true,
+          enabled: !blocked,
+          onTap: () {
+            if (widget.fit == FitBadge.wontFit) {
+              setState(() => _confirming = true); // first tap never starts a Won't-fit pull
+            } else {
+              ctrl.start(entry);
+            }
+          },
+        ),
+      ]),
     );
   }
 }

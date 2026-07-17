@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quorum/state/catalog_provider.dart';
+import 'package:quorum/state/pull_controller.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/brand.dart';
 import 'package:quorum/ui/quorum_colors.dart';
@@ -45,14 +46,23 @@ Map<String, dynamic> _edgeJson({String? ollamaVersion}) => {
       ],
     };
 
+class _FixturePulls extends PullController {
+  final Map<String, PullSnapshot> fixture;
+  _FixturePulls(this.fixture);
+  @override
+  Map<String, PullSnapshot> build() => fixture;
+}
+
 Widget _wrap({
   EdgeModelCatalog? edgeCatalog,
   int? deviceRamMb,
+  Map<String, PullSnapshot> pulls = const {},
   void Function()? onEdgeFetch,
   void Function()? onLocalFetch,
 }) =>
     ProviderScope(
       overrides: [
+        pullControllerProvider.overrideWith(() => _FixturePulls(pulls)),
         initialSettingsProvider.overrideWithValue(const SettingsState(
           demoMode: true,
           ticker: 'NVDA',
@@ -184,5 +194,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(edgeFetches, before.$1 + 1, reason: 'Re-detect must refetch the edge catalog');
     expect(localFetches, before.$2 + 1, reason: 'Re-detect must refetch discovery');
+  });
+
+  testWidgets('SCOPE WALL holds across every P5.2 pull state (incl. the confirm strip)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final pullStates = <String, Map<String, dynamic>>{
+      'pulling': {'tag': 'qwen3.5:2b', 'status': 'pulling', 'total': 100, 'completed': 40},
+      'error': {'tag': 'qwen3.5:2b', 'status': 'error', 'error': 'boom'},
+      'drift-success': {'tag': 'qwen3.5:2b', 'status': 'success', 'drift': true},
+      'cancelled': {'tag': 'qwen3.5:2b', 'status': 'cancelled'},
+    };
+    for (final entry in pullStates.entries) {
+      // ProviderScope overrides are fixed per element — dispose the tree between pumps or the
+      // FIRST _FixturePulls silently sticks and the loop stops exercising the states.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(_wrap(
+        edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+        deviceRamMb: 16384,
+        pulls: {'qwen3.5:2b': PullSnapshot.fromJson(entry.value)},
+      ));
+      await tester.pumpAndSettle();
+      final board = _boardFinder();
+      expect(board, findsOneWidget, reason: 'state ${entry.key} must render the board');
+      expect(find.descendant(of: board, matching: find.byType(EditableText)), findsNothing,
+          reason: 'no text input may ride in with pull state ${entry.key}');
+    }
+    // And the Won't-fit confirm strip (a tapped-into state, not a snapshot state):
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+      deviceRamMb: 4096, // the lite fixture model badges Won't fit on a tiny device
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Pull · '));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('May not run on this machine'), findsOneWidget);
+    expect(find.descendant(of: _boardFinder(), matching: find.byType(EditableText)), findsNothing,
+        reason: 'the confirm strip must not introduce a text input');
   });
 }

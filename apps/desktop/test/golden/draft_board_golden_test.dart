@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quorum/state/pull_controller.dart';
 import 'package:quorum/state/settings_controller.dart';
 import 'package:quorum/ui/brand.dart';
 import 'package:quorum/ui/quorum_colors.dart';
@@ -112,10 +113,19 @@ Map<String, dynamic> _edgeJson({String? ollamaVersion}) => {
       ],
     };
 
+/// Injects deterministic pull states for the P5.2 goldens (no network, no timers).
+class _FixturePulls extends PullController {
+  final Map<String, PullSnapshot> fixture;
+  _FixturePulls(this.fixture);
+  @override
+  Map<String, PullSnapshot> build() => fixture;
+}
+
 Widget _wrap({
   required EdgeModelCatalog edgeCatalog,
   int? deviceRamMb,
   List<LocalModel> localModels = const [],
+  Map<String, PullSnapshot> pulls = const {},
 }) =>
     ProviderScope(
       overrides: [
@@ -126,6 +136,7 @@ Widget _wrap({
           deepModel: 'claude-opus-4-8',
           quickModel: 'claude-sonnet-4-6',
         )),
+        pullControllerProvider.overrideWith(() => _FixturePulls(pulls)),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -230,5 +241,85 @@ void main() {
     expect(find.text("Won't fit"), findsNWidgets(4)); // 9b, e2b, 14b-fixture, 35b
     await expectLater(
         find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_lite_device.png'));
+  });
+
+  testWidgets('draft board — a pull in flight: progress + cancel; other buttons disabled',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2450));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+      deviceRamMb: 16384,
+      pulls: {
+        'qwen3.5:9b': PullSnapshot.fromJson(const {
+          'tag': 'qwen3.5:9b', 'status': 'pulling',
+          'total': 6594462816, 'completed': 3297231408,
+        }),
+      },
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('3.3 GB / 6.6 GB'), findsOneWidget); // honest byte counts, mono
+    await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_pulling.png'));
+  });
+
+  testWidgets('draft board — a failed pull shows the server error verbatim + Retry',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2450));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+      deviceRamMb: 16384,
+      pulls: {
+        'qwen3.5:9b': PullSnapshot.fromJson(const {
+          'tag': 'qwen3.5:9b', 'status': 'error',
+          'error': 'write /models/blobs: no space left on device',
+          'error_kind': 'ollama_error',
+        }),
+      },
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('no space left on device'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    await expectLater(
+        find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_pull_error.png'));
+  });
+
+  testWidgets('draft board — a drifted pull warns even after success', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2450));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+      deviceRamMb: 16384,
+      pulls: {
+        'qwen3.5:2b': PullSnapshot.fromJson(const {
+          'tag': 'qwen3.5:2b', 'status': 'success',
+          'total': 2841180928, 'completed': 2841180928,
+          'catalog_bytes': 2741180928,
+          'drift': true, 'drift_reason': 'no layer matched catalog bytes',
+        }),
+      },
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('differs from the curated catalog'), findsOneWidget);
+    await expectLater(
+        find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_pull_drift.png'));
+  });
+
+  testWidgets("draft board — a Won't-fit pull needs a second, informed tap", (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2450));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+      deviceRamMb: 8062, // gemma4:e2b badges Won't fit here
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pull · 7.2 GB')); // first tap does NOT start the pull
+    await tester.pumpAndSettle();
+    expect(find.textContaining('May not run on this machine'), findsOneWidget);
+    expect(find.text('Pull anyway · 7.2 GB'), findsOneWidget);
+    expect(find.text('Keep browsing'), findsOneWidget);
+    await expectLater(
+        find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_wontfit_confirm.png'));
   });
 }
