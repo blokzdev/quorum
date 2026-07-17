@@ -129,7 +129,7 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
 
 ### P5.2 — One-click pull *(the install path)*
 
-- [ ] **P5.2a Pull seam** — sidecar-proxied pull (`POST /pull` → Ollama `/api/pull`), reusing the
+- [x] **P5.2a Pull seam** — sidecar-proxied pull (`POST /pull` → Ollama `/api/pull`), reusing the
   EventLog/SSE *pattern* but **NOT the serialized run queue (A1, blocker-grade):** `jobs.py`'s
   `JobRegistry` runs all jobs through one worker thread, so a 6–24GB pull queued there would block every
   analysis run for the pull's duration (and vice versa) — and the reasons runs are serialized
@@ -137,18 +137,24 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
   **separate concurrent lane**, and pull events ride a **separate lightweight stream**, not the run
   event union (no `CONTRACT_VERSION` bump; the Dart side's `UnknownEvent` forward-compat is the
   backstop) — both validated at P5.2 recon.
-- [ ] **P5.2b Pull UX** — per-model progress (aggregate per-layer `completed/total`; early events omit
+- [x] **P5.2b Pull UX** — per-model progress (aggregate per-layer `completed/total`; early events omit
   `completed` → default 0), cancel, and **resume proven for real** (cancel a real pull mid-flight,
   re-pull, verify it resumes — documented Ollama behavior, must be demonstrated not assumed).
-- [ ] **P5.2c Post-pull integration** — a completed pull folds into the existing discovery + capability
+- [x] **P5.2c Post-pull integration** — a completed pull folds into the existing discovery + capability
   gate **without app restart**; pull errors (Ollama down, disk full, cancelled) surface honestly; the
   pull stream's reported `total` bytes are **cross-checked against the catalog entry's bytes** (the
   catalog-drift tripwire from P5.1a — a repointed tag surfaces as a visible mismatch, not a silent lie).
-  *Exit (falsifiable):* a real curated model pulls end-to-end from the Draft Board on the dev machine
-  **while an analysis run is in flight (the A1 concurrency proof — neither blocks the other)**;
-  cancel→resume verified on a real download; the pulled model immediately appears role-assignable with
-  its true capabilities; killing Ollama mid-pull produces a recoverable error state (not a crash); a
-  seeded byte-mismatch surfaces the drift warning; goldens for pulling/installed/error states.
+  *Exit (falsifiable — ALL MET, 2026-07-17, real sidecar + real Ollama 0.32.0):* qwen3.5:0.8b (1.0GB)
+  pulled end-to-end **while a demo run streamed simultaneously** (sampled side-by-side: run sections
+  advancing while pull bytes climbed — the A1 proof); **cancel→resume proven live** (cancelled at
+  86.7MB; 6s after re-pull already at 273MB — resumed, not restarted); **kill-Ollama-mid-pull produced
+  an honest `ollama_unreachable` snapshot** and the re-pull after Ollama returned completed clean;
+  the finished model appeared in discovery with `tool_capable: true` (the P5.2c fold, no restart);
+  the at-success drift check passed correctly (aggregate differs by ~12KB of metadata layers, but the
+  MODEL layer matched the catalog bytes exactly → drift=False); the live SSE wire served the
+  on-connect sweep + live snapshots (the case no in-process harness can test — both verified hanging,
+  documented in tests/test_api_pulls.py); drift/error/pulling/confirm goldens Read-verified; the
+  scope-wall falsifier extended across every pull state.
 
 ### P5.3 — Tiered free lineup + zero-key onboarding *(the payoff)*
 
