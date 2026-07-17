@@ -3,12 +3,11 @@
 /// custom auth header + resume semantics stay exact and portable to mobile.
 library;
 
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 import 'engine_endpoint.dart';
 import 'events.dart';
+import 'sse_frames.dart';
 
 class SseTransport {
   final EngineConnection conn;
@@ -29,17 +28,7 @@ class SseTransport {
     if (resp.statusCode != 200) {
       throw EngineException('SSE /runs/$runId/events -> ${resp.statusCode}');
     }
-    final lines = resp.stream.transform(utf8.decoder).transform(const LineSplitter());
-    await for (final line in lines) {
-      if (!line.startsWith('data:')) continue; // ignore event:/id:/comments
-      final payload = line.substring(5).trim();
-      if (payload.isEmpty) continue;
-      Map<String, dynamic> env;
-      try {
-        env = jsonDecode(payload) as Map<String, dynamic>;
-      } catch (_) {
-        continue;
-      }
+    await for (final env in sseJsonDataFrames(resp.stream)) {
       if (env['type'] == null) continue; // heartbeat frame ({}) or noise
       yield QuorumEvent.fromEnvelope(env);
     }

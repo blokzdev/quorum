@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'engine_endpoint.dart';
+import 'pull_state.dart';
 import 'run_summary.dart';
 
 class ApiClient {
@@ -69,6 +70,42 @@ class ApiClient {
     try {
       await _client.post(conn.baseUri.resolve('/shutdown'), headers: _auth);
     } catch (_) {/* ignore */}
+  }
+
+  /// POST /pulls -> start (202) or idempotently join (200) a curated-model pull; the response body
+  /// is the pull's current snapshot either way. The tag must be a curated `ollama_tag` — the
+  /// sidecar re-validates against the catalog (422 otherwise; the server-side scope wall).
+  Future<PullSnapshot> startPull(String tag) async {
+    final r = await _client.post(
+      conn.baseUri.resolve('/pulls'),
+      headers: {..._auth, 'content-type': 'application/json'},
+      body: jsonEncode({'tag': tag}),
+    );
+    if (r.statusCode != 202 && r.statusCode != 200) {
+      throw EngineException('startPull failed: ${r.statusCode} ${r.body}');
+    }
+    return PullSnapshot.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
+  /// GET /pulls -> every known pull's snapshot (active + terminal) — the reconnect bootstrap.
+  Future<List<PullSnapshot>> listPulls() async {
+    final body = await _getJson('/pulls');
+    return ((body['pulls'] as List?) ?? const [])
+        .map((e) => PullSnapshot.fromJson((e as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  /// POST /pulls/cancel — aborts an active pull (Ollama keeps partial layers; re-pull resumes).
+  /// 404 (no active pull) is swallowed: cancel-after-finish is a benign race, not an error.
+  Future<void> cancelPull(String tag) async {
+    final r = await _client.post(
+      conn.baseUri.resolve('/pulls/cancel'),
+      headers: {..._auth, 'content-type': 'application/json'},
+      body: jsonEncode({'tag': tag}),
+    );
+    if (r.statusCode != 200 && r.statusCode != 404) {
+      throw EngineException('cancelPull failed: ${r.statusCode} ${r.body}');
+    }
   }
 
   Future<Map<String, dynamic>> _getJson(String path, {bool auth = true}) async {
