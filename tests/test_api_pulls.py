@@ -201,6 +201,21 @@ def test_repull_after_terminal_starts_fresh(monkeypatch):
         assert calls == 2
 
 
+def test_success_with_no_layer_lines_does_not_claim_drift(monkeypatch):
+    # Defensive (#52 review): `all()` over an empty layers dict is vacuously True, so a stream that
+    # reaches success without any layer lines (a hypothetical future Ollama skipping cached layers
+    # on resume) must read as UNVERIFIABLE, not as drift — the tripwire only fires on observed
+    # mismatching bytes. (Ollama 0.32.x re-emits every layer on resume — live-verified.)
+    monkeypatch.setattr(pulls_mod, "_ollama_pull_lines", _fake_lines([
+        {"status": "success"},
+    ]))
+    with _client() as client:
+        client.post("/pulls", json={"tag": TAG})
+        snap = _poll(client, TAG, lambda s: s["status"] == "success")
+        assert snap["drift"] is False
+        assert snap["drift_reason"] is None
+
+
 def test_terminal_snapshots_are_retained(monkeypatch):
     monkeypatch.setattr(pulls_mod, "_ollama_pull_lines", _fake_lines([
         {"error": "boom"},

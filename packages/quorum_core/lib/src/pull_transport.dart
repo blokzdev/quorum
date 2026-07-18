@@ -14,8 +14,11 @@ import 'sse_frames.dart';
 class PullTransport {
   final EngineConnection conn;
   final http.Client _client;
+  final bool _ownsClient;
 
-  PullTransport(this.conn, {http.Client? client}) : _client = client ?? http.Client();
+  PullTransport(this.conn, {http.Client? client})
+      : _client = client ?? http.Client(),
+        _ownsClient = client == null;
 
   /// The shared snapshot stream: the on-connect sweep of every known pull, then live updates.
   /// Heartbeats (`{}` — no `tag`) are skipped. Non-200 → [EngineException].
@@ -34,5 +37,10 @@ class PullTransport {
     }
   }
 
-  void close() => _client.close();
+  /// Closes the HTTP client ONLY when this instance constructed it — an injected (shared) client
+  /// is the injector's to close (see [ApiClient.close]; the #52-review defect was this transport
+  /// closing the app-wide client on any stream loss).
+  void close() {
+    if (_ownsClient) _client.close();
+  }
 }

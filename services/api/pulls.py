@@ -41,8 +41,15 @@ async def _ollama_pull_lines(base_url: str, tag: str) -> AsyncIterator[dict[str,
     monkeypatch this seam with a fake line stream (the ``_fetch_ollama_tags`` precedent)."""
     import httpx  # lazy — keep it off the demo boot path (ADR 0002)
 
+    # read=None: the stream has legitimately silent phases longer than any sane read timeout —
+    # `verifying sha256 digest` is ONE line before hashing a 24GB Max-tier blob (well over 30s on a
+    # slow disk). A read timeout there marks the pull failed while Ollama actually completes it
+    # (#52 review). Localhost socket death still surfaces (closed stream -> "ended without
+    # success"); cancel remains available throughout.
     async with (
-        httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client,
+        httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=5.0, read=None, write=30.0, pool=30.0)
+        ) as client,
         client.stream(
             "POST", f"{base_url}/api/pull", json={"model": tag, "stream": True}
         ) as resp,
@@ -178,8 +185,12 @@ class PullRegistry:
                 elif status == "success":
                     state.status = "success"
                     # At-success drift: the curated model layer's exact bytes must appear among the
-                    # pulled layers (both sides come from the same registry manifest data).
-                    if not state.drift and all(
+                    # pulled layers (both sides come from the same registry manifest data). The
+                    # `state.layers and` guard: `all()` over an empty dict is vacuously True, so if
+                    # a future Ollama stopped re-emitting cached-layer lines on a resumed pull,
+                    # every resume would false-positive drift (#52 review; 0.32.x re-emits every
+                    # layer — live-verified — so empty-at-success means unverifiable, not drifted).
+                    if not state.drift and state.layers and all(
                         layer["total"] != state.catalog_bytes for layer in state.layers.values()
                     ):
                         state.drift = True
