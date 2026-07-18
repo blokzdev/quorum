@@ -188,7 +188,8 @@ void main() {
     expect(find.text('THIS MACHINE'), findsOneWidget); // core is the detected tier
     expect(find.text('Installed ✓'), findsOneWidget); // llama3.2 only (tag ⇄ :latest normalization)
     expect(find.text('Tight'), findsOneWidget); // the fixture 14B on 16GB
-    expect(find.text("Won't fit"), findsOneWidget); // the 35B MoE on 16GB
+    // The 35B MoE card + the Max preset row's badge (P5.3a: preset rows carry fit badges too).
+    expect(find.text("Won't fit"), findsNWidgets(2));
     await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_tiers.png'));
   });
 
@@ -201,10 +202,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // qwen3.5 (x2) + gemma4 + qwen3.6 rows carry the gate line; llama3.2/minicpm5/qwen3:14b do not.
-    expect(find.textContaining('Requires Ollama ≥ 0.17.6'), findsNWidgets(2));
+    // qwen3.5 (x2) + gemma4 + qwen3.6 CARDS carry the gate line; llama3.2/minicpm5/qwen3:14b do
+    // not. P5.3a: the qwen3.5/qwen3.6 tier-DEFAULT rows repeat it on their preset rows (gemma4 is
+    // not a default -> no preset row), so 0.17.6 = 2 cards + 2 presets, 0.17.7 = card + preset.
+    expect(find.textContaining('Requires Ollama ≥ 0.17.6'), findsNWidgets(4));
     expect(find.textContaining('Requires Ollama ≥ 0.20.0'), findsOneWidget);
-    expect(find.textContaining('Requires Ollama ≥ 0.17.7'), findsOneWidget);
+    expect(find.textContaining('Requires Ollama ≥ 0.17.7'), findsNWidgets(2));
     await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_old_ollama.png'));
   });
 
@@ -238,7 +241,9 @@ void main() {
 
     // Lite is the detected tier; every core/max heavyweight badges Won't fit (incl. gemma4:e2b).
     expect(find.text('THIS MACHINE'), findsOneWidget);
-    expect(find.text("Won't fit"), findsNWidgets(4)); // 9b, e2b, 14b-fixture, 35b
+    // Cards: 9b, e2b, 14b-fixture, 35b. P5.3a preset rows: Core (9b) + Max (35b) repeat their
+    // default's badge; the Lite preset (2b) fits an 8GB device.
+    expect(find.text("Won't fit"), findsNWidgets(6));
     await expectLater(
         find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_lite_device.png'));
   });
@@ -258,8 +263,10 @@ void main() {
       },
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Cancel'), findsOneWidget);
-    expect(find.text('3.3 GB / 6.6 GB'), findsOneWidget); // honest byte counts, mono
+    // The board card AND the Core preset row mirror the SAME pull (P5.3a routes the preset's
+    // needs-pull state through the shared affordance) — both show live progress.
+    expect(find.text('Cancel'), findsNWidgets(2));
+    expect(find.text('3.3 GB / 6.6 GB'), findsNWidgets(2)); // honest byte counts, mono
     await expectLater(find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_pulling.png'));
   });
 
@@ -279,8 +286,9 @@ void main() {
       },
     ));
     await tester.pumpAndSettle();
-    expect(find.textContaining('no space left on device'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
+    // Board card + Core preset row both surface the same failed pull (P5.3a shared affordance).
+    expect(find.textContaining('no space left on device'), findsNWidgets(2));
+    expect(find.text('Retry'), findsNWidgets(2));
     await expectLater(
         find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_pull_error.png'));
   });
@@ -301,7 +309,8 @@ void main() {
       },
     ));
     await tester.pumpAndSettle();
-    expect(find.textContaining('differs from the curated catalog'), findsOneWidget);
+    // Board card + Lite preset row both keep the drift warning visible (P5.3a shared affordance).
+    expect(find.textContaining('differs from the curated catalog'), findsNWidgets(2));
     await expectLater(
         find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_pull_drift.png'));
   });
@@ -321,5 +330,32 @@ void main() {
     expect(find.text('Keep browsing'), findsOneWidget);
     await expectLater(
         find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_wontfit_confirm.png'));
+  });
+
+  testWidgets('P5.3a preset rows — installed Apply vs needs-pull routing (16GB core device)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2450));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.32.0')),
+      deviceRamMb: 16384,
+      // The CORE tier default is installed -> its preset row shows Apply; Lite/Max defaults are
+      // not -> their rows route through the P5.2 pull affordance instead.
+      localModels: const [LocalModel('qwen3.5:9b', toolCapable: true)],
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Free local team — Max'), 300,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Free local team — Lite'), findsOneWidget);
+    expect(find.text('Free local team — Core'), findsOneWidget);
+    expect(find.text('Free local team — Max'), findsOneWidget);
+    expect(find.text('Apply — switches to real local runs'), findsOneWidget); // core only
+    expect(find.textContaining('first — Apply unlocks'), findsNWidgets(2)); // lite + max
+    expect(find.text('Your tier'), findsOneWidget); // 16GB -> core is the detected tier
+    await expectLater(
+        find.byType(Scaffold), matchesGoldenFile('goldens/draft_board_preset_rows.png'));
   });
 }

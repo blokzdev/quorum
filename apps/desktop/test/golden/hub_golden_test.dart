@@ -24,6 +24,7 @@ Widget _hub({
   List<RunSummary> history = const [],
   Catalog? catalog,
   List<LocalModel>? localModels,
+  EdgeModelCatalog? edgeCatalog,
 }) =>
     ProviderScope(
       overrides: [
@@ -32,6 +33,8 @@ Widget _hub({
         if (catalog != null) catalogProvider.overrideWith((ref) => Future.value(catalog)),
         if (localModels != null)
           localModelsProvider.overrideWith((ref) => Future.value(localModels)),
+        if (edgeCatalog != null)
+          edgeModelCatalogProvider.overrideWith((ref) => Future.value(edgeCatalog)),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -77,14 +80,21 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    // P5.3c: a stored key retires the free-local onboarding card (keeps this golden byte-stable).
+    // (_CardLabel uppercases its text — match the rendered form.)
+    expect(find.textContaining('RUN QUORUM FREE'), findsNothing);
     await expectLater(find.byType(HubSurface), matchesGoldenFile('goldens/hub_home.png'));
   });
 
   testWidgets('hub — pre-launch key gate (needs keys, Run disabled)', (tester) async {
     await tester.binding.setSurfaceSize(const Size(960, 1080));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    // Empty vault: a real run (provider=anthropic + a Dream Team role on google) references two
-    // uncredentialed providers -> the gate lists them and disables Run before POST /runs.
+    // An unrelated key exists (P5.3c: anyKeysStored=true hides the free-local onboarding card and
+    // keeps this golden byte-stable) while anthropic + google — the providers this run actually
+    // references — are missing, which is exactly the state the key gate exists for.
+    store['quorum_apikey_openai'] = 'present';
+    // Empty vault for the referenced providers: a real run (provider=anthropic + a Dream Team role
+    // on google) references two uncredentialed providers -> the gate lists them and disables Run.
     await tester.pumpWidget(_hub(
       initial: const SettingsState(
         demoMode: false, ticker: 'NVDA', provider: 'anthropic', deepModel: 'claude-opus-4-8',
@@ -133,6 +143,90 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No tool support'), findsOneWidget);
+    // P5.3c: provider == ollama means the user is already on the local path — no onboarding card
+    // even with an empty vault (and this golden stays byte-stable).
+    expect(find.textContaining('RUN QUORUM FREE'), findsNothing);
     await expectLater(find.byType(HubSurface), matchesGoldenFile('goldens/hub_capability_gate.png'));
+  });
+
+  // --- P5.3c: the zero-key onboarding card ---------------------------------------------------------
+
+  testWidgets('hub — keyless + Ollama present: the free-local path is offered (P5.3c)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(960, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A genuinely fresh install: empty vault, default settings (demo, no provider), Ollama found.
+    await tester.pumpWidget(_hub(
+      initial: const SettingsState(),
+      edgeCatalog: EdgeModelCatalog.fromJson(const {'ollama_version': '0.32.1', 'tiers': []}),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('RUN QUORUM FREE'), findsOneWidget); // _CardLabel uppercases
+    expect(find.textContaining('Ollama 0.32.1 detected'), findsOneWidget);
+    expect(find.text('Open the Draft Board'), findsOneWidget);
+    expect(find.textContaining('slower and less capable'), findsOneWidget); // honest copy
+    await expectLater(
+        find.byType(HubSurface), matchesGoldenFile('goldens/hub_onboarding_ollama_present.png'));
+  });
+
+  testWidgets('hub — keyless + Ollama ABSENT: install guidance + re-detect, never a dead end '
+      '(P5.3c falsifier)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(960, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_hub(
+      initial: const SettingsState(),
+      edgeCatalog: const EdgeModelCatalog(), // ollamaVersion null = absent
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('no local model runtime detected'), findsOneWidget);
+    expect(find.textContaining('ollama.com/download'), findsOneWidget);
+    expect(find.textContaining('outside Quorum'), findsOneWidget); // honest install copy
+    expect(find.text('Re-detect Ollama'), findsOneWidget);
+    await expectLater(
+        find.byType(HubSurface), matchesGoldenFile('goldens/hub_onboarding_ollama_absent.png'));
+  });
+
+  testWidgets('hub — Re-detect refetches the catalog + discovery (P5.3c)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(960, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var edgeFetches = 0, localFetches = 0;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        initialSettingsProvider.overrideWithValue(const SettingsState()),
+        runHistoryProvider.overrideWith((ref) => Future.value(const <RunSummary>[])),
+        edgeModelCatalogProvider.overrideWith((ref) async {
+          edgeFetches++;
+          return const EdgeModelCatalog();
+        }),
+        localModelsProvider.overrideWith((ref) async {
+          localFetches++;
+          return const <LocalModel>[];
+        }),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true, brightness: Brightness.dark, fontFamily: 'Inter',
+          scaffoldBackgroundColor: QC.bg,
+        ),
+        home: const Scaffold(backgroundColor: QC.bg, body: HubSurface()),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    // Discovery has no watcher on a keyless Hub (correct lazy behavior: invalidate defers the
+    // refetch to the next watch) — hold a listener so the invalidation is observable here, the
+    // way the Draft Board's own watch makes it observable in the app.
+    final container = ProviderScope.containerOf(tester.element(find.byType(HubSurface)));
+    final sub = container.listen(localModelsProvider, (_, _) {});
+    addTearDown(sub.close);
+    await container.read(localModelsProvider.future);
+    final before = (edgeFetches, localFetches);
+
+    await tester.tap(find.text('Re-detect Ollama'));
+    await tester.pumpAndSettle();
+    expect(edgeFetches, before.$1 + 1, reason: 'Re-detect must refetch the edge catalog');
+    expect(localFetches, before.$2 + 1, reason: 'Re-detect must refetch discovery');
   });
 }

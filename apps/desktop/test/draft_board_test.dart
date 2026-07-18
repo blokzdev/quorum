@@ -220,6 +220,13 @@ void main() {
       expect(board, findsOneWidget, reason: 'state ${entry.key} must render the board');
       expect(find.descendant(of: board, matching: find.byType(EditableText)), findsNothing,
           reason: 'no text input may ride in with pull state ${entry.key}');
+      // P5.3a: the preset rows are a SECOND pull surface (they embed the same affordance for a
+      // tier default) — the scope wall must hold there too, in every pull state.
+      final presetRows =
+          find.byWidgetPredicate((w) => w.runtimeType.toString() == '_TierPresetRow');
+      expect(presetRows, findsWidgets, reason: 'the preset rows must render (state ${entry.key})');
+      expect(find.descendant(of: presetRows, matching: find.byType(EditableText)), findsNothing,
+          reason: 'no text input may ride in a preset row (state ${entry.key})');
     }
     // And the Won't-fit confirm strip (a tapped-into state, not a snapshot state):
     await tester.pumpWidget(const SizedBox.shrink());
@@ -228,7 +235,9 @@ void main() {
       deviceRamMb: 4096, // the lite fixture model badges Won't fit on a tiny device
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Pull · '));
+    // P5.3a made 'Pull · ' ambiguous (preset rows carry the affordance too) — any Won't-fit
+    // button opens the strip; take the first.
+    await tester.tap(find.textContaining('Pull · ').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('May not run on this machine'), findsOneWidget);
     expect(find.descendant(of: _boardFinder(), matching: find.byType(EditableText)), findsNothing,
