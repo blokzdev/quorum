@@ -35,24 +35,7 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
 
-- **2026-07-18 — How shipped users get the raised context window (P5.4).** The e2e run proved the
-  A6 risk real: at Ollama's 8192-token default, analyst prompts get silently truncated (6/45
-  requests) and 3 of 4 desks produced empty reports. The verification sweep runs at 16384 on this
-  machine (a local Ollama setting — no code). But the probe **falsified every zero-surface way for
-  the PRODUCT to set ctx programmatically** on the OpenAI-compat path (Ollama /v1 ignores ctx
-  fields — live-verified on 0.32.1). Options: **(i) docs-guidance + an in-app detectable warning
-  when the served ctx is below what the badges assume (my recommendation — zero new surface,
-  honest, reversible)**; (ii) derived-model tags (`ollama create` with a baked num_ctx — works via
-  /v1 unchanged but adds create-surface + a second catalog identity); (iii) switch the ollama path
-  to the native /api/chat (new dep, exits the shared compat registry — an architecture fork). The
-  sweep does not block on this; V1 can ship (i) and revisit.
-- **2026-07-18 — Correctness (surfaced same-session per doctrine): the engine accepts an EMPTY
-  analyst report and marks the run `done`** — run 15d074ab shipped a Buy verdict over three empty
-  desks with `error: null`. The sweep's harness grades on report content so P5.4 can't be fooled,
-  but the *product* can still present a verdict built on silence. A minimal engine guard (flag or
-  fail a run whose analyst sections are empty) is NEW surface, so it's yours to call: guard in V1,
-  or ship with the disclaimer posture and guard in V1.x. My recommendation: a lightweight
-  warning-level flag on the run (UI shows "partial analysis"), not a hard fail.
+- _(none open — both 2026-07-18 P5.4 forks decided by you in chat; see §3)_
 
 - **Analytics — Firebase vs Google Analytics vs none (your question 2026-07-06).** Two problems with the
   framing: (a) **Firebase Analytics doesn't support Windows desktop** (`firebase_analytics` = Android/iOS/
@@ -66,6 +49,14 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   alternatives in [`SETUP.md`](SETUP.md) §4. *(hub-03 disclaimer + signing + Windows-first are all decided — §3.)*
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
+
+- 2026-07-18 — **YOUR call (chat, "proceed as recommended"): the two P5.4 forks.** (1) **Product
+  ctx mechanism = docs-guidance + an in-app detectable warning** when the served Ollama context is
+  below what the fit badges assume (Ollama /v1 has no programmatic ctx path — live-falsified);
+  derived-model tags / native-path switch shelved. (2) **Empty-analyst-report guard = a
+  warning-level "partial analysis" flag on the run, not a hard fail** — the engine currently marks
+  a run `done` over empty desks (found by the P5.4 forensics; the verdict rode on 3 silent desks).
+  Both land as P5.4 slices with the sweep.
 
 - 2026-07-17 — **Applying a "Free local team" preset turns demo mode OFF** (P5.3a). A preset that left
   demo on would "apply" and then visibly do nothing — the preset's whole point is a real free local
