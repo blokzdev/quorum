@@ -13,8 +13,11 @@ import 'run_summary.dart';
 class ApiClient {
   final EngineConnection conn;
   final http.Client _client;
+  final bool _ownsClient;
 
-  ApiClient(this.conn, {http.Client? client}) : _client = client ?? http.Client();
+  ApiClient(this.conn, {http.Client? client})
+      : _client = client ?? http.Client(),
+        _ownsClient = client == null;
 
   Map<String, String> get _auth => {'authorization': 'Bearer ${conn.token}'};
 
@@ -116,5 +119,10 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
-  void close() => _client.close();
+  /// Closes the HTTP client ONLY when this instance constructed it. An injected client is the
+  /// injector's to close — closing a shared client here would kill every other consumer's requests
+  /// app-wide (the #52-review defect: a pull-stream hiccup bricked all networking until restart).
+  void close() {
+    if (_ownsClient) _client.close();
+  }
 }

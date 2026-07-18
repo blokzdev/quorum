@@ -14,25 +14,46 @@ import 'package:quorum_core/quorum_core.dart';
 EdgeModel _entry(String tag) =>
     EdgeModel.fromJson({'ollama_tag': tag, 'bytes': 1000, 'capability': 'analyst'});
 
-/// Answers POST /pulls with a snapshot, streams /pulls/events from a canned body, 200s cancel.
+/// Answers POST /pulls with a snapshot, streams /pulls/events from canned chunks, 200s cancel.
+/// Each chunk of [sseChunks] is delivered on its OWN async turn (25ms apart) — single-chunk
+/// delivery coalesces provider invalidations into one rebuild, which false-pinned the
+/// invalidate-once behavior (#53 review finding 1).
 class _FakeApi extends http.BaseClient {
   final Map<String, dynamic> startResponse;
-  final String sseBody;
+  final List<String> sseChunks;
   final requests = <http.BaseRequest>[];
-  _FakeApi({required this.startResponse, this.sseBody = ''});
+  bool closed = false;
+  _FakeApi({required this.startResponse, String sseBody = '', List<String>? sseChunks})
+      : sseChunks = sseChunks ?? [if (sseBody.isNotEmpty) sseBody];
+
+  Stream<List<int>> _chunked() async* {
+    for (final c in sseChunks) {
+      yield utf8.encode(c);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+  }
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     requests.add(request);
     final path = request.url.path;
     if (path == '/pulls/events') {
-      return http.StreamedResponse(Stream.value(utf8.encode(sseBody)), 200);
+      // A real localhost SSE connect isn't instant — the small delay keeps the single-flight
+      // window open so a double-subscribe race is deterministic, not timing-lucky.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return http.StreamedResponse(_chunked(), 200);
     }
     if (path == '/pulls' && request.method == 'POST') {
       return http.StreamedResponse(
           Stream.value(utf8.encode(jsonEncode(startResponse))), 202);
     }
     return http.StreamedResponse(Stream.value(utf8.encode('{}')), 200);
+  }
+
+  @override
+  void close() {
+    closed = true;
+    super.close();
   }
 }
 
@@ -111,6 +132,120 @@ void main() {
     final snap = c.read(pullControllerProvider)['qwen3.5:2b']!;
     expect(snap.phase, PullPhase.error);
     expect(snap.error, contains('sidecar down'));
+  });
+
+  test('a pull-stream loss NEVER closes the shared http client (#52 review MAJOR)', () async {
+    // The canned SSE body ends immediately -> onDone -> the controller tears the transport down.
+    // The transport must NOT close the injected app-wide client: before the ownership fix, any
+    // stream hiccup bricked every subsequent HTTP call in the app until restart.
+    final api = _FakeApi(
+      startResponse: {'tag': 'qwen3.5:2b', 'status': 'pulling', 'total': 1000, 'completed': 0},
+    );
+    final c = _container(api);
+    addTearDown(c.dispose);
+    final ctrl = c.read(pullControllerProvider.notifier);
+    await ctrl.start(_entry('qwen3.5:2b'));
+    await Future<void>.delayed(const Duration(milliseconds: 50)); // stream ends -> teardown path
+    expect(api.closed, isFalse, reason: 'an injected client is the injector\'s to close');
+    // And the app-wide outage regression: a later call over the same client still works.
+    await ctrl.cancel('qwen3.5:2b');
+    expect(api.requests.any((r) => r.url.path == '/pulls/cancel'), isTrue);
+  });
+
+  test('a dropped stream reattaches while a pull is active (#52 review)', () async {
+    // Body ends while the pull is still 'pulling' server-side -> the controller must reconnect
+    // so progress/terminal snapshots keep folding — a frozen live-looking row is the UI lying
+    // for the rest of the session.
+    PullController.retryDelay = const Duration(milliseconds: 100);
+    addTearDown(() => PullController.retryDelay = const Duration(seconds: 3));
+    final api = _FakeApi(
+      startResponse: {'tag': 'qwen3.5:2b', 'status': 'pulling', 'total': 1000, 'completed': 0},
+    );
+    final c = _container(api);
+    addTearDown(c.dispose);
+    await c.read(pullControllerProvider.notifier).start(_entry('qwen3.5:2b'));
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    final before = api.requests.where((r) => r.url.path == '/pulls/events').length;
+    expect(before, 1, reason: 'one subscription opened by start()');
+    await Future<void>.delayed(const Duration(milliseconds: 400)); // past the retry timer
+    final after = api.requests.where((r) => r.url.path == '/pulls/events').length;
+    expect(after, greaterThan(before), reason: 'stream loss with an active pull must resubscribe');
+  });
+
+  test('two quick start()s share ONE stream subscription (#53 review — single-flight)', () async {
+    final api = _FakeApi(
+      startResponse: {'tag': 'qwen3.5:2b', 'status': 'pulling', 'total': 1000, 'completed': 0},
+      sseChunks: ['data: {"tag":"qwen3.5:2b","status":"pulling","total":1000,"completed":1}\n\n'],
+    );
+    final c = _container(api);
+    addTearDown(c.dispose);
+    final ctrl = c.read(pullControllerProvider.notifier);
+    await Future.wait([ctrl.start(_entry('qwen3.5:2b')), ctrl.start(_entry('qwen3.5:9b'))]);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(api.requests.where((r) => r.url.path == '/pulls/events').length, 1,
+        reason: 'the check-then-act race opened two sockets and leaked one pre-fix');
+  });
+
+  test('a dead sidecar fails active pulls honestly after the loss streak (#53 review)', () async {
+    // Every reattach also dies instantly (empty stream each time). After _kMaxLossStreak straight
+    // losses the row must flip to an honest error — NOT spin as a live-looking "pulling" row that
+    // blocks every Pull button for the rest of the session.
+    PullController.retryDelay = const Duration(milliseconds: 60);
+    addTearDown(() => PullController.retryDelay = const Duration(seconds: 3));
+    final api = _FakeApi(
+      startResponse: {'tag': 'qwen3.5:2b', 'status': 'pulling', 'total': 1000, 'completed': 0},
+    );
+    final c = _container(api);
+    addTearDown(c.dispose);
+    final ctrl = c.read(pullControllerProvider.notifier);
+    await ctrl.start(_entry('qwen3.5:2b'));
+    await Future<void>.delayed(const Duration(milliseconds: 600)); // 3 losses at 60ms spacing
+    final snap = c.read(pullControllerProvider)['qwen3.5:2b']!;
+    expect(snap.phase, PullPhase.error);
+    expect(snap.error, contains('Lost contact'));
+    expect(ctrl.anyActive, isFalse, reason: 'the one-download gate must release');
+  });
+
+  test('redelivered success snapshots invalidate discovery ONCE (#52 review)', () async {
+    // A reconnect sweep redelivers terminal snapshots; only the pulling->success TRANSITION may
+    // refetch the catalogs, or every reconnect triggers a refetch storm. The two success frames
+    // arrive as SEPARATE chunks on separate async turns — in one chunk the pre-fix double
+    // invalidation coalesced into one rebuild and the test false-pinned (#53 review finding 1).
+    final api = _FakeApi(
+      startResponse: {'tag': 'qwen3.5:2b', 'status': 'pulling'},
+      sseChunks: [
+        'data: {"tag":"qwen3.5:2b","status":"success","total":10,"completed":10}\n\n',
+        'data: {"tag":"qwen3.5:2b","status":"success","total":10,"completed":10}\n\n',
+      ],
+    );
+    var localFetches = 0, edgeFetches = 0;
+    final c = ProviderContainer(retry: (_, _) => null, overrides: [
+      engineConnectionProvider.overrideWith(
+          (ref) async => EngineConnection(Uri.parse('http://127.0.0.1:1'), 't')),
+      httpClientProvider.overrideWithValue(api),
+      localModelsProvider.overrideWith((ref) async {
+        localFetches++;
+        return const <LocalModel>[];
+      }),
+      edgeModelCatalogProvider.overrideWith((ref) async {
+        edgeFetches++;
+        return const EdgeModelCatalog();
+      }),
+    ]);
+    addTearDown(c.dispose);
+    final s1 = c.listen(localModelsProvider, (_, _) {});
+    final s2 = c.listen(edgeModelCatalogProvider, (_, _) {});
+    addTearDown(s1.close);
+    addTearDown(s2.close);
+    await c.read(localModelsProvider.future);
+    await c.read(edgeModelCatalogProvider.future);
+    final before = (localFetches, edgeFetches);
+
+    await c.read(pullControllerProvider.notifier).start(_entry('qwen3.5:2b'));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(c.read(pullControllerProvider)['qwen3.5:2b']!.phase, PullPhase.success);
+    expect(localFetches, before.$1 + 1, reason: 'transition invalidates exactly once');
+    expect(edgeFetches, before.$2 + 1, reason: 'transition invalidates exactly once');
   });
 
   test('cancel posts to /pulls/cancel with the tag in the body', () async {
