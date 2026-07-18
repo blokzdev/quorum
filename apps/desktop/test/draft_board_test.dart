@@ -56,6 +56,7 @@ class _FixturePulls extends PullController {
 Widget _wrap({
   EdgeModelCatalog? edgeCatalog,
   int? deviceRamMb,
+  List<LocalModel> localModels = const [],
   Map<String, PullSnapshot> pulls = const {},
   void Function()? onEdgeFetch,
   void Function()? onLocalFetch,
@@ -96,6 +97,7 @@ Widget _wrap({
             catalog: _catalog,
             edgeCatalog: edgeCatalog,
             deviceRamMb: deviceRamMb,
+            localModels: localModels,
           ),
         ),
       ),
@@ -196,6 +198,25 @@ void main() {
     expect(localFetches, before.$2 + 1, reason: 'Re-detect must refetch discovery');
   });
 
+  testWidgets('P5.3a: an installed-but-VERSION-GATED tier default never gets Apply (#54 review)',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(820, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // Old Ollama + the tier default ALREADY INSTALLED: the gate must outrank installed — a live
+    // Apply here would pin 12 roles to a model whose tool parsing is broken on this version.
+    await tester.pumpWidget(_wrap(
+      edgeCatalog: EdgeModelCatalog.fromJson(_edgeJson(ollamaVersion: '0.15.0')),
+      deviceRamMb: 16384,
+      localModels: const [LocalModel('qwen3.5:2b', toolCapable: true)],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apply — switches to real local runs'), findsNothing,
+        reason: 'the version gate outranks installed');
+    expect(find.textContaining('Apply is disabled: tool calls would silently fail'),
+        findsWidgets); // every gated preset row says why
+  });
+
   testWidgets('SCOPE WALL holds across every P5.2 pull state (incl. the confirm strip)',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(820, 2400));
@@ -220,6 +241,13 @@ void main() {
       expect(board, findsOneWidget, reason: 'state ${entry.key} must render the board');
       expect(find.descendant(of: board, matching: find.byType(EditableText)), findsNothing,
           reason: 'no text input may ride in with pull state ${entry.key}');
+      // P5.3a: the preset rows are a SECOND pull surface (they embed the same affordance for a
+      // tier default) — the scope wall must hold there too, in every pull state.
+      final presetRows =
+          find.byWidgetPredicate((w) => w.runtimeType.toString() == '_TierPresetRow');
+      expect(presetRows, findsWidgets, reason: 'the preset rows must render (state ${entry.key})');
+      expect(find.descendant(of: presetRows, matching: find.byType(EditableText)), findsNothing,
+          reason: 'no text input may ride in a preset row (state ${entry.key})');
     }
     // And the Won't-fit confirm strip (a tapped-into state, not a snapshot state):
     await tester.pumpWidget(const SizedBox.shrink());
@@ -228,7 +256,9 @@ void main() {
       deviceRamMb: 4096, // the lite fixture model badges Won't fit on a tiny device
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Pull · '));
+    // P5.3a made 'Pull · ' ambiguous (preset rows carry the affordance too) — any Won't-fit
+    // button opens the strip; take the first.
+    await tester.tap(find.textContaining('Pull · ').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('May not run on this machine'), findsOneWidget);
     expect(find.descendant(of: _boardFinder(), matching: find.byType(EditableText)), findsNothing,

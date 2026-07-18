@@ -158,16 +158,25 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
 
 ### P5.3 — Tiered free lineup + zero-key onboarding *(the payoff)*
 
-- [ ] **P5.3a Preset local Benches** — one-click **"Free local team"** presets, one per tier and named
+- [x] **P5.3a Preset local Benches** — one-click **"Free local team"** presets, one per tier and named
   by the tier triple (**Lite / Core / Max** — A5: one name set, no second Starter/Balanced/Max triple),
   built on the existing Bench + roster mechanics; presets stay on the Qwen family (one download serves
   analysts + debaters); the preset only offers models that are installed (or routes through P5.2 pull
-  affordances).
-- [ ] **P5.3b Roster-fit** — "can this machine run my whole Dream Team?" **Correctness note (locked at
+  affordances). *(Done 2026-07-18, PR #54: presets are SYNTHESIZED from the served catalog at render
+  time, never persisted — no collision/deletion semantics exist; `applyTierPreset` routes through
+  `withProvider('ollama')`, NOT `applyBench` (whose copyWith merge keeps a stale backendUrl the engine
+  applies to ollama roles), clears keyed vendors, and turns demo OFF (Decided-FYI); the needs-pull
+  state embeds the shared P5.2 `_PullAffordance`; the fresh review's MAJOR — the version gate now
+  outranks `installed`, so a gated default never gets a live Apply — falsifier-tested.)*
+- [x] **P5.3b Roster-fit** — "can this machine run my whole Dream Team?" **Correctness note (locked at
   plan time):** Ollama loads models per-request and swaps them (default `OLLAMA_MAX_LOADED_MODELS`),
   so roster RAM fit = **max single model + KV**, NOT the sum — with an honest swap-latency note when a
-  roster spans many distinct models. Pure function, unit-tested.
-- [ ] **P5.3c Zero-key onboarding** — a keyless first-run Hub affordance surfacing the free-local path.
+  roster spans many distinct models. Pure function, unit-tested. *(Done 2026-07-18, PR #54:
+  `rosterFit`/`effectiveSlots` in quorum_core, 20 unit tests incl. the sum>RAM/max-fits falsifier,
+  bytes-only bounds that prove Won't-fit but never promise Fits, remote-endpoint exclusion
+  (`isLoopbackBackendUrl`), blank-override fallthrough matching the engine, and exact
+  fits/tight/wontFit boundary delegation; surfaced as `_RosterFitLine` under the Dream Team header.)*
+- [x] **P5.3c Zero-key onboarding** — a keyless first-run Hub affordance surfacing the free-local path.
   Two detected states, each with its own UX (A4 — most first-run keyless users **won't have Ollama**,
   and pointing them at a Draft Board where every pull fails is a dead end, not onboarding): **Ollama
   present** → guide to the Draft Board; **Ollama absent** → an explicit install-guidance state (what
@@ -180,6 +189,19 @@ on the Qwen family; `minicpm5` is a listed alternate, not a preset member).
   falsifier)**; a tier preset applies a complete valid roster in one click; the roster-fit function is
   unit-tested for the max-not-sum rule; **a full real analysis run completes on a roster composed
   entirely of curated local models on the dev machine** (the end-to-end proof).
+  *(All pass, 2026-07-18: goldens `hub_onboarding_ollama_present`/`_absent` Read-verified (absent =
+  the named falsifier, install guidance + Re-detect that also heals a dead sidecar); the one-click
+  falsifier seeds stale backendUrl + keyed vendor + custom ids + demo + a mixed roster → one call
+  lands the complete valid all-local config; the e2e proof ran live: real sidecar + real Ollama
+  0.32.1, `qwen3.5:9b` (6.6GB) pulled through the real pull lane (drift=False), then the byte-exact
+  Core-preset config (mode=pro, keyless, 12× ollama/qwen3.5:9b) — run `15d074ab87ce44bf`, done in
+  27m16s, 9 non-empty sections, verdict **Rating: Buy** with an executive summary, report tree at
+  `~/.tradingagents/logs/quorum_runs/NVDA_15d074ab87ce44bf_20260718_000131`. **P5.4a input, recorded
+  honestly:** on this run only the NEWS analyst produced a report (13.9KB); the market/social/
+  fundamentals desks wrote NOTHING and the conservative risk turn was empty (24B) — the debate/
+  trader/risk-judge/portfolio stages all produced real content. The Core default's tool-analyst
+  reliability is exactly what P5.4a must now gate (tool failure → demote vs context truncation →
+  re-tier, per A6) — the phase's stated load-bearing risk, observed on first contact.)*
 
 ### P5.4 — Real-run verification sweep + close-out *(the honesty gate)*
 

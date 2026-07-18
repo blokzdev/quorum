@@ -158,19 +158,32 @@ class EdgeModelCatalog {
     }
     return null;
   }
+
+  /// The curated entry whose tag canonically matches [tag] (P5.3b roster-fit lookup) — null when the
+  /// tag isn't on the Draft Board (a discovered/custom model; the caller must not fabricate numbers).
+  EdgeModel? entryForTag(String tag) {
+    if (tag.isEmpty) return null;
+    final wanted = canonicalTag(tag);
+    for (final tier in tiers) {
+      for (final m in tier.models) {
+        if (m.ollamaTag.isNotEmpty && canonicalTag(m.ollamaTag) == wanted) return m;
+      }
+    }
+    return null;
+  }
 }
 
-/// Whether a curated entry is already pulled, per the device's discovery list. Ollama normalizes
-/// bare tags to `:latest` (`llama3.2` ⇄ `llama3.2:latest`), so match exact OR either side's
-/// `:latest` expansion — but never across genuinely different tags (`qwen3.5:2b` ≠ `qwen3.5:0.8b`).
+/// Ollama normalizes bare tags to `:latest` (`llama3.2` ⇄ `llama3.2:latest`) — the shared canonical
+/// form for tag equality, so `qwen3.5:2b` ≠ `qwen3.5:0.8b` but a bare name matches its `:latest`.
+String canonicalTag(String tag) => tag.contains(':') ? tag : '$tag:latest';
+
+/// Whether a curated entry is already pulled, per the device's discovery list (canonical-tag match).
 bool isInstalled(EdgeModel entry, List<LocalModel> localModels) {
   final tag = entry.ollamaTag;
   if (tag.isEmpty) return false;
-  final expanded = tag.contains(':') ? tag : '$tag:latest';
+  final expanded = canonicalTag(tag);
   for (final m in localModels) {
-    final name = m.name;
-    final nameExpanded = name.contains(':') ? name : '$name:latest';
-    if (nameExpanded == expanded) return true;
+    if (canonicalTag(m.name) == expanded) return true;
   }
   return false;
 }

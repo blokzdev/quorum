@@ -6,6 +6,8 @@ import 'package:quorum_core/quorum_core.dart';
 import '../dream_team_roster.dart';
 import '../state/app_surface.dart';
 import '../state/capability_gate.dart';
+import '../state/catalog_provider.dart'
+    show edgeModelCatalogProvider, engineConnectionProvider, localModelsProvider;
 import '../state/hub_provider.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
@@ -112,6 +114,7 @@ class _HubSurfaceState extends ConsumerState<HubSurface> {
                 children: [
                   const _Header(),
                   const SizedBox(height: 20),
+                  const _FreeLocalOnboardingCard(),
                   _LaunchCard(onRun: () => _launch(ref)),
                   const SizedBox(height: 16),
                   _WatchlistSection(
@@ -134,6 +137,93 @@ class _HubSurfaceState extends ConsumerState<HubSurface> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// --- Zero-key onboarding (P5.3c) -------------------------------------------------------------------
+
+/// The honest capability line both onboarding states carry — no over-promising the free tier.
+const _kHonestLocalCopy =
+    'Local models are slower and less capable than frontier cloud models — a free way to run the '
+    'full workflow, not a substitute for frontier reasoning.';
+
+/// The keyless first-run affordance: a fresh install with no API keys is offered the free-local
+/// path instead of a dead end. Two detected states (A4): **Ollama present** → guide to the Draft
+/// Board; **Ollama absent** → install guidance + Re-detect (installing Ollama happens outside the
+/// app and the copy says so). Retires itself the moment a key lands or the user is already on the
+/// local provider; renders nothing while key/catalog state is still loading (no flash of the
+/// absent state on a slow sidecar).
+class _FreeLocalOnboardingCard extends ConsumerWidget {
+  const _FreeLocalOnboardingCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = ref.watch(settingsControllerProvider.select((s) => s.provider));
+    if (provider == 'ollama') return const SizedBox.shrink(); // already on the free-local path
+    final anyKeys = ref.watch(anyKeysStoredProvider);
+    if (anyKeys.value != false) return const SizedBox.shrink(); // loading / error / keyed
+    final catalog = ref.watch(edgeModelCatalogProvider).value;
+    if (catalog == null) return const SizedBox.shrink(); // catalog still loading — no flash
+    final version = catalog.ollamaVersion;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: _Card(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const _CardLabel('Run Quorum free — no API keys'),
+          const SizedBox(height: 10),
+          if (version != null) ...[
+            Text(
+              'Ollama $version detected. Build a free local analyst team from the curated Draft '
+              'Board — the full debate workflow, running entirely on this machine.',
+              style: const TextStyle(color: QC.textHi, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 6),
+            const Text(_kHonestLocalCopy,
+                style: TextStyle(color: QC.textLo, fontSize: 11.5, height: 1.4)),
+            const SizedBox(height: 12),
+            Row(children: [
+              _MiniButton(
+                label: 'Open the Draft Board',
+                onTap: () => ref.read(appSurfaceProvider.notifier).go(AppSurface.settings),
+              ),
+            ]),
+          ] else ...[
+            const Text(
+              // "couldn't detect" (not "isn't installed") — an unreachable engine also lands here,
+              // and the copy must stay honest under both causes (#54 review).
+              "No API keys stored, and Quorum couldn't detect Ollama — the free local model "
+              'runner it uses to run the full analyst workflow on this machine. Install it from '
+              'the official site — installing happens outside Quorum:',
+              style: TextStyle(color: QC.textHi, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 6),
+            const SelectableText(
+              'https://ollama.com/download',
+              style: TextStyle(color: QC.accent, fontSize: 12, fontFamily: QC.fontMono),
+            ),
+            const SizedBox(height: 6),
+            const Text(_kHonestLocalCopy,
+                style: TextStyle(color: QC.textLo, fontSize: 11.5, height: 1.4)),
+            const SizedBox(height: 12),
+            Row(children: [
+              _MiniButton(
+                label: 'Re-detect Ollama',
+                onTap: () {
+                  // Drop the cached catalog + discovery so a just-installed Ollama is picked up
+                  // without an app restart — AND the memoized engine connection, so Re-detect can
+                  // also recover from the "sidecar died, not Ollama" cause of this state (#54
+                  // review; the settings surface's retry invalidates the connection for the same
+                  // reason, and a healthy memoized endpoint makes this a cheap no-op).
+                  ref.invalidate(engineConnectionProvider);
+                  ref.invalidate(edgeModelCatalogProvider);
+                  ref.invalidate(localModelsProvider);
+                },
+              ),
+            ]),
+          ],
+        ]),
       ),
     );
   }

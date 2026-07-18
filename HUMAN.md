@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-16 (**Phase 5 (The Free Local Tier) plan-locked on your call — "complete this before GA so V1 has the complete world-class implementation."** The GA publish + Defender submission now follow Phase 5 (§1). Phase-5 plan: [docs/phase-5-plan.md](docs/phase-5-plan.md), seeded by a 5-agent live-verified model/mechanics research pass. §3/§4)
+**Last AI update:** 2026-07-17 (**P5.1 + P5.2 merged; the #52 review fixed forward (PR #53, merged); P5.3 in flight** — presets/roster-fit/zero-key onboarding implemented + golden-verified, the all-local e2e proof running. §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -48,6 +48,16 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
 
 ## 3 · ✅ Decisions I made — *FYI; self-approved consequential calls. Newest first; ADR-linked.*
 
+- 2026-07-17 — **Applying a "Free local team" preset turns demo mode OFF** (P5.3a). A preset that left
+  demo on would "apply" and then visibly do nothing — the preset's whole point is a real free local
+  run. The button copy says so ("Apply — switches to real local runs"); demo-preserving semantics is a
+  one-line revert if you prefer it. It also resets data vendors to the keyless defaults (a stored
+  Alpha-Vantage pick would re-block the keyless Run button).
+- 2026-07-17 — **PR #52's fresh-context review (killed by your reboot) was re-run post-merge → PR #53
+  fixed forward**: 1 MAJOR (a pull-stream hiccup closed the app-wide HTTP client — bricked all
+  networking until restart) + reconnect/race/timeout/gate fixes; the resumed-pull drift question
+  closed empirically (Ollama re-emits every layer on resume — verified twice, live). Triage table in
+  [PR #53](https://github.com/blokzdev/quorum/pull/53); two NITs backlogged.
 - 2026-07-16 — **Phase 5 (The Free Local Tier) plan-locked — YOUR call: complete before GA, so V1 ships
   the world-class free-local implementation.** The Edge Model Draft Board core pulls forward from post-V1
   into V1: device-tiered (Lite/Core/Pro) curated local models, fit badges, one-click `ollama pull`,
