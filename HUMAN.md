@@ -7,7 +7,7 @@
 > links it. **§1 (blockers) and §2 (forks) are also surfaced in the chat turn** the moment they arise;
 > §3/§4/§5 are pull-only. Rules: see CLAUDE.md → *Operating doctrine*.
 
-**Last AI update:** 2026-07-17 (**P5.1 + P5.2 merged; the #52 review fixed forward (PR #53, merged); P5.3 in flight** — presets/roster-fit/zero-key onboarding implemented + golden-verified, the all-local e2e proof running. §3/§4)
+**Last AI update:** 2026-07-18 (**P5.3 MERGED (PR #54) — the free-local story works end-to-end**: a keyless machine pulled qwen3.5:9b through the app's pull lane and ran a real 12-role all-local analysis to a "Rating: Buy" verdict in 27min. **P5.4 (the verification sweep) is now in flight with a concrete diagnosis**: 6 of 45 requests in that run hit the 8192-token context ceiling (`truncated = 1` in Ollama's log) and 3 of 4 analyst desks produced no report — the plan's predicted A6 context-truncation risk, observed live; the sweep opens by settling truncation-vs-tool per desk and re-badging at a raised context. §3/§4)
 **Spend (Phase 4):** **entirely free tier — zero paid spend.** Ollama + demo + the shared Gemini test key +
 free data-vendor keys + free public-repo CI. **Production code-signing is deferred to V2** (ADR 0007), so no
 cert purchase this phase; the `-Sign` seam is retained for later. If anything would cost money it stops and
@@ -34,6 +34,25 @@ surfaces first. (Phase-2/3 spend was ~cents on the Gemini test key only.)
   regardless; this just hard-enforces it. My merge discipline covers the interim, so it doesn't block me.
 
 ## 2 · 🔱 Want your input — *genuine forks; I have a recommendation*
+
+- **2026-07-18 — How shipped users get the raised context window (P5.4).** The e2e run proved the
+  A6 risk real: at Ollama's 8192-token default, analyst prompts get silently truncated (6/45
+  requests) and 3 of 4 desks produced empty reports. The verification sweep runs at 16384 on this
+  machine (a local Ollama setting — no code). But the probe **falsified every zero-surface way for
+  the PRODUCT to set ctx programmatically** on the OpenAI-compat path (Ollama /v1 ignores ctx
+  fields — live-verified on 0.32.1). Options: **(i) docs-guidance + an in-app detectable warning
+  when the served ctx is below what the badges assume (my recommendation — zero new surface,
+  honest, reversible)**; (ii) derived-model tags (`ollama create` with a baked num_ctx — works via
+  /v1 unchanged but adds create-surface + a second catalog identity); (iii) switch the ollama path
+  to the native /api/chat (new dep, exits the shared compat registry — an architecture fork). The
+  sweep does not block on this; V1 can ship (i) and revisit.
+- **2026-07-18 — Correctness (surfaced same-session per doctrine): the engine accepts an EMPTY
+  analyst report and marks the run `done`** — run 15d074ab shipped a Buy verdict over three empty
+  desks with `error: null`. The sweep's harness grades on report content so P5.4 can't be fooled,
+  but the *product* can still present a verdict built on silence. A minimal engine guard (flag or
+  fail a run whose analyst sections are empty) is NEW surface, so it's yours to call: guard in V1,
+  or ship with the disclaimer posture and guard in V1.x. My recommendation: a lightweight
+  warning-level flag on the run (UI shows "partial analysis"), not a hard fail.
 
 - **Analytics — Firebase vs Google Analytics vs none (your question 2026-07-06).** Two problems with the
   framing: (a) **Firebase Analytics doesn't support Windows desktop** (`firebase_analytics` = Android/iOS/
