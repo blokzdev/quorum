@@ -183,6 +183,19 @@ void main() {
           isEmpty);
     });
 
+    test('effectiveSlots: a present-but-BLANK override falls back to the global model — exactly '
+        'what the engine runs (#54 review)', () {
+      final slots = effectiveSlots(
+        roleKeys: ['market'],
+        deepRoles: const {},
+        agentModels: {'market': const AgentModel(provider: 'ollama', model: '  ')},
+        globalProvider: 'ollama',
+        quickModel: 'qwen3.6:35b',
+      );
+      expect(slots.map((s) => s.model).toList(), ['qwen3.6:35b'],
+          reason: 'the engine drops a blank-model spec and runs the global fallback');
+    });
+
     test(':latest normalization dedupes bare and tagged forms and matches the curated entry', () {
       final r = rosterFit(
         slots: [_ollama('llama3.2'), _ollama('llama3.2:latest')],
@@ -242,6 +255,64 @@ void main() {
       );
       expect(r.verdict, isNull);
       expect(r.unknownTags, ['mystery:1b']);
+    });
+
+    test('an UNINSTALLED curated entry with bytes but broken KV geometry still proves wontFit '
+        '(#54 review)', () {
+      final broken = EdgeModelCatalog.fromJson({
+        'kv_ctx': 8192,
+        'tiers': [
+          {
+            'tier': 'max',
+            'min_device_ram_mb': 0,
+            'models': [
+              {
+                'id': 'big',
+                'ollama_tag': 'big:70b',
+                'bytes': 40000000000,
+                'kv_params': {'block_count': 48}, // value_length etc. missing -> kvBytesAt null
+                'capability': 'analyst',
+              },
+            ],
+          },
+        ],
+      });
+      final r = rosterFit(
+        slots: [_ollama('big:70b')],
+        catalog: broken,
+        localModels: const [], // NOT installed — the served bytes alone must carry the bound
+        deviceRamMb: ramMb,
+      );
+      expect(r.verdict, FitBadge.wontFit,
+          reason: 'a provable wontFit must not degrade to silence');
+      expect(r.limitingIncludesKv, isFalse, reason: 'the bound excludes context memory');
+      expect(r.unknownTags, ['big:70b']);
+    });
+
+    test('a slot pinned to a REMOTE Ollama is never charged to local RAM (#54 review)', () {
+      final r = rosterFit(
+        slots: [
+          const AgentModel(
+              provider: 'ollama', model: 'qwen3.5:9b', backendUrl: 'http://192.168.1.50:11434/v1'),
+          _ollama('qwen3.5:2b'),
+        ],
+        catalog: _catalog(),
+        localModels: const [],
+        deviceRamMb: ramMb,
+      );
+      expect(r.distinctLocalModels, 1, reason: 'only the local slot counts');
+      expect(r.limitingTag, 'qwen3.5:2b');
+      expect(r.limitingIncludesKv, isTrue);
+    });
+
+    test('isLoopbackBackendUrl: null/empty/localhost forms are local; LAN hosts are not', () {
+      expect(isLoopbackBackendUrl(null), isTrue);
+      expect(isLoopbackBackendUrl('  '), isTrue);
+      expect(isLoopbackBackendUrl('http://localhost:11434/v1'), isTrue);
+      expect(isLoopbackBackendUrl('http://127.0.0.1:11434/v1'), isTrue);
+      expect(isLoopbackBackendUrl('http://[::1]:11434/v1'), isTrue);
+      expect(isLoopbackBackendUrl('http://192.168.1.50:11434/v1'), isFalse);
+      expect(isLoopbackBackendUrl('https://ollama.example.com/v1'), isFalse);
     });
 
     test('unknown device RAM -> null verdict', () {

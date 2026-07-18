@@ -1862,7 +1862,7 @@ class _TierPresetRow extends ConsumerWidget {
     final gated = _versionGated(catalog, m);
     return Semantics(
       label: '${preset.name}, all 12 roles on ${m.display}'
-          '${installed ? ', ready to apply' : ', requires a pull first'}',
+          '${gated ? ', requires a newer Ollama' : installed ? ', ready to apply' : ', requires a pull first'}',
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -1879,7 +1879,8 @@ class _TierPresetRow extends ConsumerWidget {
                 style: TextStyle(color: brand.textLo, fontSize: 11.5, fontFamily: brand.fontMono)),
             const Spacer(),
             if (recommended) _MiniChip('Your tier', brand.accent),
-            if (fit != null) ...[const SizedBox(width: 8), _FitBadgeChip(fit: fit)],
+            // Hidden when gated, like the board card — no fit claim for an unusable version.
+            if (!gated && fit != null) ...[const SizedBox(width: 8), _FitBadgeChip(fit: fit)],
           ]),
           const SizedBox(height: 6),
           Text(
@@ -1888,7 +1889,18 @@ class _TierPresetRow extends ConsumerWidget {
             'the full workflow.',
             style: TextStyle(color: brand.textLo, fontSize: 11.5, height: 1.3),
           ),
-          if (installed) ...[
+          // The version gate outranks EVERYTHING, including installed (#54 review MAJOR: an
+          // installed-but-gated default must never get a live Apply — one click would pin all 12
+          // roles to a model whose tool parsing is broken on this Ollama, and the launch
+          // capability gate can't catch a version incompatibility).
+          if (gated) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Requires Ollama ≥ ${m.minOllamaVersion} — you have ${catalog.ollamaVersion}. '
+              'Apply is disabled: tool calls would silently fail on this version.',
+              style: TextStyle(color: brand.warning, fontSize: 11),
+            ),
+          ] else if (installed) ...[
             const SizedBox(height: 8),
             Row(mainAxisSize: MainAxisSize.min, children: [
               _SmallButton(
@@ -1899,7 +1911,7 @@ class _TierPresetRow extends ConsumerWidget {
                     ref.read(settingsControllerProvider.notifier).applyTierPreset(preset),
               ),
             ]),
-          ] else if (!gated && catalog.ollamaVersion != null && m.bytes != null) ...[
+          ] else if (catalog.ollamaVersion != null && m.bytes != null) ...[
             const SizedBox(height: 8),
             Text('Pull ${m.ollamaTag} first — Apply unlocks once it is installed.',
                 style: TextStyle(color: brand.textMid, fontSize: 11.5)),
@@ -1907,9 +1919,13 @@ class _TierPresetRow extends ConsumerWidget {
           ] else ...[
             const SizedBox(height: 8),
             Text(
+              // Two honest reasons a pull can't be offered: no runtime, or no size ("every pull
+              // is an explicit user click with visible size" is a locked constraint) — never a
+              // bogus "Requires Ollama ≥ null" (#54 review).
               catalog.ollamaVersion == null
                   ? 'Ollama not detected — install it to use the free local team.'
-                  : 'Requires Ollama ≥ ${m.minOllamaVersion} — you have ${catalog.ollamaVersion}.',
+                  : 'Download size unknown for this entry — pull it from the Draft Board when '
+                      'the catalog serves its size.',
               style: TextStyle(color: brand.warning, fontSize: 11),
             ),
           ],
@@ -1933,7 +1949,11 @@ class _RosterFitLine extends ConsumerWidget {
     final Color color;
     final v = r.verdict;
     if (v == null) {
-      text = 'Local fit unknown — no size data for ${r.unknownTags.join(', ')}.';
+      // Two distinct honest unknowns (#54 review): missing model numbers vs unreadable device
+      // RAM — never a dangling "no size data for ." when the sizes are known and the RAM isn't.
+      text = r.unknownTags.isEmpty
+          ? "Local fit unknown — this machine's memory couldn't be read."
+          : 'Local fit unknown — no size data for ${r.unknownTags.join(', ')}.';
       color = brand.textLo;
     } else {
       final label = switch (v) {
@@ -1947,9 +1967,12 @@ class _RosterFitLine extends ConsumerWidget {
         FitBadge.wontFit => brand.down,
       };
       // Max-not-sum: Ollama keeps ONE model resident and swaps per-request, so the largest model
-      // (weights + context memory) is the machine's real requirement, not the sum.
-      text = '$label — largest local model ${r.limitingTag} (${_gb(r.limitingBytes)} incl. '
-          'context memory).'
+      // (weights + context memory) is the machine's real requirement, not the sum. A bytes-only
+      // bound EXCLUDES context memory — say "at least", never claim it's included (#54 review).
+      final size = r.limitingIncludesKv
+          ? '${_gb(r.limitingBytes)} incl. context memory'
+          : 'at least ${_gb(r.limitingBytes)}';
+      text = '$label — largest local model ${r.limitingTag} ($size).'
           '${r.swapLatencyNote ? ' ${r.distinctLocalModels} distinct local models — swapping between them adds latency per hand-off.' : ''}';
     }
     return Padding(

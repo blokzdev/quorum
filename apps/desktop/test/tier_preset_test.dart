@@ -186,6 +186,21 @@ void main() {
       return c;
     }
 
+    test('a REMOTE global Ollama endpoint suppresses local-fit claims (#54 review)', () async {
+      const remote = SettingsState(
+        demoMode: false,
+        provider: 'ollama',
+        quickModel: 'qwen3.5:2b',
+        backendUrl: 'http://192.168.1.50:11434/v1', // the models load on the LAN box, not here
+      );
+      final c = wired(remote, edge: _edgeJson(), ramMb: 16000);
+      await c.read(edgeModelCatalogProvider.future);
+      await c.read(localModelsProvider.future);
+      await c.read(deviceRamMbProvider.future);
+      expect(c.read(rosterFitProvider), isNull,
+          reason: 'no honest local-RAM claim exists for a remote endpoint');
+    });
+
     test('null in demo mode and when the catalog is empty; a real verdict otherwise', () async {
       const local = SettingsState(
           demoMode: false, provider: 'ollama', quickModel: 'qwen3.5:2b', deepModel: 'qwen3.5:9b');

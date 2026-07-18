@@ -15,7 +15,8 @@ import 'settings_controller.dart';
 /// The current roster's fit, or null when nothing can be said (demo mode, or the edge catalog isn't
 /// loaded). A result with `distinctLocalModels == 0` means an all-cloud roster — render nothing.
 final rosterFitProvider = Provider<RosterFitResult?>((ref) {
-  final (demoMode, provider, quickModel, customQuick, deepModel, customDeep, agentModels) =
+  final (demoMode, provider, quickModel, customQuick, deepModel, customDeep, agentModels,
+          backendUrl) =
       ref.watch(settingsControllerProvider.select((s) => (
             s.demoMode,
             s.provider,
@@ -24,8 +25,13 @@ final rosterFitProvider = Provider<RosterFitResult?>((ref) {
             s.deepModel,
             s.customDeepModel,
             s.agentModels,
+            s.backendUrl,
           )));
   if (demoMode) return null; // no engine models run in demo — a fit claim would be noise
+  // A REMOTE Ollama endpoint (the global backend URL points off this machine) means the global
+  // slots never load locally — no local-RAM claim can honestly be made for them (#54 review).
+  // Per-role remote URLs are excluded slot-by-slot inside rosterFit.
+  if (provider == 'ollama' && !isLoopbackBackendUrl(backendUrl)) return null;
   final catalog = ref.watch(edgeModelCatalogProvider).value;
   if (catalog == null || catalog.tiers.isEmpty) return null; // no curated numbers yet
   final localModels = ref.watch(localModelsProvider).value ?? const <LocalModel>[];

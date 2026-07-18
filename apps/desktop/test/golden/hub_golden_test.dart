@@ -77,6 +77,9 @@ void main() {
         _run('r3', 'AAPL', 'Hold', mode: 'demo', cost: null),
         _run('r4', 'MSFT', 'Buy'),
       ],
+      // Ollama present + keyless-card conditions otherwise met: the stored key must be THE thing
+      // hiding the card (an airtight falsifier, not one relying on the catalog failing to load).
+      edgeCatalog: EdgeModelCatalog.fromJson(const {'ollama_version': '0.32.1', 'tiers': []}),
     ));
     await tester.pumpAndSettle();
 
@@ -180,7 +183,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('no local model runtime detected'), findsOneWidget);
+    expect(find.textContaining("couldn't detect Ollama"), findsOneWidget);
     expect(find.textContaining('ollama.com/download'), findsOneWidget);
     expect(find.textContaining('outside Quorum'), findsOneWidget); // honest install copy
     expect(find.text('Re-detect Ollama'), findsOneWidget);

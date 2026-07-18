@@ -31,6 +31,11 @@ class RosterFitResult {
   /// That requirement in bytes (understated when [limitingTag] is a bytes-only bound).
   final int? limitingBytes;
 
+  /// Whether [limitingBytes] includes the KV term (a complete curated number) — false for a
+  /// bytes-only bound, so UI copy can say "at least X GB" instead of falsely claiming the number
+  /// covers context memory (#54 review).
+  final bool limitingIncludesKv;
+
   /// Distinct canonical ollama tags across the roster's effective slots.
   final int distinctLocalModels;
 
@@ -45,6 +50,7 @@ class RosterFitResult {
     required this.verdict,
     required this.limitingTag,
     required this.limitingBytes,
+    this.limitingIncludesKv = false,
     required this.distinctLocalModels,
     required this.swapLatencyNote,
     required this.unknownTags,
@@ -67,8 +73,11 @@ List<AgentModel> effectiveSlots({
   final out = <AgentModel>[];
   for (final role in roleKeys) {
     final override = agentModels?[role];
-    if (override != null) {
-      if (override.provider.isNotEmpty && override.model.trim().isNotEmpty) out.add(override);
+    // A present-but-malformed override (blank provider/model) is UNASSIGNED to the engine — it
+    // falls back to the global quick/deep model for that role — so it must fall through here too,
+    // not silently contribute nothing (#54 review: fit would miss the model that actually runs).
+    if (override != null && override.provider.isNotEmpty && override.model.trim().isNotEmpty) {
+      out.add(override);
       continue;
     }
     final provider = globalProvider;
@@ -78,6 +87,16 @@ List<AgentModel> effectiveSlots({
     out.add(AgentModel(provider: provider, model: model));
   }
   return out;
+}
+
+/// Whether an OpenAI-compatible base URL points at THIS machine. A slot served by a remote Ollama
+/// must not be charged against local RAM (#54 review) — an unparseable/empty URL reads as local
+/// (the provider default is localhost).
+bool isLoopbackBackendUrl(String? url) {
+  if (url == null || url.trim().isEmpty) return true;
+  final host = Uri.tryParse(url.trim())?.host ?? '';
+  if (host.isEmpty) return true;
+  return host == 'localhost' || host == '127.0.0.1' || host == '::1' || host == '[::1]';
 }
 
 /// The roster-fit verdict for [slots] on a device with [deviceRamMb] reported RAM. [ctx] defaults to
@@ -91,10 +110,12 @@ RosterFitResult rosterFit({
 }) {
   final effCtx = ctx ?? catalog.kvCtx;
 
-  // Distinct canonical local tags — the swap-note count and the per-model fit universe.
+  // Distinct canonical local tags — the swap-note count and the per-model fit universe. A slot
+  // pinned to a REMOTE Ollama (per-role backendUrl) never loads locally — excluded (#54 review).
   final tags = <String>{};
   for (final s in slots) {
     if (s.provider.toLowerCase() != 'ollama') continue;
+    if (!isLoopbackBackendUrl(s.backendUrl)) continue;
     final tag = s.model.trim();
     if (tag.isEmpty) continue;
     tags.add(canonicalTag(tag));
@@ -115,12 +136,16 @@ RosterFitResult rosterFit({
       requirement = bytes + kv; // curated: exact registry bytes + KV at the effective ctx
       complete = true;
     } else {
-      // Non-curated (or a curated row missing numbers): the installed blob size is a lower bound —
-      // no KV geometry exists for discovered tags anywhere (/api/tags carries none).
-      for (final m in localModels) {
-        if (canonicalTag(m.name) == tag && m.size != null) {
-          requirement = m.size;
-          break;
+      // Bytes-only lower bound: a curated row's served bytes even when its KV geometry is broken
+      // (#54 review — provable wontFit must not degrade to silence), else the installed blob
+      // size. Either is enough to prove wontFit, never enough to promise fits.
+      requirement = bytes;
+      if (requirement == null) {
+        for (final m in localModels) {
+          if (canonicalTag(m.name) == tag && m.size != null) {
+            requirement = m.size;
+            break;
+          }
         }
       }
       unknown.add(tag);
@@ -148,6 +173,7 @@ RosterFitResult rosterFit({
     verdict: verdict,
     limitingTag: limitingTag,
     limitingBytes: limitingBytes,
+    limitingIncludesKv: limitingComplete,
     distinctLocalModels: tags.length,
     swapLatencyNote: tags.length >= kSwapNoteThreshold,
     unknownTags: List.unmodifiable(unknown),

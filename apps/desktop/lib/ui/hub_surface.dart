@@ -6,7 +6,8 @@ import 'package:quorum_core/quorum_core.dart';
 import '../dream_team_roster.dart';
 import '../state/app_surface.dart';
 import '../state/capability_gate.dart';
-import '../state/catalog_provider.dart' show edgeModelCatalogProvider, localModelsProvider;
+import '../state/catalog_provider.dart'
+    show edgeModelCatalogProvider, engineConnectionProvider, localModelsProvider;
 import '../state/hub_provider.dart';
 import '../state/run_controller.dart';
 import '../state/settings_controller.dart';
@@ -190,9 +191,11 @@ class _FreeLocalOnboardingCard extends ConsumerWidget {
             ]),
           ] else ...[
             const Text(
-              'No API keys and no local model runtime detected. Quorum can run its full analyst '
-              'workflow free on this machine through Ollama, a free local model runner. '
-              'Install it from the official site — installing happens outside Quorum:',
+              // "couldn't detect" (not "isn't installed") — an unreachable engine also lands here,
+              // and the copy must stay honest under both causes (#54 review).
+              "No API keys stored, and Quorum couldn't detect Ollama — the free local model "
+              'runner it uses to run the full analyst workflow on this machine. Install it from '
+              'the official site — installing happens outside Quorum:',
               style: TextStyle(color: QC.textHi, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 6),
@@ -208,8 +211,12 @@ class _FreeLocalOnboardingCard extends ConsumerWidget {
               _MiniButton(
                 label: 'Re-detect Ollama',
                 onTap: () {
-                  // The exact mirror of the Draft Board's status banner: drop the cached catalog +
-                  // discovery so a just-installed Ollama is picked up without an app restart.
+                  // Drop the cached catalog + discovery so a just-installed Ollama is picked up
+                  // without an app restart — AND the memoized engine connection, so Re-detect can
+                  // also recover from the "sidecar died, not Ollama" cause of this state (#54
+                  // review; the settings surface's retry invalidates the connection for the same
+                  // reason, and a healthy memoized endpoint makes this a cheap no-op).
+                  ref.invalidate(engineConnectionProvider);
                   ref.invalidate(edgeModelCatalogProvider);
                   ref.invalidate(localModelsProvider);
                 },
